@@ -1,4 +1,4 @@
-"""Command-line interface: ``rukh info``, ``rukh data fetch``, ``rukh mlflow ui``."""
+"""Command-line interface: ``info``, ``data fetch``, ``engine check`` and ``mlflow ui``."""
 
 from __future__ import annotations
 
@@ -19,6 +19,8 @@ data_app = typer.Typer(help="Datasets: fetch and describe Lichess games.", no_ar
 app.add_typer(data_app, name="data")
 mlflow_app = typer.Typer(help="Local MLflow tracking.", no_args_is_help=True)
 app.add_typer(mlflow_app, name="mlflow")
+engine_app = typer.Typer(help="Stockfish engine utilities.", no_args_is_help=True)
+app.add_typer(engine_app, name="engine")
 
 
 def _version_callback(value: bool) -> None:
@@ -100,3 +102,26 @@ def mlflow_ui(
 
     typer.echo(f"mlflow ui on http://{host}:{port} (store {tracking_uri()})")
     raise typer.Exit(code=serve_ui(host=host, port=port))
+
+
+@engine_app.command("check")
+def engine_check_cmd(
+    elo: Annotated[int, typer.Option("--elo", help="UCI_Elo to configure.")] = 1400,
+    plies: Annotated[int, typer.Option("--plies", help="Half-moves to play.")] = 40,
+    seed: Annotated[int, typer.Option("--seed", help="Seed for the random opponent.")] = 0,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Locate Stockfish, set UCI_Elo and play a short game against a random mover."""
+    from rukh.engine import EngineCheckResult, EngineNotFound, engine_check
+
+    try:
+        result = engine_check(elo=elo, plies=plies, seed=seed)
+    except (EngineNotFound, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    width = max(len(key) for key in EngineCheckResult.model_fields)
+    for key, value in result.model_dump().items():
+        typer.echo(f"{key:<{width}}  {value if value is not None else 'null'}")

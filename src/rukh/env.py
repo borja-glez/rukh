@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import platform
-import shutil
-from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
 from rukh import paths
+from rukh.engine import find_stockfish
 from rukh.tracking import tracking_uri
 
 
@@ -40,25 +38,10 @@ def _torch_info() -> tuple[str | None, bool, str | None]:
     return torch.__version__, cuda, gpu
 
 
-def _find_stockfish() -> Path | None:
-    """Stockfish binary: ``RUKH_STOCKFISH``, then ``tools/stockfish/``, then ``PATH``."""
-    env = os.environ.get("RUKH_STOCKFISH")
-    if env:
-        candidate = Path(env)
-        return candidate if candidate.is_file() else None
-    tools = paths.tools_dir() / "stockfish"
-    for pattern in ("stockfish*.exe", "stockfish"):
-        for candidate in sorted(tools.glob(pattern)):
-            if candidate.is_file():
-                return candidate
-    which = shutil.which("stockfish")
-    return Path(which) if which else None
-
-
 def collect() -> EnvReport:
     """Collect the environment report. Never raises because torch or Stockfish are absent."""
     torch_version, cuda, gpu = _torch_info()
-    stockfish = _find_stockfish()
+    stockfish = find_stockfish()
     return EnvReport(
         python=platform.python_version(),
         platform=f"{platform.system()}-{platform.release()}-{platform.machine()}",
