@@ -1,0 +1,58 @@
+# Decisiones y desviaciones de ejecución
+
+Registro vivo, en orden cronológico. Cada entrada: qué se decidió, por qué, qué cuesta si está mal.
+Las decisiones de diseño previas viven en `docs/spec/08-riesgos-y-decisiones.md`; aquí solo lo que
+se decide o se desvía durante la ejecución.
+
+## P0 · Scaffold (2026-09-18)
+
+### D-001 · Commits en inglés con Conventional Commits
+- **Qué:** los mensajes de commit de los tres repos van en inglés siguiendo Conventional Commits
+  (`feat:`, `fix:`, `docs:`, `ci:`, `chore:`, `test:`, `refactor:`), sin coautoría ni referencias a
+  herramientas o sesiones.
+- **Por qué:** orden explícita de Borja al lanzar `/goal` el 2026-09-18; prevalece sobre GOAL.md,
+  CLAUDE.md y `docs/spec/07` (que decían "en español, imperativo"). Los docs llevan nota fechada.
+- **Si está mal:** coste nulo de revertir (solo afecta a mensajes futuros).
+
+### D-002 · TypeScript fijado a `^6`
+- **Qué:** `typescript@^6` en las dos webs aunque npm ya publica 7.0.2.
+- **Por qué:** `docs/spec/04` lo exige ("TypeScript 6, nunca 7"); el portfolio de referencia usa 6.
+- **Si está mal:** subir la versión es un cambio de una línea y `astro check`.
+
+### D-003 · Stockfish 19 `windows-x86-64-universal` descargado por script
+- **Qué:** `scripts/get_stockfish.py` descarga el asset `stockfish-windows-x86-64-universal.zip`
+  de la release `sf_19` a `tools/stockfish/` (gitignored). No se añade al PATH del sistema;
+  `rukh.engine.find_stockfish()` lo localiza (o `RUKH_STOCKFISH`).
+- **Por qué:** no había Stockfish en la máquina; sf_19 no publica un asset `avx2` separado (el
+  binario universal elige la mejor variante en tiempo de ejecución).
+- **Si está mal:** cambiar la URL del script.
+
+### D-004 · Capturas E2E como artefactos de CI, no comparación de píxeles
+- **Qué:** los E2E de la demo en los tres viewports comprueban invariantes (sin scroll horizontal,
+  tablero cuadrado ≤ 640 px, panel a la derecha/debajo, objetivos ≥ 44 px) y guardan capturas que la
+  CI sube como artefacto. No se hace `toHaveScreenshot`.
+- **Por qué:** las baselines de píxeles difieren entre Windows (local) y el runner Linux; mantener
+  dos juegos de baselines en P0 es coste sin valor. `docs/spec/05` decía "capturas comparadas".
+- **Si está mal:** añadir `toHaveScreenshot` con baselines generadas en el contenedor de Playwright.
+
+### D-005 · OG por lección aplazado
+- **Qué:** en P0 el curso usa una imagen OG estática; las OG por lección con satori + resvg se hacen
+  cuando haya más de una lección (P1 o P2).
+- **Por qué:** reducir el alcance de P0 a lo que pide GOAL.md.
+- **Si está mal:** es una ruta `/og/[...].png` aislada.
+
+### D-006 · Repos remotos, DNS y Dokploy los crea Borja
+- **Qué:** todo P0 se hace en local; al final se pide a Borja crear `borja-glez/{rukh,rukh-lab,rukh-web}`,
+  los registros DNS y las dos apps en Dokploy. `gh` está autenticado como `borja-glez`, así que se
+  ofrece crear los repos desde aquí con su OK.
+- **Por qué:** punto de intervención marcado en GOAL.md.
+
+### D-007 · Python 3.12 fijado con `uv` (el del sistema es 3.13)
+- **Qué:** `.python-version` = 3.12 y `requires-python = ">=3.12,<3.13"`.
+- **Por qué:** `docs/spec/02` fija 3.12 y las ruedas de torch cu128 verificadas son cp312.
+- **Si está mal:** cambiar el rango y regenerar `uv.lock`.
+
+### D-008 · El plan de P0 quedó en el commit inicial de `main`
+- **Qué:** `docs/plans/2026-09-18-p0-scaffold.md` entró en `chore: initial commit` de `rukh` en vez
+  de en la rama. Se deja así; no se reescribe historia.
+- **Si está mal:** ninguno; es documentación.
