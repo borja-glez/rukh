@@ -10,7 +10,13 @@ from typer.testing import CliRunner
 
 from rukh import engine
 from rukh.cli import app
-from rukh.engine import EngineCheckResult, EngineNotFound, engine_check, find_stockfish
+from rukh.engine import (
+    EngineCheckResult,
+    EngineError,
+    EngineNotFound,
+    engine_check,
+    find_stockfish,
+)
 
 # The two live tests carry only `engine`, so `-m unit` never needs the Stockfish binary.
 unit = pytest.mark.unit
@@ -25,12 +31,14 @@ def test_find_stockfish_honours_env(rukh_home: Path, monkeypatch: pytest.MonkeyP
 
 
 @unit
-def test_find_stockfish_env_missing_file_is_none(
+def test_find_stockfish_env_missing_file_raises(
     rukh_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("RUKH_STOCKFISH", str(rukh_home / "missing.exe"))
+    missing = rukh_home / "missing.exe"
+    monkeypatch.setenv("RUKH_STOCKFISH", str(missing))
     monkeypatch.setattr(engine.shutil, "which", lambda _name: None)
-    assert find_stockfish() is None
+    with pytest.raises(EngineNotFound, match=r"RUKH_STOCKFISH=.*missing\.exe is not a file"):
+        find_stockfish()
 
 
 @unit
@@ -73,6 +81,55 @@ def test_cli_engine_check_without_binary_fails_cleanly(
     result = CliRunner().invoke(app, ["engine", "check"])
     assert result.exit_code == 1
     assert "Stockfish" in result.output
+
+
+class _FakeEngine:
+    """Stand-in for ``SimpleEngine``: speaks UCI but is not Stockfish (no ``UCI_Elo``)."""
+
+    def __init__(self) -> None:
+        self.id = {"name": "not-stockfish"}
+        self.options: dict[str, object] = {}
+
+    def __enter__(self) -> _FakeEngine:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+
+def _use_fake_engine(rukh_home: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    binary = rukh_home / "not-stockfish.exe"
+    binary.write_bytes(b"")
+    monkeypatch.setenv("RUKH_STOCKFISH", str(binary))
+    monkeypatch.setattr(
+        engine.chess.engine.SimpleEngine, "popen_uci", staticmethod(lambda *_a, **_k: _FakeEngine())
+    )
+    return binary
+
+
+@unit
+def test_engine_check_without_uci_elo_raises_engine_error(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_fake_engine(rukh_home, monkeypatch)
+    with pytest.raises(EngineError, match="does not expose UCI_Elo; is it Stockfish?"):
+        engine_check()
+
+
+@unit
+def test_engine_error_is_a_value_error() -> None:
+    assert issubclass(EngineError, ValueError)
+
+
+@unit
+def test_cli_engine_check_without_uci_elo_fails_cleanly(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_fake_engine(rukh_home, monkeypatch)
+    result = CliRunner().invoke(app, ["engine", "check"])
+    assert result.exit_code == 1
+    assert "does not expose UCI_Elo" in result.output
+    assert "Traceback" not in result.output
 
 
 @pytest.mark.engine

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from typing import Any
@@ -33,11 +34,15 @@ def flatten(config: Mapping[str, Any], prefix: str = "") -> dict[str, str]:
 
 
 def git_sha() -> str | None:
-    """Short SHA of the repository at ``paths.root()``, or None when there is no git repo."""
+    """Full SHA of the source tree (``paths.package_root()``), or None when it is not a git repo.
+
+    The source tree is used on purpose: ``RUKH_HOME`` may point at a data directory that is
+    not a checkout, and the tag must identify the code that produced the run.
+    """
     try:
         out = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=paths.root(),
+            ["git", "rev-parse", "HEAD"],
+            cwd=paths.package_root(),
             capture_output=True,
             text=True,
             check=True,
@@ -78,8 +83,10 @@ def start_run(
 
 
 def ui_command(host: str = "127.0.0.1", port: int = 5000) -> list[str]:
-    """Argv for ``mlflow ui`` against the local store."""
+    """Argv for ``mlflow ui`` against the local store, run through the current interpreter."""
     return [
+        sys.executable,
+        "-m",
         "mlflow",
         "ui",
         "--backend-store-uri",

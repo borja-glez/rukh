@@ -15,10 +15,12 @@ build/
 /mlruns/
 /tools/
 /checkpoints/
+/checkpoints/**/*.bin
+/artifacts/**/*.bin
+# Model weights never belong in git, wherever they are
 *.onnx
 *.safetensors
 *.pt
-*.bin
 
 # Local env
 .env

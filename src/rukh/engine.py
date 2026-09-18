@@ -20,6 +20,10 @@ class EngineNotFound(RuntimeError):
     """No Stockfish binary could be located."""
 
 
+class EngineError(ValueError):
+    """The engine started but does not behave like Stockfish (no usable ``UCI_Elo``)."""
+
+
 class EngineCheckResult(BaseModel):
     """Outcome of ``engine_check``: what engine answered and how the test game went."""
 
@@ -38,14 +42,15 @@ class EngineCheckResult(BaseModel):
 def find_stockfish() -> Path | None:
     """Locate Stockfish: ``RUKH_STOCKFISH``, then ``tools/stockfish/``, then ``PATH``.
 
-    When ``RUKH_STOCKFISH`` points at an existing file it wins outright; otherwise the lookup
-    continues with the other locations.
+    When ``RUKH_STOCKFISH`` is set it wins outright and must point at an existing file;
+    otherwise ``EngineNotFound`` is raised instead of silently falling through.
     """
     env = os.environ.get("RUKH_STOCKFISH")
     if env:
         candidate = Path(env)
-        if candidate.is_file():
-            return candidate
+        if not candidate.is_file():
+            raise EngineNotFound(f"RUKH_STOCKFISH={env} is not a file")
+        return candidate
     tools = paths.tools_dir() / "stockfish"
     for pattern in ("stockfish*.exe", "stockfish"):
         for candidate in sorted(tools.glob(pattern)):
@@ -59,7 +64,8 @@ def engine_check(elo: int = 1400, plies: int = 40, seed: int = 0) -> EngineCheck
     """Open Stockfish, limit it to ``elo`` and play ``plies`` half-moves against a random mover.
 
     Stockfish plays White, the seeded random player plays Black. Raises ``EngineNotFound`` when
-    no binary is available and ``ValueError`` when ``elo`` is outside the engine's range.
+    no binary is available, ``EngineError`` when the binary does not expose ``UCI_Elo`` and
+    ``ValueError`` when ``elo`` is outside the engine's range.
     """
     path = find_stockfish()
     if path is None:
@@ -75,8 +81,16 @@ def engine_check(elo: int = 1400, plies: int = 40, seed: int = 0) -> EngineCheck
 
     with chess.engine.SimpleEngine.popen_uci(str(path)) as engine:
         name = str(engine.id.get("name", "unknown"))
-        option = engine.options["UCI_Elo"]
-        uci_elo_min, uci_elo_max = int(option.min), int(option.max)
+        try:
+            option = engine.options["UCI_Elo"]
+            uci_elo_min, uci_elo_max = int(option.min), int(option.max)
+        except (
+            KeyError,
+            TypeError,
+            chess.engine.EngineError,
+            chess.engine.EngineTerminatedError,
+        ) as exc:
+            raise EngineError(f"{path} ({name}) does not expose UCI_Elo; is it Stockfish?") from exc
         if not uci_elo_min <= elo <= uci_elo_max:
             raise ValueError(f"UCI_Elo {elo} outside [{uci_elo_min}, {uci_elo_max}]")
         engine.configure({"UCI_LimitStrength": True, "UCI_Elo": elo})

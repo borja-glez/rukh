@@ -12,6 +12,11 @@ from pathlib import Path
 _PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 
 
+def package_root() -> Path:
+    """Source tree root (the parent of ``src/``), regardless of ``RUKH_HOME``."""
+    return _PACKAGE_ROOT
+
+
 def root() -> Path:
     """Repository root: ``RUKH_HOME`` if set, otherwise the parent of ``src/``."""
     home = os.environ.get("RUKH_HOME")

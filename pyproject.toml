@@ -4,6 +4,7 @@ version = "0.0.1"
 description = "Rukh: a chess language model built from scratch (data, training, evaluation, agents)."
 readme = "README.md"
 license = "MIT"
+authors = [{ name = "Borja González" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "typer>=0.27",
@@ -23,6 +24,12 @@ dependencies = [
 [project.optional-dependencies]
 cpu = ["torch>=2.11,<2.12"]
 cu128 = ["torch>=2.11,<2.12"]
+
+[project.urls]
+Repository = "https://github.com/borja-glez/rukh"
+Course = "https://lab.rukh.borjaglez.com"
+Demo = "https://rukh.borjaglez.com"
+Models = "https://huggingface.co/chorcat"
 
 [project.scripts]
 rukh = "rukh.cli:app"
@@ -54,7 +61,7 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [dependency-groups]
-dev = ["pytest>=9", "ruff>=0.16", "pytest-cov"]
+dev = ["pytest>=9", "ruff>=0.16"]
 
 [tool.pytest.ini_options]
 markers = [

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import re
+import shutil
+import sys
 from pathlib import Path
 
 import mlflow
 import pytest
 
 from rukh import __version__
-from rukh.tracking import flatten, start_run, tracking_uri
+from rukh.tracking import flatten, git_sha, start_run, tracking_uri, ui_command
 
 pytestmark = pytest.mark.unit
 
@@ -44,6 +47,25 @@ def test_start_run_logs_flattened_params_and_tags(rukh_home: Path) -> None:
     assert logged.data.tags["rukh_version"] == __version__
     assert logged.data.tags["purpose"] == "test"
     assert logged.info.status == "FINISHED"
+
+
+def test_git_sha_is_the_source_tree_sha_even_with_rukh_home_elsewhere(
+    rukh_home: Path, repo_root: Path
+) -> None:
+    if shutil.which("git") is None:
+        pytest.skip("git is not installed")
+    if not (repo_root / ".git").exists():
+        pytest.skip("source tree is not a git checkout")
+    assert not (rukh_home / ".git").exists()
+    sha = git_sha()
+    assert sha is not None and re.fullmatch(r"[0-9a-f]{40}", sha), sha
+
+
+def test_ui_command_uses_the_current_interpreter() -> None:
+    argv = ui_command(host="0.0.0.0", port=5001)
+    assert argv[:4] == [sys.executable, "-m", "mlflow", "ui"]
+    assert argv[argv.index("--host") + 1] == "0.0.0.0"
+    assert argv[argv.index("--port") + 1] == "5001"
 
 
 def test_cli_has_mlflow_ui_command() -> None:

@@ -86,6 +86,7 @@ def data_fetch(
     typer.echo("query:")
     for line in fetch_plan.query.splitlines():
         typer.echo(f"  {line}")
+    typer.echo(f"out_dir:  {fetch_plan.out_dir}")
     typer.echo("outputs:")
     for path in fetch_plan.out_paths:
         typer.echo(f"  {path}")
@@ -112,11 +113,11 @@ def engine_check_cmd(
     as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
 ) -> None:
     """Locate Stockfish, set UCI_Elo and play a short game against a random mover."""
-    from rukh.engine import EngineCheckResult, EngineNotFound, engine_check
+    from rukh.engine import EngineCheckResult, EngineError, EngineNotFound, engine_check
 
     try:
         result = engine_check(elo=elo, plies=plies, seed=seed)
-    except (EngineNotFound, ValueError) as exc:
+    except (EngineNotFound, EngineError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     if as_json:

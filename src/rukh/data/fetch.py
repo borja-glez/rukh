@@ -3,8 +3,8 @@
 Only the games that pass the filters are materialized locally (predicate pushdown on the
 remote parquet files). The ply count (``min_plies``) is not applied here: it is enforced in P1
 once ``movetext`` has been converted to UCI with python-chess, because counting plies from SAN
-with comments (``%clk``, ``%eval``) in SQL is unreliable. Variant exclusion by ``Event`` is a
-coarse first pass that P1 refines.
+with comments (``%clk``, ``%eval``) in SQL is unreliable. The manifest therefore records it as
+``min_plies_deferred``. Variant exclusion by ``Event`` is a coarse first pass that P1 refines.
 """
 
 from __future__ import annotations
@@ -27,13 +27,13 @@ class FetchConfig(BaseConfig):
 
     dataset: str = "Lichess/standard-chess-games"
     months: list[str] = Field(min_length=1)
-    min_elo: int = 1800
-    min_base_seconds: int = 180
-    terminations: list[str] = ["Normal", "Time forfeit"]
-    min_plies: int = 20
+    min_elo: int = Field(default=1800, ge=0)
+    min_base_seconds: int = Field(default=180, ge=0)
+    terminations: list[str] = Field(default=["Normal", "Time forfeit"], min_length=1)
+    min_plies: int = Field(default=20, ge=0)
     exclude_variants: bool = True
     out_dir: str = "data/raw"
-    limit: int | None = None
+    limit: int | None = Field(default=None, ge=1)
 
     @field_validator("months")
     @classmethod
@@ -45,12 +45,17 @@ class FetchConfig(BaseConfig):
 
 
 class FetchPlan(BaseModel):
-    """Everything ``run`` would do, without doing it."""
+    """Everything ``run`` would do, without doing it.
+
+    ``out_dir`` is the absolute output directory; ``out_paths`` and ``manifest_path`` are
+    relative to it, in POSIX form, so plans and manifests do not leak machine paths.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     query: str
     months: list[str]
+    out_dir: str
     out_paths: list[str]
     manifest_path: str
 
@@ -72,10 +77,15 @@ def _sql_string(value: str) -> str:
 
 
 def build_query(cfg: FetchConfig) -> str:
-    """Build the DuckDB SQL that selects the filtered games, one ``read_parquet`` per month."""
+    """Build the DuckDB SQL that selects the filtered games, one ``read_parquet`` per month.
+
+    ``TRY_CAST`` drops rows whose base time is not an integer (correspondence games export
+    ``TimeControl = '-'``). ``hive_partitioning = false`` stops DuckDB from injecting ``year``
+    and ``month`` columns from the path, which would collide with the explicit ``month`` alias.
+    """
     conditions = [
         f"WhiteElo >= {cfg.min_elo} AND BlackElo >= {cfg.min_elo}",
-        f"CAST(split_part(TimeControl, '+', 1) AS INTEGER) >= {cfg.min_base_seconds}",
+        f"TRY_CAST(split_part(TimeControl, '+', 1) AS INTEGER) >= {cfg.min_base_seconds}",
         "Termination IN (" + ", ".join(_sql_string(t) for t in cfg.terminations) + ")",
     ]
     if cfg.exclude_variants:
@@ -85,7 +95,7 @@ def build_query(cfg: FetchConfig) -> str:
         "SELECT *, "
         + _sql_string(month)
         + " AS month\n"
-        + f"FROM read_parquet({_sql_string(_source(cfg, month))})\n"
+        + f"FROM read_parquet({_sql_string(_source(cfg, month))}, hive_partitioning = false)\n"
         + f"WHERE {where}"
         for month in cfg.months
     ]
@@ -101,17 +111,19 @@ def _out_dir(cfg: FetchConfig) -> Path:
 
 
 def plan(cfg: FetchConfig) -> FetchPlan:
-    """Describe the query, months, output files and manifest path for ``cfg``."""
+    """Describe the query, months, output directory, relative output files and manifest."""
     out_dir = _out_dir(cfg)
     out_paths = []
     for month in cfg.months:
         year, mm = _split_month(month)
-        out_paths.append(str(out_dir / f"year={year}" / f"month={mm}" / "games.parquet"))
+        target = out_dir / f"year={year}" / f"month={mm}" / "games.parquet"
+        out_paths.append(target.relative_to(out_dir).as_posix())
     return FetchPlan(
         query=build_query(cfg),
         months=list(cfg.months),
+        out_dir=out_dir.as_posix(),
         out_paths=out_paths,
-        manifest_path=str(out_dir / "manifest.json"),
+        manifest_path=(out_dir / "manifest.json").relative_to(out_dir).as_posix(),
     )
 
 
@@ -128,7 +140,9 @@ def run(cfg: FetchConfig, dry_run: bool = False) -> FetchPlan:
 
     With ``dry_run=True`` nothing touches the network or the disk. Otherwise each month is
     materialized as ``<out_dir>/year=YYYY/month=MM/games.parquet`` (so ``limit`` applies per
-    month) and a ``manifest.json`` with filters, counts and file hashes is written last.
+    month) and a ``manifest.json`` with filters, counts and file hashes is written last. The
+    manifest stores file paths relative to ``out_dir`` and ``min_plies`` as
+    ``min_plies_deferred`` because plies are only filtered in P1, after UCI conversion.
     """
     fetch_plan = plan(cfg)
     if dry_run:
@@ -136,17 +150,20 @@ def run(cfg: FetchConfig, dry_run: bool = False) -> FetchPlan:
 
     import duckdb
 
+    out_dir = Path(fetch_plan.out_dir)
     counts: dict[str, int] = {}
     files: list[FileHash] = []
     con = duckdb.connect()
     try:
         for month, out_path in zip(cfg.months, fetch_plan.out_paths, strict=True):
-            target = Path(out_path)
+            target = out_dir / out_path
             target.parent.mkdir(parents=True, exist_ok=True)
             month_query = build_query(cfg.model_copy(update={"months": [month]}))
             target_sql = _sql_string(target.as_posix())
             con.execute(f"COPY ({month_query}) TO {target_sql} (FORMAT PARQUET)")
-            row = con.execute(f"SELECT count(*) FROM read_parquet({target_sql})").fetchone()
+            row = con.execute(
+                f"SELECT count(*) FROM read_parquet({target_sql}, hive_partitioning = false)"
+            ).fetchone()
             counts[month] = int(row[0]) if row else 0
             files.append(
                 FileHash(path=out_path, sha256=_sha256(target), bytes=target.stat().st_size)
@@ -154,14 +171,16 @@ def run(cfg: FetchConfig, dry_run: bool = False) -> FetchPlan:
     finally:
         con.close()
 
+    filters = cfg.model_dump(exclude={"dataset", "months", "out_dir", "min_plies"})
+    filters["min_plies_deferred"] = cfg.min_plies
     manifest = Manifest(
         dataset=cfg.dataset,
         months=list(cfg.months),
-        filters=cfg.model_dump(exclude={"dataset", "months", "out_dir"}),
+        filters=filters,
         counts=counts,
         files=files,
     )
-    manifest_path = Path(fetch_plan.manifest_path)
+    manifest_path = out_dir / fetch_plan.manifest_path
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return fetch_plan

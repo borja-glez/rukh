@@ -42,8 +42,22 @@ def target_path(dest: Path) -> Path:
 def download(url: str) -> bytes:
     print(f"downloading {url}")
     request = urllib.request.Request(url, headers={"User-Agent": "rukh/get_stockfish"})
-    with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
+    with urllib.request.urlopen(request, timeout=120) as response:
         return response.read()
+
+
+def is_executable_member(name: str) -> bool:
+    """True for the engine binary inside the release archive, never for a ``src/`` file.
+
+    Windows archives ship ``stockfish-<variant>.exe``; the others ship a plain binary with no
+    extension. Both archives also contain the sources under ``src/``, which must be skipped.
+    """
+    path = Path(name)
+    if "src" in path.parts or not path.name.startswith("stockfish"):
+        return False
+    if platform.system() == "Windows":
+        return path.suffix == ".exe"
+    return path.suffix == ""
 
 
 def extract_executable(asset: str, payload: bytes, target: Path) -> None:
@@ -51,8 +65,9 @@ def extract_executable(asset: str, payload: bytes, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     if asset.endswith(".zip"):
         with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-            names = [n for n in archive.namelist() if Path(n).name.startswith("stockfish")]
-            names = [n for n in names if not n.endswith("/")]
+            names = [
+                n for n in archive.namelist() if not n.endswith("/") and is_executable_member(n)
+            ]
             if not names:
                 raise SystemExit(f"no stockfish executable inside {asset}")
             with archive.open(names[0]) as src, target.open("wb") as dst:
@@ -60,9 +75,7 @@ def extract_executable(asset: str, payload: bytes, target: Path) -> None:
     else:
         with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as archive:
             members = [
-                m
-                for m in archive.getmembers()
-                if m.isfile() and Path(m.name).name.startswith("stockfish")
+                m for m in archive.getmembers() if m.isfile() and is_executable_member(m.name)
             ]
             if not members:
                 raise SystemExit(f"no stockfish executable inside {asset}")
