@@ -221,3 +221,16 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Por qué:** la lección pide guardarlos en el repo `rukh` para ejecutarlos; tenerlos versionados
   evita que el lector los copie mal y permite que `ruff` los revise.
 - **Si está mal:** si la lección y el script divergen, manda la lección; el README lo advierte.
+
+## P2 · Decoder (2026-09-19)
+
+### D-023 · El código de P2 se adelanta mientras se descarga el recorte de P1
+- **Qué:** la rama `p2-decoder` nace de `p1-datos` y se desarrolla el modelo, el entrenamiento, la
+  evaluación y la exportación mientras `rukh data fetch` sigue descargando los dos meses (tarda
+  varias horas: son ~12 GB de parquet remoto por mes para quedarse con 3M partidas). El código de P1
+  ya está completo y revisado; lo único pendiente de P1 es la ejecución real y la publicación.
+- **Por qué:** el protocolo de hitos (plan → rama → tareas → revisión → una ola → parada) se respeta
+  en los dos hitos; lo que se solapa es la espera de una descarga, no el trabajo. La alternativa era
+  dejar la máquina parada varias horas.
+- **Si está mal:** `p2-decoder` se rebasa sobre `p1-datos` cuando P1 cierre; los artefactos que P1
+  regenera (`artifacts/tokenizer/*`, `artifacts/web/tokenizer-stats.json`) se traen con un merge.
