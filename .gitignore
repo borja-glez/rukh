@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Project data and runs (never in git)
+data/
+mlruns/
+tools/
+checkpoints/
+*.onnx
+*.safetensors
+*.pt
+*.bin
+
+# Local env
+.env
+.env.*
+*.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
