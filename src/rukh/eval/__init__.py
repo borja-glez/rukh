@@ -1,7 +1,7 @@
 """Evaluation harness: legality, next-move accuracy, puzzles, Elo, cache and reporting."""
 
 from rukh.eval.accuracy import AccuracyResult, BandAccuracy, accuracy, elo_band
-from rukh.eval.cache import EvalCache, file_sha
+from rukh.eval.cache import EvalCache, config_sha, file_sha
 from rukh.eval.elo import (
     DEFAULT_RUNGS,
     EloResult,
@@ -11,9 +11,12 @@ from rukh.eval.elo import (
     bootstrap_ci,
     estimate,
     fit_elo,
+    one_sided_bound,
     play_rung,
     play_rungs,
+    record_of,
     score_of,
+    separation,
 )
 from rukh.eval.legality import (
     LegalityResult,
@@ -32,8 +35,25 @@ from rukh.eval.puzzles import (
     run_puzzles,
     solve_puzzle,
 )
-from rukh.eval.report import ReportPaths, WebRow, render_markdown, row_of, upsert_row, write_report
-from rukh.eval.suite import EvalConfig, SuiteResult, evaluate, load_suite, run_suite
+from rukh.eval.report import (
+    ReportPaths,
+    WebRow,
+    elo_line,
+    render_markdown,
+    row_of,
+    upsert_row,
+    write_report,
+)
+from rukh.eval.suite import (
+    EvalConfig,
+    SuiteResult,
+    evaluate,
+    hub_checkpoint,
+    is_hub_id,
+    load_suite,
+    resolve_model,
+    run_suite,
+)
 
 __all__ = [
     "DEFAULT_RUNGS",
@@ -56,24 +76,32 @@ __all__ = [
     "accuracy",
     "board_of",
     "bootstrap_ci",
+    "config_sha",
     "elo_band",
+    "elo_line",
     "estimate",
     "evaluate",
     "file_sha",
     "fit_elo",
+    "hub_checkpoint",
+    "is_hub_id",
     "legality",
     "load_puzzles",
     "load_suite",
     "model_source",
+    "one_sided_bound",
     "play_rung",
     "play_rungs",
     "position_at",
+    "record_of",
     "render_markdown",
+    "resolve_model",
     "row_of",
     "run_puzzles",
     "run_suite",
     "sample_positions",
     "score_of",
+    "separation",
     "solve_puzzle",
     "upsert_row",
     "write_report",

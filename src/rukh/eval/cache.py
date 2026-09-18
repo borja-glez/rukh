@@ -5,6 +5,11 @@ hundreds of games and thousands of puzzles. Every finished item is stored as JSO
 of the weights that produced it, so re-running a suite after a crash (or after adding one rung)
 only pays for what is missing. ``--no-cache`` builds a disabled cache: it reads nothing and
 writes nothing, which is what a benchmark of the harness itself wants.
+
+The key is the weights **and** the settings that change what an item means: temperature, top-k,
+the engine's move time, the ply limit, the rung definitions, the number of games and the seed.
+Without them, lowering the temperature or raising the move time would silently reuse games
+played under the old settings and report them as the new ones.
 """
 
 from __future__ import annotations
@@ -27,6 +32,14 @@ CREATE TABLE IF NOT EXISTS items (
 )
 """
 CHUNK = 1 << 20
+SHA_PREFIX = 16
+"""Characters of each SHA kept in the key: enough to identify, short enough to read."""
+
+
+def config_sha(fields: Mapping[str, Any]) -> str:
+    """SHA-256 of the evaluation-relevant settings, as canonical JSON."""
+    payload = json.dumps(dict(fields), sort_keys=True, default=str, ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def file_sha(path: Path) -> str:
@@ -41,8 +54,18 @@ def file_sha(path: Path) -> str:
 class EvalCache:
     """Key-value store of evaluation items; ``enabled=False`` turns every call into a no-op."""
 
-    def __init__(self, path: Path | None, model_sha: str, enabled: bool = True) -> None:
+    def __init__(
+        self,
+        path: Path | None,
+        model_sha: str,
+        enabled: bool = True,
+        config_sha: str | None = None,
+    ) -> None:
         self.model_sha = model_sha
+        self.config_sha = config_sha
+        self.key = (
+            model_sha if not config_sha else f"{model_sha[:SHA_PREFIX]}:{config_sha[:SHA_PREFIX]}"
+        )
         self.enabled = enabled and path is not None
         self.path = Path(path) if path is not None else None
         self._conn: sqlite3.Connection | None = None
@@ -58,7 +81,7 @@ class EvalCache:
             return None
         row = self._conn.execute(
             "SELECT payload FROM items WHERE model_sha = ? AND suite = ? AND item_id = ?",
-            (self.model_sha, suite, item_id),
+            (self.key, suite, item_id),
         ).fetchone()
         if row is None:
             return None
@@ -71,7 +94,7 @@ class EvalCache:
             return
         self._conn.execute(
             "INSERT OR REPLACE INTO items (model_sha, suite, item_id, payload) VALUES (?, ?, ?, ?)",
-            (self.model_sha, suite, item_id, json.dumps(dict(payload), default=str)),
+            (self.key, suite, item_id, json.dumps(dict(payload), default=str)),
         )
         self._conn.commit()
 
@@ -81,10 +104,10 @@ class EvalCache:
             return 0
         if suite is None:
             query = "SELECT COUNT(*) FROM items WHERE model_sha = ?"
-            args: tuple[str, ...] = (self.model_sha,)
+            args: tuple[str, ...] = (self.key,)
         else:
             query = "SELECT COUNT(*) FROM items WHERE model_sha = ? AND suite = ?"
-            args = (self.model_sha, suite)
+            args = (self.key, suite)
         return int(self._conn.execute(query, args).fetchone()[0])
 
     def close(self) -> None:

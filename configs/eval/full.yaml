@@ -8,7 +8,8 @@ accuracy_positions: 10000
 position_pool: 50000
 puzzles_per_band: 2000
 elo_games: 100
-elo_move_time: 0.05
+# 0.1 s per move: below that `UCI_Elo` is not calibrated at all (D-025).
+elo_move_time: 0.1
 bootstrap: 1000
 temperature: 0.6
 top_k: 20
@@ -17,4 +18,5 @@ seed: 42
 out_dir: artifacts/eval
 web_results: artifacts/web/results.json
 cache_db: artifacts/eval/cache.sqlite
+# device: null -> CUDA when it is available (rukh.train.pick_device)
 track: true

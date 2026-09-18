@@ -7,7 +7,7 @@ from pathlib import Path
 import chess
 import pytest
 
-from rukh.eval.cache import EvalCache, file_sha
+from rukh.eval.cache import EvalCache, config_sha, file_sha
 from rukh.eval.puzzles import PuzzleItem, run_puzzles
 from rukh.tokenize.uci_vocab import UciTokenizer
 
@@ -91,6 +91,34 @@ def test_without_a_cache_the_puzzle_is_replayed(tok: UciTokenizer) -> None:
     run_puzzles(source, tok, [SCHOLAR])
     run_puzzles(source, tok, [SCHOLAR])
     assert source.calls == 2
+
+
+def test_different_settings_do_not_share_results(tmp_path: Path) -> None:
+    path = tmp_path / "cache.sqlite"
+    slow = config_sha({"temperature": 0.6, "elo_move_time": 0.1})
+    fast = config_sha({"temperature": 0.6, "elo_move_time": 0.05})
+    assert slow != fast
+    with EvalCache(path, "sha-a", config_sha=slow) as first:
+        first.put("elo", "uci-1500:0", {"score": 1.0})
+    with EvalCache(path, "sha-a", config_sha=fast) as second:
+        assert second.get("elo", "uci-1500:0") is None  # the move time changed the games
+        assert second.count("elo") == 0
+    with EvalCache(path, "sha-a", config_sha=slow) as again:
+        assert again.get("elo", "uci-1500:0") == {"score": 1.0}
+
+
+def test_the_config_hash_ignores_key_order_and_reads_every_field() -> None:
+    fields = {"temperature": 0.6, "top_k": 20, "seed": 42}
+    assert config_sha(fields) == config_sha(dict(reversed(list(fields.items()))))
+    assert config_sha(fields) != config_sha({**fields, "top_k": 10})
+    assert config_sha(fields) != config_sha({**fields, "seed": 7})
+
+
+def test_the_weights_sha_is_still_what_the_report_shows(tmp_path: Path) -> None:
+    cache = EvalCache(tmp_path / "cache.sqlite", "sha-a", config_sha="deadbeef")
+    assert cache.model_sha == "sha-a"
+    assert cache.key.startswith("sha-a:")
+    cache.close()
 
 
 def test_file_sha_identifies_the_weights(tmp_path: Path) -> None:

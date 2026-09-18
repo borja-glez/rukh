@@ -29,6 +29,7 @@ class RankedModel:
     def __init__(self, tok: UciTokenizer, ranking: list[str]) -> None:
         self.ids = [tok.vocab[token] for token in ranking]
         self.vocab_size = len(tok)
+        self.cfg = TOY  # the prompt is cropped to the model's block, so the stub needs one
 
     def parameters(self) -> Iterator[torch.Tensor]:
         return iter([torch.zeros(1)])

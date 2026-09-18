@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict
 
 from rukh.eval.cache import EvalCache
 from rukh.eval.legality import header
-from rukh.infer import SampleConfig, pick_move
+from rukh.infer import SampleConfig, model_generator, pick_move, prompt_ids
 from rukh.models import MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer
 
@@ -55,7 +55,7 @@ def model_source(
 ) -> MoveSource:
     """A ``MoveSource`` backed by the masked sampler (temperature 0 by default: argmax)."""
     sample = (cfg or SampleConfig(temperature=0.0)).model_copy(update={"mask_illegal": True})
-    generator = sample.generator()
+    generator = model_generator(model, sample)
 
     def choose(board: chess.Board, history: list[int]) -> chess.Move | None:
         move, _ = pick_move(model, tok, board, history, sample, generator)
@@ -94,7 +94,7 @@ def solve_puzzle(
     for index, uci in enumerate(item.moves):
         move = chess.Move.from_uci(uci)
         if index % 2 == 1:
-            played = source(board, history[-block:])
+            played = source(board, prompt_ids(history, block))
             if played is None or played.uci() != uci:
                 break
             correct += 1

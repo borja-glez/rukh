@@ -18,6 +18,7 @@ from rukh.eval.legality import (
     position_at,
     sample_positions,
 )
+from rukh.infer import SampleConfig
 from rukh.models import DecoderConfig, MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer
 
@@ -74,10 +75,37 @@ def test_the_elo_of_a_position_is_the_side_to_move(tok: UciTokenizer) -> None:
     assert position_at(tok, 1, moves, 3, 1850, 1950).elo == 1950
 
 
-def test_the_history_is_cropped_on_the_left_to_the_block(tok: UciTokenizer) -> None:
+def test_the_crop_keeps_the_header_and_drops_the_oldest_moves(tok: UciTokenizer) -> None:
     moves = GAME.split()
     position = position_at(tok, 1, moves, 8, 1850, 1950, block=5)
     assert len(position.history) == 5
+    # The Elo conditioning survives: a plain ``history[-block:]`` would have thrown it away.
+    assert position.history[:3] == header(tok, 1850, 1950)
+    assert position.history[3:] == [tok.vocab[uci] for uci in moves[6:8]]
+
+
+def test_a_short_history_is_left_alone(tok: UciTokenizer) -> None:
+    position = position_at(tok, 1, GAME.split(), 4, 1850, 1950, block=200)
+    assert len(position.history) == 7
+    assert position.history[:3] == header(tok, 1850, 1950)
+
+
+def test_legality_is_measured_twice_with_different_definitions(
+    tok: UciTokenizer, model: MoveDecoder
+) -> None:
+    positions = [position_at(tok, 1, GAME.split(), ply, 1850, 1950) for ply in range(1, 6)]
+    cfg = SampleConfig(temperature=0.6, top_k=20, seed=0)
+    argmax = legality(model, tok, positions, cfg, mode="argmax")
+    sampled = legality(model, tok, positions, cfg, mode="sampled")
+    assert argmax.mode == "argmax" and argmax.temperature is None and argmax.top_k is None
+    assert sampled.mode == "sampled" and sampled.temperature == 0.6 and sampled.top_k == 20
+    # argmax is deterministic: the same call twice gives the same rate.
+    assert legality(model, tok, positions, cfg, mode="argmax").legal == argmax.legal
+
+
+def test_an_unknown_legality_mode_is_an_error(tok: UciTokenizer, model: MoveDecoder) -> None:
+    with pytest.raises(ValueError, match="unknown legality mode"):
+        legality(model, tok, [], mode="greedy")
 
 
 def test_board_of_replays_the_prefix(tok: UciTokenizer) -> None:

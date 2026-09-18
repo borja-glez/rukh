@@ -15,12 +15,21 @@ import chess
 import chess.engine
 from pydantic import BaseModel, ConfigDict
 
-from rukh.infer.sampler import SampleConfig, legal_token_ids, pick_move
+from rukh.infer.sampler import (
+    HEADER_TOKENS,
+    SampleConfig,
+    legal_token_ids,
+    model_generator,
+    pick_move,
+)
 from rukh.models import MoveDecoder
 from rukh.tokenize.uci_vocab import RESULT_TOKENS, UciTokenizer, elo_token
 
-MOVE_TIME_SECONDS = 0.05
-HEADER_TOKENS = 3  # <bos> <wXXXX> <bXXXX>
+MOVE_TIME_SECONDS = 0.1
+"""Default seconds per move for the Stockfish opponent (``docs/decisiones-de-ejecucion`` D-025)."""
+REPETITION_CLOCK = 8
+"""A threefold repetition needs at least this many reversible plies, so the check is gated on it."""
+FIFTY_MOVE_PLIES = 100
 
 
 class Opponent(Protocol):
@@ -96,6 +105,28 @@ class GameResult(BaseModel):
     illegal_proposals: int
     moves: list[str]
     termination: str
+    fen: str = chess.STARTING_FEN
+    """The final position, so a game cut by the context limit can still be adjudicated."""
+
+    @property
+    def cut(self) -> bool:
+        """True when the game ran out of context instead of ending on the board."""
+        return self.result == "*"
+
+
+def is_over(board: chess.Board) -> bool:
+    """Whether the game is finished, including the claimable draws, without the O(n^2) check.
+
+    ``board.is_game_over(claim_draw=True)`` tries every legal move looking for a claimable
+    repetition, which is quadratic over a long game and is called once per ply. The claimable
+    draws are covered here by the fifty-move clock and by ``is_repetition`` (a scan of the move
+    stack) gated on a halfmove clock that makes a repetition possible at all.
+    """
+    if board.is_game_over():
+        return True
+    if board.halfmove_clock >= FIFTY_MOVE_PLIES:
+        return True
+    return board.halfmove_clock >= REPETITION_CLOCK and board.is_repetition(3)
 
 
 def _history(tok: UciTokenizer, white_elo: int, black_elo: int) -> list[int]:
@@ -121,16 +152,19 @@ def play_game(
 
     The model's illegal proposals are counted and then rescued with a masked draw, so a game
     always terminates: ``illegal_proposals`` is the raw legality signal, not a failure.
+
+    A game that hits ``max_plies`` comes back with ``result="*"`` and the final ``fen``: scoring
+    it as a draw would flatter (or punish) the model, so the Elo harness adjudicates it instead.
     """
     board = board if board is not None else chess.Board()
     limit = max_plies if max_plies is not None else model.cfg.block - HEADER_TOKENS - 1
-    generator = cfg.generator()
+    generator = model_generator(model, cfg)
     masked = cfg.model_copy(update={"mask_illegal": True})
     history = _history(tok, white_elo, black_elo)
     moves: list[str] = []
     illegal = 0
 
-    while len(moves) < limit and not board.is_game_over(claim_draw=True):
+    while len(moves) < limit and not is_over(board):
         if board.turn == model_color:
             move, report = pick_move(model, tok, board, history, cfg, generator)
             if move is None:
@@ -152,7 +186,66 @@ def play_game(
         illegal_proposals=illegal,
         moves=moves,
         termination=outcome.termination.name.lower() if outcome else "cut_short",
+        fen=board.fen(),
     )
+
+
+PIECE_VALUES = {
+    chess.PAWN: 1.0,
+    chess.KNIGHT: 3.0,
+    chess.BISHOP: 3.0,
+    chess.ROOK: 5.0,
+    chess.QUEEN: 9.0,
+}
+ADJUDICATION_DEPTH = 8
+ADJUDICATION_CP = 200
+"""Centipawn margin above which an adjudicated position counts as a win."""
+ADJUDICATION_PAWNS = ADJUDICATION_CP / 100.0
+MATE_SCORE = 10_000
+
+
+def material_balance(board: chess.Board) -> float:
+    """Material of the position in pawns, from White's point of view."""
+    total = 0.0
+    for piece_type, value in PIECE_VALUES.items():
+        total += value * len(board.pieces(piece_type, chess.WHITE))
+        total -= value * len(board.pieces(piece_type, chess.BLACK))
+    return total
+
+
+def adjudicate(
+    board: chess.Board | str,
+    engine: chess.engine.SimpleEngine | None = None,
+    depth: int = ADJUDICATION_DEPTH,
+    margin_cp: int = ADJUDICATION_CP,
+) -> tuple[str, str]:
+    """Decide a game that was cut short; returns ``(result, how)``.
+
+    With an engine the final position is analysed to a shallow depth and a score of at least
+    ``margin_cp`` for one side is a win for that side; without one (or when the analysis gives no
+    centipawn score) the same margin is applied to the material count, which is crude but is
+    still an answer, and is far better than booking every cut game as half a point.
+    """
+    position = chess.Board(board) if isinstance(board, str) else board
+    if engine is not None:
+        try:
+            info = engine.analyse(position, chess.engine.Limit(depth=depth))
+            score = info["score"].white().score(mate_score=MATE_SCORE)
+        except (chess.engine.EngineError, chess.engine.EngineTerminatedError, KeyError):
+            score = None
+        if score is not None:
+            return _verdict(float(score), float(margin_cp)), f"engine depth {depth}"
+    pawns = material_balance(position)
+    return _verdict(pawns * 100.0, float(margin_cp)), "material count"
+
+
+def _verdict(centipawns: float, margin: float) -> str:
+    """``1-0``/``0-1``/``1/2-1/2`` from a White-relative score in centipawns."""
+    if centipawns >= margin:
+        return "1-0"
+    if centipawns <= -margin:
+        return "0-1"
+    return "1/2-1/2"
 
 
 def result_token(tok: UciTokenizer, result: str) -> int | None:
@@ -168,15 +261,21 @@ def legality_rate(
     histories: list[list[int]],
     cfg: SampleConfig,
 ) -> float:
-    """Share of positions where the unmasked network proposes a legal move."""
+    """Share of the positions actually queried where the unmasked network proposes a legal move.
+
+    Positions with no legal move (checkmate, stalemate) are never asked, so they are not counted
+    in the denominator either: the rate is over the boards the model was really given.
+    """
     if not boards:
         return 0.0
     unmasked = cfg.model_copy(update={"mask_illegal": False})
-    generator = cfg.generator()
+    generator = model_generator(model, cfg)
     legal = 0
+    counted = 0
     for board, history in zip(boards, histories, strict=True):
         if not legal_token_ids(board, tok):
             continue
+        counted += 1
         _, report = pick_move(model, tok, board, history, unmasked, generator)
         legal += int(report["legal"])
-    return legal / len(boards)
+    return legal / counted if counted else 0.0

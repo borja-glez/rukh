@@ -5,6 +5,16 @@ training encodes them (``<bos> <wXXXX> <bXXXX> moves...``). The model is asked f
 ``mask_illegal=False``, so the raw token comes out as the network produced it, and the share of
 tokens that happen to be legal moves in that position is the legality rate of ``docs/spec/02``.
 
+It is measured twice, because the two numbers answer different questions:
+
+``argmax``
+    the single most likely token, with no temperature and no top-k. This is the headline rate
+    and the one the "at least 99 % legal" bar of ``GOAL.md`` refers to: it is a property of the
+    weights, not of a sampler setting.
+``sampled``
+    a token drawn exactly as the demo draws it (the suite's temperature and top-k). It is
+    always the lower of the two and is what a player would actually experience without a mask.
+
 The sampler of validation prefixes lives here because legality is what defines it; ``accuracy``
 reuses the same ``Position`` objects (it only needs the human move on top).
 """
@@ -18,9 +28,17 @@ from pathlib import Path
 import chess
 from pydantic import BaseModel, ConfigDict
 
-from rukh.infer import SampleConfig, legal_token_ids, pick_move
+from rukh.infer import (
+    SampleConfig,
+    legal_token_ids,
+    model_generator,
+    pick_move,
+    prompt_ids,
+)
 from rukh.models import MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer, elo_token
+
+LEGALITY_MODES = ("argmax", "sampled")
 
 GAME_COLUMNS = ["game_id", "uci", "white_elo", "black_elo"]
 MIN_PLY = 1
@@ -70,7 +88,11 @@ def position_at(
     black_elo: int,
     block: int = 200,
 ) -> Position:
-    """Build the prefix of ``moves`` at ``ply``, cropped on the left to ``block`` ids."""
+    """Build the prefix of ``moves`` at ``ply``, cropped to ``block`` ids header-first.
+
+    The crop keeps ``<bos> <wXXXX> <bXXXX>`` and drops the oldest moves (``prompt_ids``): a plain
+    left crop would take the Elo conditioning away from every long prefix.
+    """
     prefix = list(moves[:ply])
     ids = header(tok, white_elo, black_elo)
     ids.extend(tok.vocab.get(uci, tok.unk_id) for uci in prefix)
@@ -78,7 +100,7 @@ def position_at(
         game_id=game_id,
         ply=ply,
         moves=prefix,
-        history=ids[-block:],
+        history=prompt_ids(ids, block),
         target=moves[ply] if ply < len(moves) else None,
         elo=white_elo if ply % 2 == 0 else black_elo,
     )
@@ -131,13 +153,17 @@ def sample_positions(
 
 
 class LegalityResult(BaseModel):
-    """Share of unmasked proposals that were legal moves."""
+    """Share of unmasked proposals that were legal moves, and how they were drawn."""
 
     model_config = ConfigDict(extra="forbid")
 
     positions: int
     legal: int
     rate: float
+    mode: str = "sampled"
+    """``argmax`` (the headline definition) or ``sampled`` (the demo's temperature and top-k)."""
+    temperature: float | None = None
+    top_k: int | None = None
 
 
 def legality(
@@ -145,10 +171,21 @@ def legality(
     tok: UciTokenizer,
     positions: Sequence[Position],
     cfg: SampleConfig | None = None,
+    mode: str = "sampled",
 ) -> LegalityResult:
-    """Ask the model for one unmasked move per position and count the legal ones."""
-    sample = (cfg or SampleConfig()).model_copy(update={"mask_illegal": False})
-    generator = sample.generator()
+    """Ask the model for one unmasked move per position and count the legal ones.
+
+    ``mode="argmax"`` ignores the temperature and the top-k of ``cfg`` and takes the single most
+    likely token, which is the definition behind the 99 % bar; ``mode="sampled"`` draws the way
+    the demo does.
+    """
+    if mode not in LEGALITY_MODES:
+        raise ValueError(f"unknown legality mode {mode!r}; expected one of {LEGALITY_MODES}")
+    update: dict[str, object] = {"mask_illegal": False}
+    if mode == "argmax":
+        update |= {"temperature": 0.0, "top_k": None}
+    sample = (cfg or SampleConfig()).model_copy(update=update)
+    generator = model_generator(model, sample)
     legal = 0
     counted = 0
     for position in positions:
@@ -162,4 +199,7 @@ def legality(
         positions=counted,
         legal=legal,
         rate=legal / counted if counted else 0.0,
+        mode=mode,
+        temperature=None if mode == "argmax" else sample.temperature,
+        top_k=None if mode == "argmax" else sample.top_k,
     )

@@ -16,11 +16,14 @@ from rukh.eval.elo import (
     bootstrap_ci,
     estimate,
     fit_elo,
+    one_sided_bound,
     play_rung,
+    record_of,
     score_of,
+    separation,
     summarize_rungs,
 )
-from rukh.infer import SampleConfig
+from rukh.infer import GameResult, SampleConfig
 from rukh.models import DecoderConfig, MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer
 
@@ -86,6 +89,111 @@ def test_bootstrap_interval_covers_the_truth_in_at_least_ninety_of_a_hundred_run
         low, high = bootstrap_ci(opponents, scores, samples=200, seed=simulation)
         covered += int(low <= TRUE_ELO <= high)
     assert covered >= 90
+
+
+CUT_WHITE_WINNING = "7k/8/8/8/8/8/8/Q5K1 b - - 0 90"
+CUT_LEVEL = "4k3/8/8/8/8/8/8/4K3 w - - 0 90"
+
+
+def cut_game(fen: str, plies: int = 196) -> GameResult:
+    """A game that ran out of context in ``fen``, as ``play_game`` returns it."""
+    return GameResult(
+        result="*",
+        plies=plies,
+        illegal_proposals=0,
+        moves=[],
+        termination="cut_short",
+        fen=fen,
+    )
+
+
+@unit
+def test_a_cut_game_is_adjudicated_rather_than_scored_as_a_draw() -> None:
+    rung = EloRung(name="uci-1500", elo=1500, uci_elo=1500)
+    as_white = record_of(cut_game(CUT_WHITE_WINNING), rung, 0, model_white=True)
+    assert as_white.cut is True
+    assert as_white.adjudicated == "material count"
+    assert (as_white.result, as_white.score) == ("1-0", 1.0)
+
+    as_black = record_of(cut_game(CUT_WHITE_WINNING), rung, 1, model_white=False)
+    assert (as_black.result, as_black.score) == ("1-0", 0.0)
+
+    level = record_of(cut_game(CUT_LEVEL), rung, 2, model_white=True)
+    assert (level.result, level.score) == ("1/2-1/2", 0.5)
+
+
+@unit
+def test_a_finished_game_is_not_adjudicated() -> None:
+    rung = EloRung(name="uci-1500", elo=1500, uci_elo=1500)
+    finished = GameResult(
+        result="0-1",
+        plies=40,
+        illegal_proposals=2,
+        moves=[],
+        termination="checkmate",
+        fen=CUT_WHITE_WINNING,
+    )
+    record = record_of(finished, rung, 0, model_white=True)
+    assert record.cut is False and record.adjudicated is None
+    assert (record.result, record.score) == ("0-1", 0.0)
+
+
+@unit
+def test_the_cut_and_adjudicated_counts_reach_the_summary_and_the_result() -> None:
+    rung = EloRung(name="uci-1500", elo=1500, uci_elo=1500)
+    games = [
+        record_of(cut_game(CUT_WHITE_WINNING), rung, index, index % 2 == 0) for index in range(4)
+    ]
+    games.extend(records("uci-1320", 1320, [0.0, 1.0]))
+    summary = {row.name: row for row in summarize_rungs(games)}
+    assert (summary["uci-1500"].cut, summary["uci-1500"].adjudicated) == (4, 4)
+    assert (summary["uci-1320"].cut, summary["uci-1320"].adjudicated) == (0, 0)
+    fitted = estimate(games, samples=50, seed=0)
+    assert (fitted.cut, fitted.adjudicated) == (4, 4)
+
+
+@unit
+def test_separation_is_detected_and_reported_as_a_one_sided_bound() -> None:
+    assert separation([1.0, 1.0, 1.0]) == "wins"
+    assert separation([0.0, 0.0]) == "losses"
+    assert separation([1.0, 0.0]) is None
+    assert separation([0.5, 0.5]) is None
+    assert separation([]) is None
+
+    all_wins = records("uci-2000", 2000, [1.0] * 40)
+    fitted = estimate(all_wins, samples=50, seed=0)
+    assert fitted.separated is True
+    assert fitted.ci_low is None and fitted.ci_high is None
+    assert fitted.elo_lower is not None and fitted.elo_upper is None
+    assert fitted.elo_lower > 2000.0
+
+    all_losses = records("skill-0", 800, [0.0] * 40)
+    lost = estimate(all_losses, samples=50, seed=0)
+    assert lost.separated is True
+    assert lost.elo_upper is not None and lost.elo_lower is None
+    assert lost.elo_upper < 800.0
+
+
+@unit
+def test_the_one_sided_bound_is_the_rating_that_makes_the_run_implausible() -> None:
+    opponents = [1500.0] * 20
+    bound = one_sided_bound(opponents, [1.0] * 20, level=0.95, lower=True)
+    # Winning 20 games has probability 0.05 exactly at the bound.
+    probability = (1.0 / (1.0 + 10.0 ** ((1500.0 - bound) / 400.0))) ** 20
+    assert probability == pytest.approx(0.05, abs=1e-3)
+    # Ten times as many wins is ten times as much evidence, so the bound rises.
+    assert one_sided_bound([1500.0] * 200, [1.0] * 200, lower=True) > bound
+    # A single win says almost nothing: the bound sits below the opponent.
+    assert one_sided_bound([1500.0], [1.0], lower=True) < 1500.0
+
+
+@unit
+def test_a_mixed_run_still_gets_a_bootstrap_interval() -> None:
+    games = records("uci-1320", 1320, [1.0, 0.0] * 20)
+    fitted = estimate(games, samples=100, seed=0)
+    assert fitted.separated is False
+    assert fitted.ci_low is not None and fitted.ci_high is not None
+    assert fitted.elo_lower is None and fitted.elo_upper is None
 
 
 @unit

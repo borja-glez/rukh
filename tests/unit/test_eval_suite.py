@@ -11,7 +11,16 @@ import yaml
 from typer.testing import CliRunner
 
 from rukh.cli import app
-from rukh.eval.suite import EvalConfig, config_path, evaluate, load_suite, run_suite
+from rukh.eval.suite import (
+    EvalConfig,
+    config_path,
+    evaluate,
+    hub_checkpoint,
+    is_hub_id,
+    load_suite,
+    resolve_model,
+    run_suite,
+)
 from rukh.models import DecoderConfig, MoveDecoder
 from rukh.train import save_checkpoint
 
@@ -75,10 +84,12 @@ def test_an_unknown_suite_is_an_error() -> None:
 
 
 def test_missing_inputs_become_notes_not_failures(rukh_home: Path, checkpoint: Path) -> None:
-    result = evaluate(checkpoint, quick_config(rukh_home), suite="quick")
+    result = evaluate(checkpoint, quick_config(rukh_home), suite="quick", device="cpu")
     assert result.stage == "tiny"
     assert result.params == MoveDecoder(TOY).num_params(non_embedding=False)
-    assert (result.legality, result.accuracy, result.puzzles, result.elo) == (None,) * 4
+    assert result.legality_argmax is None and result.legality_sampled is None
+    assert (result.accuracy, result.puzzles, result.elo) == (None,) * 3
+    assert result.device in ("cpu", "cuda")
     assert any("validation games not found" in note for note in result.notes)
     assert any("puzzles not found" in note for note in result.notes)
     assert any("no games were played" in note for note in result.notes)
@@ -87,8 +98,12 @@ def test_missing_inputs_become_notes_not_failures(rukh_home: Path, checkpoint: P
 def test_a_suite_with_games_measures_legality_and_accuracy(
     rukh_home: Path, checkpoint: Path, games: Path
 ) -> None:
-    result, report = run_suite(checkpoint, quick_config(rukh_home, games), suite="quick")
-    assert result.legality is not None and 0.0 <= result.legality.rate <= 1.0
+    result, report = run_suite(
+        checkpoint, quick_config(rukh_home, games), suite="quick", device="cpu"
+    )
+    assert result.legality_argmax is not None and 0.0 <= result.legality_argmax.rate <= 1.0
+    assert result.legality_argmax.mode == "argmax"
+    assert result.legality_sampled is not None and result.legality_sampled.mode == "sampled"
     assert result.accuracy is not None and result.accuracy.positions == 2
     assert Path(report.markdown).is_file()
     table = json.loads(Path(report.web or "").read_text(encoding="utf-8"))
@@ -112,3 +127,55 @@ def test_the_cli_writes_a_report(rukh_home: Path, checkpoint: Path, games: Path)
 def test_the_cli_rejects_an_unknown_suite(rukh_home: Path, checkpoint: Path) -> None:
     result = CliRunner().invoke(app, ["eval", "--model", str(checkpoint), "--suite", "enormous"])
     assert result.exit_code == 2
+
+
+def test_a_hub_id_is_told_apart_from_a_path(checkpoint: Path) -> None:
+    assert is_hub_id("chorcat/rukh-small")
+    assert is_hub_id("chorcat/rukh_small.v2")
+    assert not is_hub_id(str(checkpoint))
+    assert not is_hub_id("checkpoints/small/best.pt")
+    assert not is_hub_id("just-a-name")
+    assert not is_hub_id("too/many/slashes")
+    assert resolve_model(checkpoint) == checkpoint
+
+
+def test_a_model_that_is_neither_a_file_nor_a_hub_id_is_an_error() -> None:
+    with pytest.raises(FileNotFoundError, match="neither a checkpoint nor a Hub id"):
+        resolve_model("checkpoints/does-not-exist.pt")
+
+
+def test_the_cli_validates_the_model_without_touching_the_network(rukh_home: Path) -> None:
+    """A bad ``--model`` fails at validation; a Hub id is accepted by its shape alone."""
+    result = CliRunner().invoke(app, ["eval", "--model", "not a model", "--suite", "quick"])
+    assert result.exit_code == 2
+    assert "neither an existing checkpoint nor a Hub id" in result.output
+
+
+def test_a_hub_repository_becomes_a_checkpoint(
+    rukh_home: Path, checkpoint: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``hub_checkpoint`` folds ``config.json`` plus the weights back into a checkpoint."""
+    import json as json_module
+
+    from rukh.train import load_checkpoint
+
+    payload = load_checkpoint(checkpoint)
+    published = tmp_path / "published"
+    published.mkdir()
+    (published / "config.json").write_text(
+        json_module.dumps({"params": 1, "step": 1000, "vocab_hash": "v", **TOY.model_dump()}),
+        encoding="utf-8",
+    )
+    torch.save(payload["model_state"], published / "pytorch_model.bin")
+
+    def fake_download(repo_id: str, filename: str) -> str:
+        path = published / filename
+        if not path.is_file():
+            raise FileNotFoundError(filename)
+        return str(path)
+
+    monkeypatch.setattr("huggingface_hub.hf_hub_download", fake_download, raising=False)
+    out = hub_checkpoint("chorcat/rukh-tiny", out_dir=tmp_path / "hub")
+    assert out.name == "chorcat__rukh-tiny.pt"
+    result = evaluate(out, quick_config(rukh_home), suite="quick", device="cpu")
+    assert result.params == MoveDecoder(TOY).num_params(non_embedding=False)

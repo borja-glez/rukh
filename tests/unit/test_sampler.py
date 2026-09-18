@@ -11,10 +11,15 @@ from rukh.infer import (
     RandomOpponent,
     SampleConfig,
     StockfishOpponent,
+    adjudicate,
+    is_over,
     legal_token_ids,
     legality_rate,
+    material_balance,
+    model_generator,
     pick_move,
     play_game,
+    prompt_ids,
     result_token,
 )
 from rukh.models import DecoderConfig, MoveDecoder
@@ -208,6 +213,84 @@ def test_result_tokens_map_to_the_vocabulary(tok: UciTokenizer) -> None:
 
 
 @unit
+def test_the_generator_follows_the_model_device(model: MoveDecoder) -> None:
+    cfg = SampleConfig(seed=0)
+    generator = model_generator(model, cfg)
+    assert generator is not None
+    assert generator.device.type == next(model.parameters()).device.type
+    assert model_generator(model, SampleConfig(seed=None)) is None
+
+
+@pytest.mark.gpu
+def test_sampling_runs_on_cuda(tok: UciTokenizer) -> None:
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+    torch.manual_seed(0)
+    on_gpu = MoveDecoder(TOY).eval().to("cuda")
+    cfg = SampleConfig(temperature=1.0, top_k=20, mask_illegal=True, seed=0)
+    generator = model_generator(on_gpu, cfg)
+    assert generator is not None and generator.device.type == "cuda"
+    board = chess.Board()
+    for _ in range(20):
+        move, report = pick_move(on_gpu, tok, board, history(tok), cfg, generator)
+        assert move is not None and board.is_legal(move)
+        assert report["legal"] is True
+    result = play_game(on_gpu, tok, RandomOpponent(seed=0), cfg, max_plies=20)
+    assert result.plies > 0
+
+
+@unit
+def test_the_prompt_keeps_the_header_when_it_has_to_be_cropped(tok: UciTokenizer) -> None:
+    ids = history(tok) + list(range(100, 200))
+    cropped = prompt_ids(ids, 10)
+    assert len(cropped) == 10
+    assert cropped[:3] == history(tok)
+    assert cropped[3:] == list(range(193, 200))
+    assert prompt_ids(ids, 500) == ids
+
+
+@unit
+def test_a_long_game_still_carries_its_elo_tokens(model: MoveDecoder, tok: UciTokenizer) -> None:
+    board = chess.Board()
+    long_history = history(tok) + [tok.vocab["e2e4"]] * (TOY.block * 2)
+    cfg = SampleConfig(temperature=0.0, top_k=None, mask_illegal=True)
+    move, _ = pick_move(model, tok, board, long_history, cfg)
+    assert move is not None  # the decoder would have refused a prompt longer than the block
+
+
+@unit
+def test_is_over_sees_the_claimable_draws() -> None:
+    assert is_over(chess.Board("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1"))  # checkmate
+    assert not is_over(chess.Board())
+    fifty = chess.Board("7k/8/6K1/8/8/8/8/R7 w - - 100 80")
+    assert is_over(fifty)
+
+
+@unit
+def test_adjudication_reads_material_when_there_is_no_engine() -> None:
+    assert material_balance(chess.Board()) == 0.0
+    a_queen_up = chess.Board("7k/8/8/8/8/8/8/Q5K1 w - - 0 1")
+    assert material_balance(a_queen_up) == 9.0
+    assert adjudicate(a_queen_up) == ("1-0", "material count")
+    assert adjudicate("7k/8/8/8/8/8/8/q5K1 w - - 0 1") == ("0-1", "material count")
+    assert adjudicate(chess.Board())[0] == "1/2-1/2"
+    one_pawn_up = chess.Board("4k3/p7/8/8/8/8/PP6/4K3 w - - 0 1")
+    assert adjudicate(one_pawn_up) == ("1/2-1/2", "material count")  # under the two-pawn margin
+    two_pawns_up = chess.Board("4k3/8/8/8/8/8/PP6/4K3 w - - 0 1")
+    assert adjudicate(two_pawns_up) == ("1-0", "material count")  # the margin is inclusive
+
+
+@unit
+def test_a_cut_game_reports_its_final_position(model: MoveDecoder, tok: UciTokenizer) -> None:
+    cfg = SampleConfig(temperature=1.0, top_k=20, seed=3)
+    result = play_game(model, tok, RandomOpponent(seed=3), cfg, max_plies=6)
+    assert result.result == "*" and result.cut is True
+    board = chess.Board(result.fen)
+    assert board.fullmove_number == 4
+    assert adjudicate(result.fen)[0] in ("1-0", "0-1", "1/2-1/2")
+
+
+@unit
 def test_sample_config_rejects_impossible_values() -> None:
     with pytest.raises(ValueError, match="non-negative"):
         SampleConfig(temperature=-0.1)
@@ -216,6 +299,7 @@ def test_sample_config_rejects_impossible_values() -> None:
     with pytest.raises(ValueError):
         SampleConfig(temp=0.5)  # type: ignore[call-arg]
     assert SampleConfig(seed=None).generator() is None
+    assert SampleConfig(seed=1).generator().device.type == "cpu"
 
 
 @unit

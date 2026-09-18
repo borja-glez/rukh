@@ -431,10 +431,8 @@ def play_cmd(
 @app.command("eval")
 def eval_cmd(
     model: Annotated[
-        Path,
-        typer.Option(
-            "--model", exists=True, dir_okay=False, readable=True, help="Checkpoint to evaluate."
-        ),
+        str,
+        typer.Option("--model", help="Checkpoint path or Hub id (owner/name) to evaluate."),
     ],
     suite: Annotated[str, typer.Option("--suite", help="Suite name: full or quick.")] = "full",
     config: Annotated[
@@ -449,36 +447,47 @@ def eval_cmd(
     no_cache: Annotated[
         bool, typer.Option("--no-cache", help="Recompute every game and puzzle.")
     ] = False,
+    device: Annotated[
+        str | None,
+        typer.Option("--device", help="Where to run: cuda, cpu... (default: the training device)."),
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
 ) -> None:
     """Measure legality, next-move accuracy, puzzles and Elo, and write the report."""
     from rukh.eval import load_suite, run_suite
-    from rukh.eval.suite import SUITES
+    from rukh.eval.report import elo_line
+    from rukh.eval.suite import SUITES, is_hub_id
 
     if suite not in SUITES:
         typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
+        raise typer.Exit(code=2)
+    if not Path(model).is_file() and not is_hub_id(model):
+        typer.echo(
+            f"error: --model {model!r} is neither an existing checkpoint nor a Hub id "
+            "of the form owner/name",
+            err=True,
+        )
         raise typer.Exit(code=2)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
     cfg = load_suite(suite, config)
     if stage is not None:
         cfg = cfg.model_copy(update={"stage": stage})
-    result, report = run_suite(model, cfg, suite=suite, use_cache=not no_cache)
+    result, report = run_suite(model, cfg, suite=suite, use_cache=not no_cache, device=device)
     if as_json:
         typer.echo(result.model_dump_json(indent=2))
         return
     typer.echo(f"stage:    {result.stage} ({result.params:,} parameters)")
-    typer.echo(f"suite:    {result.suite}{' (cache off)' if no_cache else ''}")
-    if result.legality:
-        typer.echo(f"legality: {result.legality.rate:.4f} without the mask")
+    typer.echo(f"suite:    {result.suite}{' (cache off)' if no_cache else ''} on {result.device}")
+    if result.legality_argmax:
+        typer.echo(f"legality: {result.legality_argmax.rate:.4f} argmax, unmasked")
+    if result.legality_sampled:
+        typer.echo(f"          {result.legality_sampled.rate:.4f} sampled, unmasked")
     if result.accuracy:
         typer.echo(f"accuracy: top1 {result.accuracy.top1:.4f}  top3 {result.accuracy.top3:.4f}")
     if result.puzzles:
         typer.echo(f"puzzles:  {result.puzzles.rate:.4f} solved")
     if result.elo:
-        typer.echo(
-            f"elo:      {result.elo.elo:.0f} "
-            f"(95% CI {result.elo.ci_low:.0f}-{result.elo.ci_high:.0f}, {result.elo.games} games)"
-        )
+        typer.echo(f"elo:      {elo_line(result.elo)} over {result.elo.games} games")
     for note in result.notes:
         typer.echo(f"note:     {note}")
     typer.echo(f"report:   {report.markdown}")

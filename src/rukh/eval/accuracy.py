@@ -14,6 +14,7 @@ import torch
 from pydantic import BaseModel, ConfigDict
 
 from rukh.eval.legality import Position
+from rukh.infer import prompt_ids
 from rukh.models import MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer
 
@@ -56,9 +57,10 @@ class AccuracyResult(BaseModel):
 
 
 def _ranked(model: MoveDecoder, history: list[int], k: int) -> list[int]:
-    """Ids of the ``k`` highest logits at the next step."""
+    """Ids of the ``k`` highest logits at the next step (prompt cropped header-first)."""
     device = next(model.parameters()).device
-    idx = torch.tensor([history], dtype=torch.long, device=device)
+    ids = prompt_ids(history, model.cfg.block)
+    idx = torch.tensor([ids], dtype=torch.long, device=device)
     logits = model.next_logits(idx)[0]
     return [int(i) for i in torch.topk(logits, min(k, logits.numel())).indices]
 

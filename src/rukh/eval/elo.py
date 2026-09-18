@@ -13,6 +13,16 @@ the Hessian ``-c**2 * sum(p * (1 - p))``, so each step is ``sum(s - p) / (c * su
 Draws enter as a score of 0.5, which is the usual quasi-likelihood treatment. The 95 % interval
 is a percentile bootstrap over the game results, fitted in a single vectorised pass so a
 thousand resamples cost milliseconds and no SciPy is needed.
+
+Two honesty notes are built into the numbers rather than left to the reader:
+
+* a game cut short by the context limit is **adjudicated** (shallow engine analysis of the final
+  position, or the material count when no engine is around) instead of being booked as a draw,
+  because half a point per cut game biases the fit towards the middle of the rungs;
+* when every game is a win (or every game is a loss) the likelihood has no maximum inside the
+  range of opponents and the bootstrap collapses to a zero-width interval. That is reported as
+  ``separated`` with a one-sided likelihood bound instead of a symmetric interval that would be
+  a lie.
 """
 
 from __future__ import annotations
@@ -26,7 +36,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from rukh.config import BaseConfig
 from rukh.eval.cache import EvalCache
-from rukh.infer import SampleConfig, StockfishOpponent, play_game
+from rukh.infer import GameResult, SampleConfig, StockfishOpponent, adjudicate, play_game
 from rukh.models import MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer
 
@@ -35,6 +45,10 @@ SUITE = "elo"
 MAX_STEP = 400.0
 SLACK = 1000.0
 """How far outside the range of opponents the fit is allowed to wander (separation guard)."""
+BOUND_SLACK = 4000.0
+"""Search range of the one-sided bound when the results are separated."""
+MOVE_TIME = 0.1
+"""Seconds per move for the engine; below this ``UCI_Elo`` means very little (D-025)."""
 
 
 class EloRung(BaseConfig):
@@ -79,6 +93,10 @@ class GameRecord(BaseModel):
     score: float
     plies: int
     illegal_proposals: int
+    cut: bool = False
+    """The game ran out of context instead of ending on the board."""
+    adjudicated: str | None = None
+    """How a cut game was decided (``engine depth 8``, ``material count``), or None."""
 
     def item_id(self) -> str:
         return f"{self.rung}:{self.index}"
@@ -97,23 +115,39 @@ class RungResult(BaseModel):
     losses: int
     score: float
     """Average score in [0, 1]."""
+    cut: int = 0
+    """Games that hit the context limit instead of ending on the board."""
+    adjudicated: int = 0
+    """Cut games whose result was decided by adjudication."""
 
 
 class EloResult(BaseModel):
-    """The fitted rating with its bootstrap interval, plus the rung breakdown."""
+    """The fitted rating with its interval (or one-sided bound), plus the rung breakdown."""
 
     model_config = ConfigDict(extra="forbid")
 
     elo: float
-    ci_low: float
-    ci_high: float
+    ci_low: float | None = None
+    ci_high: float | None = None
     games: int
     score: float
     rungs: list[RungResult]
+    cut: int = 0
+    adjudicated: int = 0
+    separated: bool = False
+    """Every game was a win (or every one a loss): the fit is not identified."""
+    elo_lower: float | None = None
+    """One-sided 95 % lower bound; set when the model won every game."""
+    elo_upper: float | None = None
+    """One-sided 95 % upper bound; set when the model lost every game."""
 
 
 def score_of(result: str, model_white: bool) -> float:
-    """Score of a finished game from the model's point of view (0.5 for a draw or a cut game)."""
+    """Score of a finished game from the model's point of view.
+
+    A cut game (``*``) that could not be adjudicated is the only case left at 0.5 by default;
+    ``play_rung`` adjudicates cut games before calling this, so that branch is a fallback.
+    """
     if result == "1-0":
         return 1.0 if model_white else 0.0
     if result == "0-1":
@@ -168,6 +202,55 @@ def bootstrap_ci(
     return float(np.percentile(fitted, tail)), float(np.percentile(fitted, 100.0 - tail))
 
 
+def separation(scores: Sequence[float]) -> str | None:
+    """``"wins"``, ``"losses"`` or None: whether every game went the same way.
+
+    With no counter-example the likelihood keeps rising as the rating goes to infinity, the fit
+    stops at the clamp and every bootstrap resample returns that same clamp, which is where the
+    zero-width "95 % CI" came from.
+    """
+    values = np.asarray(scores, dtype=np.float64)
+    if values.size == 0:
+        return None
+    if np.all(values >= 1.0):
+        return "wins"
+    if np.all(values <= 0.0):
+        return "losses"
+    return None
+
+
+def one_sided_bound(
+    opponents: Sequence[float], scores: Sequence[float], level: float = 0.95, lower: bool = True
+) -> float:
+    """Likelihood bound for separated results: the rating at which the run stops being plausible.
+
+    For an all-win run the bound is the lowest rating under which winning every game still has
+    probability ``1 - level``; for an all-loss run it is the highest rating under which losing
+    every game does. Solved by bisection on a monotone log-likelihood, so no SciPy is needed.
+    """
+    rungs = np.asarray(opponents, dtype=np.float64)
+    if rungs.size == 0:
+        raise ValueError("cannot bound an Elo without games")
+    target = math.log(1.0 - level)
+
+    def loglik(elo: float) -> float:
+        p = 1.0 / (1.0 + np.exp(-LOG10_400 * (elo - rungs)))
+        p = np.clip(p if lower else 1.0 - p, 1e-300, 1.0)
+        return float(np.sum(np.log(p)))
+
+    low = float(rungs.min()) - BOUND_SLACK
+    high = float(rungs.max()) + BOUND_SLACK
+    # ``loglik`` rises with the rating when bounding from below and falls when bounding from
+    # above; bisect for the crossing of ``target`` either way.
+    for _ in range(200):
+        middle = 0.5 * (low + high)
+        if (loglik(middle) < target) == lower:
+            low = middle
+        else:
+            high = middle
+    return 0.5 * (low + high)
+
+
 def summarize_rungs(records: Sequence[GameRecord]) -> list[RungResult]:
     """Wins, draws, losses and average score per rung, ordered by opponent rating."""
     by_rung: dict[str, list[GameRecord]] = {}
@@ -182,6 +265,8 @@ def summarize_rungs(records: Sequence[GameRecord]) -> list[RungResult]:
             draws=sum(g.score == 0.5 for g in games),
             losses=sum(g.score == 0.0 for g in games),
             score=sum(g.score for g in games) / len(games),
+            cut=sum(g.cut for g in games),
+            adjudicated=sum(g.adjudicated is not None for g in games),
         )
         for name, games in by_rung.items()
     ]
@@ -191,20 +276,59 @@ def summarize_rungs(records: Sequence[GameRecord]) -> list[RungResult]:
 def estimate(
     records: Sequence[GameRecord], samples: int = 1_000, seed: int = 0, level: float = 0.95
 ) -> EloResult:
-    """Fit the rating and its interval from played games."""
+    """Fit the rating and its interval (or its one-sided bound) from played games."""
     if not records:
         raise ValueError("cannot estimate an Elo without games")
     opponents = [float(record.opponent_elo) for record in records]
     scores = [record.score for record in records]
     elo = fit_elo(opponents, scores)
-    low, high = bootstrap_ci(opponents, scores, samples=samples, seed=seed, level=level)
-    return EloResult(
+    rungs = summarize_rungs(records)
+    result = EloResult(
         elo=elo,
-        ci_low=low,
-        ci_high=high,
         games=len(records),
         score=float(np.mean(scores)),
-        rungs=summarize_rungs(records),
+        rungs=rungs,
+        cut=sum(rung.cut for rung in rungs),
+        adjudicated=sum(rung.adjudicated for rung in rungs),
+    )
+    apart = separation(scores)
+    if apart is None:
+        result.ci_low, result.ci_high = bootstrap_ci(
+            opponents, scores, samples=samples, seed=seed, level=level
+        )
+        return result
+    result.separated = True
+    bound = one_sided_bound(opponents, scores, level=level, lower=apart == "wins")
+    if apart == "wins":
+        result.elo_lower = bound
+    else:
+        result.elo_upper = bound
+    return result
+
+
+def record_of(
+    outcome: GameResult,
+    rung: EloRung,
+    index: int,
+    model_white: bool,
+    engine: chess.engine.SimpleEngine | None = None,
+) -> GameRecord:
+    """One played game as a record, adjudicating it first when it was cut short."""
+    result = outcome.result
+    how: str | None = None
+    if outcome.cut:
+        result, how = adjudicate(outcome.fen, engine=engine)
+    return GameRecord(
+        rung=rung.name,
+        opponent_elo=rung.elo,
+        index=index,
+        model_white=model_white,
+        result=result,
+        score=score_of(result, model_white),
+        plies=outcome.plies,
+        illegal_proposals=outcome.illegal_proposals,
+        cut=outcome.cut,
+        adjudicated=how,
     )
 
 
@@ -214,11 +338,16 @@ def play_rung(
     rung: EloRung,
     games: int,
     cfg: SampleConfig,
-    move_time: float = 0.05,
+    move_time: float = MOVE_TIME,
     max_plies: int | None = None,
     cache: EvalCache | None = None,
 ) -> list[GameRecord]:
-    """Play ``games`` games against one rung, alternating colours, reusing cached games."""
+    """Play ``games`` games against one rung, alternating colours, reusing cached games.
+
+    A game that ends with ``*`` (the context ran out) is adjudicated with the rung's own engine
+    before it is scored, so it enters the fit as a win, a loss or a draw on the merits of the
+    final position.
+    """
     records: list[GameRecord] = []
     for index in range(games):
         cached = cache.get(SUITE, f"{rung.name}:{index}") if cache is not None else None
@@ -241,16 +370,7 @@ def play_rung(
                 model_color=chess.WHITE if model_white else chess.BLACK,
                 max_plies=max_plies,
             )
-            record = GameRecord(
-                rung=rung.name,
-                opponent_elo=rung.elo,
-                index=index,
-                model_white=model_white,
-                result=outcome.result,
-                score=score_of(outcome.result, model_white),
-                plies=outcome.plies,
-                illegal_proposals=outcome.illegal_proposals,
-            )
+            record = record_of(outcome, rung, index, model_white, engine=opponent.engine)
             if cache is not None:
                 cache.put(SUITE, record.item_id(), record.model_dump())
             records.append(record)
@@ -265,7 +385,7 @@ def play_rungs(
     rungs: Sequence[EloRung],
     games: int,
     cfg: SampleConfig,
-    move_time: float = 0.05,
+    move_time: float = MOVE_TIME,
     max_plies: int | None = None,
     cache: EvalCache | None = None,
 ) -> list[GameRecord]:

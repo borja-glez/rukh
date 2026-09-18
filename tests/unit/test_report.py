@@ -14,6 +14,7 @@ from rukh.eval.puzzles import BandPuzzles, PuzzleResult
 from rukh.eval.report import (
     RESULTS_NAME,
     WebRow,
+    elo_line,
     render_markdown,
     row_of,
     upsert_row,
@@ -32,8 +33,12 @@ def result(stage: str = "tiny", elo: float = 1234.0) -> SuiteResult:
         model_sha="abc123",
         params=5_000_000,
         date="2026-09-19",
+        device="cuda",
         run_id="run-1",
-        legality=LegalityResult(positions=1000, legal=987, rate=0.987),
+        legality_argmax=LegalityResult(positions=1000, legal=987, rate=0.987, mode="argmax"),
+        legality_sampled=LegalityResult(
+            positions=1000, legal=901, rate=0.901, mode="sampled", temperature=0.6, top_k=20
+        ),
         accuracy=AccuracyResult(
             positions=1000,
             top1=0.31,
@@ -55,6 +60,8 @@ def result(stage: str = "tiny", elo: float = 1234.0) -> SuiteResult:
             ci_high=elo + 60,
             games=160,
             score=0.42,
+            cut=4,
+            adjudicated=4,
             rungs=[
                 RungResult(
                     name="uci-1320",
@@ -64,6 +71,8 @@ def result(stage: str = "tiny", elo: float = 1234.0) -> SuiteResult:
                     draws=5,
                     losses=35,
                     score=0.53,
+                    cut=4,
+                    adjudicated=4,
                 )
             ],
         ),
@@ -74,11 +83,43 @@ def result(stage: str = "tiny", elo: float = 1234.0) -> SuiteResult:
 def test_the_markdown_report_carries_every_headline_number() -> None:
     text = render_markdown(result())
     assert "# Evaluation of `tiny`" in text
-    assert "98.7 %" in text  # legality
+    assert "98.7 %" in text  # legality, argmax
+    assert "90.1 %" in text  # legality, sampled
     assert "31.0 %" in text  # top-1
     assert "1234 (95 % CI 1174-1294)" in text
     assert "| 1000-1500 | 200 | 30 | 15.0 %" in text
     assert "Elo skipped for the 2000 rung" in text
+
+
+def test_the_report_spells_out_both_legality_definitions() -> None:
+    text = render_markdown(result())
+    assert "Legality without the mask, argmax" in text
+    assert "Legality without the mask, sampled (T=0.6, top-k 20)" in text
+    assert "| argmax | 1000 | 987 | 98.7 % |" in text
+    assert "| sampled | 1000 | 901 | 90.1 % |" in text
+
+
+def test_the_report_names_the_device_and_the_adjudicated_games() -> None:
+    text = render_markdown(result())
+    assert "- Device: `cuda`" in text
+    assert "were adjudicated on the final position" in text
+    assert "| uci-1320 | 1320 | 80 | 40 | 5 | 35 | 0.530 | 4 | 4 |" in text
+
+
+def test_a_separated_fit_is_reported_as_a_one_sided_bound() -> None:
+    separated = EloResult(
+        elo=3000.0,
+        games=80,
+        score=1.0,
+        rungs=[],
+        separated=True,
+        elo_lower=2450.0,
+    )
+    assert elo_line(separated) == "> 2450 (one-sided 95 % bound; every game won)"
+    text = render_markdown(result().model_copy(update={"elo": separated}))
+    assert "> 2450 (one-sided 95 % bound; every game won)" in text
+    assert "a bootstrap interval would be zero wide" in text
+    assert row_of(result().model_copy(update={"elo": separated})).elo_ci is None
 
 
 def test_missing_metrics_are_reported_as_not_available() -> None:
@@ -104,11 +145,17 @@ def test_the_web_row_holds_the_columns_of_the_single_table() -> None:
         "stage": "tiny",
         "params": 5_000_000,
         "legality": 0.987,
+        "legality_sampled": 0.901,
         "top1": 0.31,
         "top3": 0.52,
+        "top1_by_band": {"1800-2000": 0.31},
+        "top3_by_band": {"1800-2000": 0.52},
         "puzzles": {"1000-1500": 0.15, "2000+": 0.05},
         "elo": 1234.0,
         "elo_ci": [1174.0, 1294.0],
+        "elo_lower": None,
+        "elo_upper": None,
+        "elo_separated": False,
         "delta_cp": None,
         "diversity": None,
         "date": "2026-09-19",

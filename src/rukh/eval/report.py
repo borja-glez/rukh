@@ -5,6 +5,11 @@ external baselines) ends up as one row of the single table of ``docs/spec/02`` Â
 ``artifacts/web/results.json`` is that table: the course site and the demo read it, so writing a
 row is an upsert keyed by ``stage`` rather than an append, and a metric that has not been
 measured yet (``delta_cp``, ``diversity``) is written as ``null`` instead of being invented.
+
+Two numbers carry their definition with them rather than a footnote somewhere else: legality is
+written twice (``argmax``, the headline, and ``sampled``, the demo's own setting), and an Elo
+whose games were all wins or all losses is printed as a one-sided bound, in words, instead of a
+zero-width "95 % CI".
 """
 
 from __future__ import annotations
@@ -15,6 +20,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
+
+from rukh.eval.elo import EloResult
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from rukh.eval.suite import SuiteResult
@@ -31,11 +38,20 @@ class WebRow(BaseModel):
     stage: str
     params: int
     legality: float | None = None
+    """Legality of the most likely token: the headline definition."""
+    legality_sampled: float | None = None
+    """Legality of a token drawn with the suite's temperature and top-k."""
     top1: float | None = None
     top3: float | None = None
+    top1_by_band: dict[str, float] = {}
+    top3_by_band: dict[str, float] = {}
     puzzles: dict[str, float] = {}
     elo: float | None = None
     elo_ci: list[float] | None = None
+    """95 % bootstrap interval, or ``null`` when the results were separated."""
+    elo_lower: float | None = None
+    elo_upper: float | None = None
+    elo_separated: bool = False
     delta_cp: float | None = None
     diversity: float | None = None
     date: str
@@ -44,15 +60,28 @@ class WebRow(BaseModel):
 
 def row_of(result: SuiteResult) -> WebRow:
     """The table row a finished suite produces."""
+    elo = result.elo
+    interval = (
+        [elo.ci_low, elo.ci_high]
+        if elo is not None and elo.ci_low is not None and elo.ci_high is not None
+        else None
+    )
+    accuracy = result.accuracy
     return WebRow(
         stage=result.stage,
         params=result.params,
-        legality=result.legality.rate if result.legality else None,
-        top1=result.accuracy.top1 if result.accuracy else None,
-        top3=result.accuracy.top3 if result.accuracy else None,
+        legality=result.legality_argmax.rate if result.legality_argmax else None,
+        legality_sampled=result.legality_sampled.rate if result.legality_sampled else None,
+        top1=accuracy.top1 if accuracy else None,
+        top3=accuracy.top3 if accuracy else None,
+        top1_by_band={band.band: band.top1 for band in accuracy.bands} if accuracy else {},
+        top3_by_band={band.band: band.top3 for band in accuracy.bands} if accuracy else {},
         puzzles=result.puzzles.by_band() if result.puzzles else {},
-        elo=result.elo.elo if result.elo else None,
-        elo_ci=[result.elo.ci_low, result.elo.ci_high] if result.elo else None,
+        elo=elo.elo if elo else None,
+        elo_ci=interval,
+        elo_lower=elo.elo_lower if elo else None,
+        elo_upper=elo.elo_upper if elo else None,
+        elo_separated=bool(elo.separated) if elo else False,
         delta_cp=result.delta_cp,
         diversity=result.diversity,
         date=result.date,
@@ -88,9 +117,31 @@ def _percent(value: float | None) -> str:
     return "n/a" if value is None else f"{value * 100:.1f} %"
 
 
+def elo_line(elo: EloResult | None) -> str:
+    """The Elo cell: a point estimate with an interval, or with a one-sided bound."""
+    if elo is None:
+        return "n/a"
+    if not elo.separated and elo.ci_low is not None and elo.ci_high is not None:
+        return f"{elo.elo:.0f} (95 % CI {elo.ci_low:.0f}-{elo.ci_high:.0f})"
+    if elo.elo_lower is not None:
+        return f"> {elo.elo_lower:.0f} (one-sided 95 % bound; every game won)"
+    if elo.elo_upper is not None:
+        return f"< {elo.elo_upper:.0f} (one-sided 95 % bound; every game lost)"
+    return f"{elo.elo:.0f} (no interval)"
+
+
 def render_markdown(result: SuiteResult) -> str:
     """The human-readable report: headline numbers first, then every breakdown."""
-    legality = result.legality.rate if result.legality else None
+    argmax = result.legality_argmax.rate if result.legality_argmax else None
+    sampled = result.legality_sampled.rate if result.legality_sampled else None
+    sampling = result.legality_sampled
+    drawn = (
+        ""
+        if sampling is None or sampling.temperature is None
+        else f" (T={sampling.temperature:g}"
+        + ("" if sampling.top_k is None else f", top-k {sampling.top_k}")
+        + ")"
+    )
     lines: list[str] = [
         f"# Evaluation of `{result.stage}`",
         "",
@@ -98,6 +149,7 @@ def render_markdown(result: SuiteResult) -> str:
         f"- Checkpoint: `{result.checkpoint}`",
         f"- Weights SHA-256: `{result.model_sha}`",
         f"- Parameters: {result.params:,}",
+        f"- Device: `{result.device}`",
         f"- Date: {result.date}",
         f"- MLflow run: {result.run_id or 'not tracked'}",
         "",
@@ -105,18 +157,13 @@ def render_markdown(result: SuiteResult) -> str:
         "",
         "| Metric | Value |",
         "|---|---|",
-        f"| Legality without the mask | {_percent(legality)} |",
+        f"| Legality without the mask, argmax | {_percent(argmax)} |",
+        f"| Legality without the mask, sampled{drawn} | {_percent(sampled)} |",
         f"| Top-1 next move | {_percent(result.accuracy.top1 if result.accuracy else None)} |",
         f"| Top-3 next move | {_percent(result.accuracy.top3 if result.accuracy else None)} |",
         f"| Puzzles solved | {_percent(result.puzzles.rate if result.puzzles else None)} |",
+        f"| Estimated Elo | {elo_line(result.elo)} |",
     ]
-    if result.elo is not None:
-        lines.append(
-            f"| Estimated Elo | {result.elo.elo:.0f} "
-            f"(95 % CI {result.elo.ci_low:.0f}-{result.elo.ci_high:.0f}) |"
-        )
-    else:
-        lines.append("| Estimated Elo | n/a |")
     delta_cp = "n/a" if result.delta_cp is None else f"{result.delta_cp:.1f}"
     diversity = "n/a" if result.diversity is None else f"{result.diversity:.3f}"
     lines.extend(
@@ -127,16 +174,29 @@ def render_markdown(result: SuiteResult) -> str:
         ]
     )
 
-    if result.legality is not None:
+    if result.legality_argmax is not None or result.legality_sampled is not None:
         lines.extend(
             [
                 "## Legality",
                 "",
-                f"{result.legality.legal} of {result.legality.positions} unmasked proposals were "
-                "legal moves in validation positions.",
+                "Two rates, because they answer different questions. **argmax** is the share of "
+                "validation positions whose single most likely token is a legal move, with no "
+                "temperature, no top-k and no mask: it is a property of the weights and it is "
+                "the definition behind the \u2265 99 % bar of `GOAL.md`. **sampled** draws the "
+                "token exactly as the demo does" + drawn.strip() + ", so it is what a player "
+                "would meet with the mask switched off, and it is always the lower of the two.",
                 "",
+                "| Definition | Positions | Legal | Rate |",
+                "|---|---:|---:|---:|",
             ]
         )
+        for measured in (result.legality_argmax, result.legality_sampled):
+            if measured is not None:
+                lines.append(
+                    f"| {measured.mode} | {measured.positions} | {measured.legal} | "
+                    f"{_percent(measured.rate)} |"
+                )
+        lines.append("")
     if result.accuracy is not None and result.accuracy.bands:
         lines.extend(
             [
@@ -165,21 +225,41 @@ def render_markdown(result: SuiteResult) -> str:
             for band in result.puzzles.bands
         )
         lines.append("")
-    if result.elo is not None and result.elo.rungs:
+    if result.elo is not None:
+        lines.extend(["## Games against Stockfish", ""])
+        if result.elo.rungs:
+            lines.extend(
+                [
+                    "| Rung | Opponent Elo | Games | W | D | L | Score | Cut | Adjudicated |",
+                    "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+                ]
+            )
+            lines.extend(
+                f"| {rung.name} | {rung.opponent_elo} | {rung.games} | {rung.wins} | "
+                f"{rung.draws} | {rung.losses} | {rung.score:.3f} | {rung.cut} | "
+                f"{rung.adjudicated} |"
+                for rung in result.elo.rungs
+            )
+            lines.append("")
         lines.extend(
             [
-                "## Games against Stockfish",
+                f"{result.elo.cut} of {result.elo.games} games hit the context limit; "
+                f"{result.elo.adjudicated} of those were adjudicated on the final position "
+                "(shallow engine analysis, or the material count when no engine was available) "
+                "rather than scored as draws.",
                 "",
-                "| Rung | Opponent Elo | Games | W | D | L | Score |",
-                "|---|---:|---:|---:|---:|---:|---:|",
             ]
         )
-        lines.extend(
-            f"| {rung.name} | {rung.opponent_elo} | {rung.games} | {rung.wins} | "
-            f"{rung.draws} | {rung.losses} | {rung.score:.3f} |"
-            for rung in result.elo.rungs
-        )
-        lines.append("")
+        if result.elo.separated:
+            lines.extend(
+                [
+                    "Every game went the same way, so the logistic fit has no maximum inside the "
+                    "range of opponents and a bootstrap interval would be zero wide. The table "
+                    "gives a one-sided 95 % likelihood bound instead: the rating is on that side "
+                    "of the bound, and the games say nothing about how far.",
+                    "",
+                ]
+            )
     if result.notes:
         lines.extend(["## Notes", ""])
         lines.extend(f"- {note}" for note in result.notes)

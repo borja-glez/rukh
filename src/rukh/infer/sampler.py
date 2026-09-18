@@ -8,6 +8,7 @@ legality rate (the "understanding" metric of ``docs/spec/02``) is measured.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import chess
@@ -19,6 +20,8 @@ from rukh.models import MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer
 
 TOP_N = 5
+HEADER_TOKENS = 3
+"""``<bos> <wXXXX> <bXXXX>``: the control prefix every training sequence starts with."""
 
 
 class SampleConfig(BaseConfig):
@@ -37,11 +40,37 @@ class SampleConfig(BaseConfig):
             raise ValueError(f"top_k must be at least 1, got {self.top_k}")
         return self
 
-    def generator(self) -> torch.Generator | None:
-        """A seeded CPU generator, or None when the run is not meant to be reproducible."""
+    def generator(self, device: torch.device | str | None = None) -> torch.Generator | None:
+        """A seeded generator on ``device``, or None when the run is not reproducible.
+
+        The device matters: ``torch.multinomial`` refuses a CPU generator when the
+        probabilities live on CUDA, so the generator has to be built where the model is.
+        ``model_generator`` does that for a given model.
+        """
         if self.seed is None:
             return None
-        return torch.Generator().manual_seed(self.seed)
+        return torch.Generator(device=device or "cpu").manual_seed(self.seed)
+
+
+def model_generator(model: MoveDecoder, cfg: SampleConfig) -> torch.Generator | None:
+    """The sampling generator of ``cfg`` built on the device the model's weights live on."""
+    return cfg.generator(next(model.parameters()).device)
+
+
+def prompt_ids(history: Sequence[int], block: int) -> list[int]:
+    """Crop ``history`` to ``block`` ids **keeping the header**: ``header + moves[-(block - 3):]``.
+
+    A plain left crop (``history[-block:]``) silently drops ``<bos> <wXXXX> <bXXXX>`` as soon as a
+    game is longer than the context, so the model loses the Elo conditioning it was trained with
+    and every learned position is shifted by three. Keeping the header costs three move tokens and
+    keeps the prompt shaped like the training data.
+    """
+    ids = list(history)
+    if len(ids) <= block:
+        return ids
+    if block <= HEADER_TOKENS:
+        return ids[:block]
+    return ids[:HEADER_TOKENS] + ids[len(ids) - (block - HEADER_TOKENS) :]
 
 
 def legal_token_ids(board: chess.Board, tok: UciTokenizer) -> list[int]:
@@ -82,7 +111,11 @@ def pick_move(
 
     Returns the move (``None`` when the proposed token is not a legal move) and a report with
     ``legal``, ``raw_token``, ``top5`` (token, probability of the distribution actually sampled)
-    and ``masked``. ``generator`` lets a whole game advance one seeded stream.
+    and ``masked``. ``generator`` lets a whole game advance one seeded stream; build it with
+    ``model_generator`` so it lives on the same device as the weights.
+
+    The history is cropped with ``prompt_ids``, so a game longer than the context keeps its
+    ``<bos>`` and Elo tokens instead of being cut off the left edge.
     """
     legal = legal_token_ids(board, tok)
     report: dict[str, Any] = {
@@ -95,7 +128,8 @@ def pick_move(
         return None, report
 
     device = next(model.parameters()).device
-    idx = torch.tensor([history_ids], dtype=torch.long, device=device)
+    ids = prompt_ids(history_ids, model.cfg.block)
+    idx = torch.tensor([ids], dtype=torch.long, device=device)
     logits = _filtered_logits(model.next_logits(idx)[0], legal, cfg)
     probs = torch.softmax(logits, dim=-1)
     if cfg.temperature == 0:
