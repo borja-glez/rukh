@@ -2,8 +2,10 @@
 
 from rukh.train.checkpoint import (
     BEST_NAME,
+    TIED_HEAD,
     load_checkpoint,
     load_model,
+    load_state,
     read_manifest_sha,
     read_vocab_hash,
     restore,
@@ -15,10 +17,12 @@ from rukh.train.schedule import lr_at
 
 __all__ = [
     "BEST_NAME",
+    "TIED_HEAD",
     "TrainConfig",
     "evaluate",
     "load_checkpoint",
     "load_model",
+    "load_state",
     "lr_at",
     "param_groups",
     "pick_device",

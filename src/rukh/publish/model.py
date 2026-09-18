@@ -9,6 +9,12 @@ The folder is always staged locally first (under ``artifacts/publish/<repo>/``) 
 one ``upload_folder`` call; ``dry_run`` stops after staging and touches no network. Every
 ``HfApi`` call goes through ``_api`` so the tests can replace it, exactly as ``data/publish``
 does.
+
+The head is tied to the token embedding, so ``lm_head.weight`` and ``tokens.weight`` are one
+tensor under two names. ``safetensors`` refuses to serialise that (it stores tensors, not
+aliases) and counting both would inflate the parameter count by a whole embedding table, so the
+tied name is dropped from what is written and the loader re-ties it: ``MoveDecoder`` builds the
+tie in its constructor and ``rukh.train.load_state`` accepts the missing name.
 """
 
 from __future__ import annotations
@@ -27,6 +33,7 @@ from rukh.config import BaseConfig
 from rukh.data.publish import CARDS_DIR
 from rukh.paths import resolve
 from rukh.tokenize.uci_vocab import UciTokenizer
+from rukh.train.checkpoint import TIED_HEAD
 
 log = logging.getLogger(__name__)
 
@@ -81,6 +88,8 @@ class ModelPublishResult(BaseModel):
     """``safetensors`` or ``torch`` when ``safetensors`` is not installed."""
     run_id: str | None = None
     params: int
+    tied_embeddings: bool = False
+    """``lm_head.weight`` was left out of the weights file and is re-tied when loading."""
 
 
 def _api():  # type: ignore[no-untyped-def]
@@ -147,12 +156,25 @@ def read_eval(stage: str, cfg: ModelPublishConfig) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def publish_state(model: Any) -> dict[str, Any]:
+    """The state dict as it is published: on the CPU, contiguous and with no aliased tensor.
+
+    With tied embeddings ``lm_head.weight`` *is* ``tokens.weight``; it is dropped here so the
+    file holds every tensor exactly once. Loading re-ties it (see the module docstring).
+    """
+    state = {key: value.detach().cpu().contiguous() for key, value in model.state_dict().items()}
+    if model.cfg.tie_embeddings:
+        state.pop(TIED_HEAD, None)
+    return state
+
+
 def write_weights(state: dict[str, Any], folder: Path) -> tuple[str, str]:
     """Write the state dict; returns ``(file name, format)``.
 
     ``safetensors`` is the format the Hub expects and the only one it will preview, so it wins
     when it is installed; otherwise the weights go out as a torch pickle under its own name
-    rather than pretending to be something they are not.
+    rather than pretending to be something they are not. The state dict must already be free of
+    aliases (``publish_state``): ``safetensors.save_file`` raises on two names for one storage.
     """
     import torch
 
@@ -214,6 +236,28 @@ def _percent(value: Any) -> str:
     return "n/a" if value is None else f"{float(value) * 100:.1f} %"
 
 
+def _sampled_label(sampled: dict[str, Any]) -> str:
+    """The row name of the sampled legality rate, with the setting it was drawn under."""
+    if not sampled or sampled.get("temperature") is None:
+        return "Legality without the mask, sampled"
+    top_k = sampled.get("top_k")
+    tail = "" if top_k is None else f", top-k {top_k}"
+    return f"Legality without the mask, sampled (T={float(sampled['temperature']):g}{tail})"
+
+
+def _elo_cell(elo: dict[str, Any]) -> str:
+    """The Elo row: an interval, or the one-sided bound of a separated fit."""
+    if not elo:
+        return "n/a"
+    if elo.get("ci_low") is not None and elo.get("ci_high") is not None:
+        return f"{elo['elo']:.0f} (95 % CI {elo['ci_low']:.0f}-{elo['ci_high']:.0f})"
+    if elo.get("elo_lower") is not None:
+        return f"> {elo['elo_lower']:.0f} (one-sided 95 % bound; every game won)"
+    if elo.get("elo_upper") is not None:
+        return f"< {elo['elo_upper']:.0f} (one-sided 95 % bound; every game lost)"
+    return f"{elo['elo']:.0f} (no interval)"
+
+
 def card_context(
     repo_id: str,
     stage: str,
@@ -226,19 +270,16 @@ def card_context(
     """Everything the Jinja card needs, with every absent metric spelled ``n/a``."""
     elo = (evaluation or {}).get("elo") or {}
     accuracy = (evaluation or {}).get("accuracy") or {}
-    legality = (evaluation or {}).get("legality") or {}
+    argmax = (evaluation or {}).get("legality_argmax") or {}
+    sampled = (evaluation or {}).get("legality_sampled") or {}
     puzzles = (evaluation or {}).get("puzzles") or {}
     metrics = [
-        ("Legality without the mask", _percent(legality.get("rate"))),
+        ("Legality without the mask, argmax", _percent(argmax.get("rate"))),
+        (_sampled_label(sampled), _percent(sampled.get("rate"))),
         ("Top-1 next move", _percent(accuracy.get("top1"))),
         ("Top-3 next move", _percent(accuracy.get("top3"))),
         ("Puzzles solved", _percent(puzzles.get("rate"))),
-        (
-            "Estimated Elo",
-            "n/a"
-            if not elo
-            else f"{elo['elo']:.0f} (95 % CI {elo['ci_low']:.0f}-{elo['ci_high']:.0f})",
-        ),
+        ("Estimated Elo", _elo_cell(elo)),
     ]
     bands = [
         (band["band"], _percent(band["rate"]))
@@ -246,7 +287,10 @@ def card_context(
         if isinstance(band, dict)
     ]
     recipe = run.params if run else {}
+    notes = [str(note) for note in (evaluation or {}).get("notes", []) if str(note).strip()]
     return {
+        "notes": notes,
+        "tied_embeddings": bool(config.get("tie_embeddings")),
         "repo_id": repo_id,
         "stage": stage,
         "license": cfg.license,
@@ -290,15 +334,15 @@ def publish_model(
     dry_run: bool = False,
 ) -> ModelPublishResult:
     """Stage (and unless ``dry_run``, upload) one trained decoder as a Hub model repository."""
-    from rukh.train import load_checkpoint
+    from rukh.train import load_model
 
     cfg = cfg or ModelPublishConfig()
     ckpt = Path(ckpt)
     repo_id = repo if "/" in repo else f"{cfg.owner}/{repo}"
     name = stage or repo_id.split("/")[-1].removeprefix("rukh-")
-    payload = load_checkpoint(ckpt)
-    state = payload["model_state"]
-    params = sum(int(tensor.numel()) for tensor in state.values())
+    model, payload = load_model(ckpt)
+    state = publish_state(model)
+    params = model.num_params(non_embedding=False)
 
     folder = resolve(cfg.publish_dir) / repo_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -332,4 +376,5 @@ def publish_model(
         weights_format=weights_format,
         run_id=run.run_id if run else None,
         params=params,
+        tied_embeddings=model.cfg.tie_embeddings,
     )

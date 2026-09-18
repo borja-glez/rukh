@@ -47,9 +47,21 @@ Puzzles by difficulty band:
 {%- endfor %}
 {%- endif %}
 
-Legality is measured **without** the legality mask: it is the share of positions where the raw
-token the network produces is a legal move, which is the honest measure of how much chess the
-weights hold. The demo masks illegal moves before sampling, so it never plays one.
+Legality is measured **without** the legality mask, twice, because the two numbers answer
+different questions:
+
+- **argmax** is the share of validation positions whose single most likely token is a legal
+  move, with no temperature and no top-k. It is a property of the weights and it is the
+  definition behind the "at least 99 % legal" bar of the project.
+- **sampled** draws the token exactly as the demo draws it, so it is what a player would meet
+  with the mask switched off. It is always the lower of the two.
+
+The demo masks illegal moves before sampling, so it never plays one.
+{% if notes %}
+How to read these numbers:
+
+{% for note in notes %}- {{ note }}
+{% endfor %}{% endif %}
 
 ## Input and output
 
@@ -67,7 +79,13 @@ enumeration, not learned from data, and ships in `tokenizer/vocab.json`.
 
 {% for file in files %}- `{{ file }}`
 {% endfor %}
-{% if has_onnx %}
+{% if tied_embeddings %}
+The language-modelling head is tied to the token embedding, so the weights file holds
+`tokens.weight` and **not** `lm_head.weight`: the two are one tensor, and storing it twice would
+both break `safetensors` and double-count the embedding in the parameter count. Re-tie it after
+loading (`model.lm_head.weight = model.tokens.weight`); `rukh` does it in the constructor.
+{% endif %}
+{%- if has_onnx %}
 The ONNX graph returns only the logits of the **last** step, `(batch, vocab)`: that is all the
 demo needs and it keeps the output tensor two hundred times smaller. `model-fp16.onnx` is for
 WebGPU and `model-int8.onnx` for the WASM fallback.
@@ -112,7 +130,10 @@ converted from SAN to legal UCI. Validation uses a month the model never saw.
 - It was trained on games between 1800+ humans on Lichess and imitates them, blunders included.
   It is not an oracle of good play and is not conditioned to be one.
 - The estimated Elo is a fit to a few hundred games against a limited Stockfish, with a
-  bootstrap interval: it is an estimate with a confidence interval, not a rating.
+  bootstrap interval: it is an estimate with a confidence interval, not a rating. The interval
+  covers sampling noise only. The rungs below Stockfish's 1320 floor are nominal `Skill Level`
+  anchors rather than measured ratings, and games that run out of context are adjudicated on the
+  final position instead of being scored as draws.
 
 ## License
 

@@ -25,6 +25,7 @@ from rukh.publish import (
     card_context,
     copy_onnx,
     publish_model,
+    publish_state,
     read_eval,
     render_card,
 )
@@ -47,7 +48,23 @@ EVAL = {
     "stage": "tiny",
     "suite": "quick",
     "date": "2026-09-19",
-    "legality": {"positions": 1000, "legal": 987, "rate": 0.987},
+    "legality_argmax": {
+        "positions": 1000,
+        "legal": 987,
+        "rate": 0.987,
+        "mode": "argmax",
+        "temperature": None,
+        "top_k": None,
+    },
+    "legality_sampled": {
+        "positions": 1000,
+        "legal": 901,
+        "rate": 0.901,
+        "mode": "sampled",
+        "temperature": 0.6,
+        "top_k": 20,
+    },
+    "notes": ["the Elo interval covers sampling noise only"],
     "accuracy": {"positions": 1000, "top1": 0.314, "top3": 0.521, "bands": []},
     "puzzles": {
         "attempted": 400,
@@ -62,6 +79,11 @@ EVAL = {
         "games": 160,
         "score": 0.42,
         "rungs": [],
+        "cut": 4,
+        "adjudicated": 4,
+        "separated": False,
+        "elo_lower": None,
+        "elo_upper": None,
     },
 }
 
@@ -183,6 +205,44 @@ def test_an_empty_onnx_directory_is_an_error(tmp_path: Path) -> None:
         copy_onnx(tmp_path / "absent", tmp_path)
 
 
+def test_the_published_weights_hold_no_tensor_twice(
+    rukh_home: Path, checkpoint: Path, api: FakeApi, no_mlflow: None
+) -> None:
+    """Tied weights would appear under two names, which ``safetensors.save_file`` refuses."""
+    model = MoveDecoder(TOY)
+    assert model.cfg.tie_embeddings
+    assert model.lm_head.weight.data_ptr() == model.tokens.weight.data_ptr()
+
+    state = publish_state(model)
+    assert "lm_head.weight" not in state
+    assert "tokens.weight" in state
+    pointers = [tensor.data_ptr() for tensor in state.values()]
+    assert len(pointers) == len(set(pointers))
+
+    reloaded = MoveDecoder(TOY)
+    reloaded.load_state_dict(state, strict=False)
+    assert torch.equal(reloaded.lm_head.weight, reloaded.tokens.weight)  # re-tied on load
+
+    result = publish_model(checkpoint, REPO, ModelPublishConfig(), dry_run=True)
+    assert result.tied_embeddings is True
+
+
+def test_the_parameter_count_is_the_models_own_and_counts_the_embedding_once(
+    rukh_home: Path, checkpoint: Path, api: FakeApi, no_mlflow: None
+) -> None:
+    result = publish_model(checkpoint, REPO, ModelPublishConfig(), dry_run=True)
+    model = MoveDecoder(TOY)
+    assert result.params == model.num_params(non_embedding=False)
+
+    naive = sum(int(tensor.numel()) for tensor in model.state_dict().values())
+    assert naive == result.params + model.tokens.weight.numel()  # the old double count
+
+    config = json.loads((Path(result.folder) / CONFIG_NAME).read_text(encoding="utf-8"))
+    assert config["params"] == result.params
+    card = Path(result.card_path).read_text(encoding="utf-8")
+    assert f"{result.params:,} parameters" in card
+
+
 def test_read_eval_finds_the_harness_results(rukh_home: Path) -> None:
     cfg = ModelPublishConfig()
     assert read_eval("tiny", cfg) is None
@@ -197,7 +257,10 @@ def test_the_card_carries_the_metrics_and_the_recipe() -> None:
     text = render_card(
         card_context("chorcat/rukh-tiny", "tiny", ModelPublishConfig(), config, EVAL, RUN, ["a"])
     )
-    assert "98.7 %" in text  # legality
+    assert "98.7 %" in text  # legality, argmax
+    assert "90.1 %" in text  # legality, sampled
+    assert "sampled (T=0.6, top-k 20)" in text
+    assert "the Elo interval covers sampling noise only" in text
     assert "31.4 %" in text  # top-1
     assert "52.1 %" in text  # top-3
     assert "1234 (95 % CI 1174-1294)" in text
@@ -205,6 +268,46 @@ def test_the_card_carries_the_metrics_and_the_recipe() -> None:
     assert "`max_steps` | `20000`" in text
     assert "run-42" in text
     assert "?stage=tiny" in text
+
+
+def test_the_card_explains_the_tied_head_when_the_weights_leave_it_out() -> None:
+    config = {"params": 5_000_000, "block": 200, "tie_embeddings": True}
+    tied = render_card(
+        card_context("chorcat/rukh-tiny", "tiny", ModelPublishConfig(), config, EVAL, RUN, ["a"])
+    )
+    assert "`lm_head.weight`" in tied
+    assert "Re-tie it after" in tied
+    untied = render_card(
+        card_context(
+            "chorcat/rukh-tiny",
+            "tiny",
+            ModelPublishConfig(),
+            {"params": 1, "tie_embeddings": False},
+            EVAL,
+            RUN,
+            ["a"],
+        )
+    )
+    assert "`lm_head.weight`" not in untied
+
+
+def test_a_separated_elo_is_shown_as_a_one_sided_bound() -> None:
+    separated = {
+        **EVAL,
+        "elo": {
+            **EVAL["elo"],
+            "ci_low": None,
+            "ci_high": None,
+            "separated": True,
+            "elo_lower": 2450.0,
+        },
+    }
+    text = render_card(
+        card_context(
+            "chorcat/rukh-tiny", "tiny", ModelPublishConfig(), {"params": 1}, separated, RUN, []
+        )
+    )
+    assert "> 2450 (one-sided 95 % bound; every game won)" in text
 
 
 def test_the_card_has_the_keys_the_hub_needs() -> None:

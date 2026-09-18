@@ -22,6 +22,8 @@ from torch import nn
 from rukh.models import DecoderConfig, MoveDecoder
 
 BEST_NAME = "best.pt"
+TIED_HEAD = "lm_head.weight"
+"""Tied to ``tokens.weight``; a published state dict leaves it out and it is re-tied on load."""
 
 
 def step_name(step: int) -> str:
@@ -121,13 +123,29 @@ def load_checkpoint(path: Path, map_location: str | torch.device = "cpu") -> dic
     return payload
 
 
+def load_state(model: nn.Module, state: Mapping[str, Any]) -> None:
+    """Load weights, accepting a state dict whose tied head was left out when it was saved.
+
+    ``MoveDecoder`` ties ``lm_head.weight`` to ``tokens.weight`` in its constructor, so the tied
+    head is already correct once the embedding is loaded: a state dict without it (the one
+    ``rukh publish`` writes, because two names for one tensor is what makes ``safetensors``
+    refuse the file) loads cleanly and nothing else may be missing.
+    """
+    missing, unexpected = model.load_state_dict(dict(state), strict=False)
+    absent = [name for name in missing if name != TIED_HEAD]
+    if absent or unexpected:
+        raise ValueError(
+            f"the weights do not match the model: missing {absent}, unexpected {list(unexpected)}"
+        )
+
+
 def load_model(
     path: Path, map_location: str | torch.device = "cpu"
 ) -> tuple[MoveDecoder, dict[str, Any]]:
     """Rebuild the decoder a checkpoint describes, in eval mode, plus the whole payload."""
     payload = load_checkpoint(path, map_location=map_location)
     model = MoveDecoder(DecoderConfig.model_validate(payload["model_cfg"]))
-    model.load_state_dict(payload["model_state"])
+    load_state(model, payload["model_state"])
     return model.eval(), payload
 
 
@@ -138,7 +156,7 @@ def restore(
     with_rng: bool = True,
 ) -> int:
     """Load weights (and optionally the optimizer and RNG) and return the step reached."""
-    model.load_state_dict(payload["model_state"])
+    load_state(model, payload["model_state"])
     opt_state = payload.get("opt_state")
     if optimizer is not None and opt_state is not None:
         optimizer.load_state_dict(opt_state)
