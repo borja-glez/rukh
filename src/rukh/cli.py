@@ -1,4 +1,4 @@
-"""Command-line interface: ``info``, ``data``, ``train``, ``play``, ``eval``, ``engine``.
+"""Command-line interface: info, data, train, play, eval, export, publish, engine, mlflow.
 
 Every command is a thin shell over the library: parse options, call one function, print.
 """
@@ -25,6 +25,8 @@ mlflow_app = typer.Typer(help="Local MLflow tracking.", no_args_is_help=True)
 app.add_typer(mlflow_app, name="mlflow")
 engine_app = typer.Typer(help="Stockfish engine utilities.", no_args_is_help=True)
 app.add_typer(engine_app, name="engine")
+publish_app = typer.Typer(help="Publish trained models to the Hub.", no_args_is_help=True)
+app.add_typer(publish_app, name="publish")
 
 
 def _version_callback(value: bool) -> None:
@@ -544,6 +546,62 @@ def export_cmd(
             f"parity {kind}: {result.agreement:.4f} on {result.positions} positions "
             f"(max |delta logits| {result.max_abs_logit_delta:.4g})"
         )
+
+
+@publish_app.command("model")
+def publish_model_cmd(
+    ckpt: Annotated[
+        Path,
+        typer.Option(
+            "--ckpt", exists=True, dir_okay=False, readable=True, help="Checkpoint to publish."
+        ),
+    ],
+    repo: Annotated[str, typer.Option("--repo", help="Hub repository, e.g. chorcat/rukh-small.")],
+    onnx: Annotated[
+        Path | None,
+        typer.Option("--onnx", exists=True, file_okay=False, help="Directory with the ONNX files."),
+    ] = None,
+    stage: Annotated[
+        str | None,
+        typer.Option("--stage", help="Stage name; default: the repo without `rukh-`."),
+    ] = None,
+    run_id: Annotated[
+        str | None, typer.Option("--run-id", help="MLflow run to take the recipe from.")
+    ] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Stage the folder locally; touch no network.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Stage weights, ONNX, tokenizer and a generated card, and upload them to the Hub."""
+    from rukh.publish import ModelPublishConfig, publish_model
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    try:
+        result = publish_model(
+            ckpt,
+            repo,
+            ModelPublishConfig(),
+            onnx_dir=onnx,
+            stage=stage,
+            run_id=run_id,
+            dry_run=dry_run,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(f"repo:     {result.repo_id} ({result.repo_type})")
+    typer.echo(f"stage:    {result.stage} ({result.params:,} parameters)")
+    typer.echo(f"mode:     {'dry-run (staged, nothing uploaded)' if dry_run else 'uploaded'}")
+    typer.echo(f"weights:  {result.weights_format}")
+    typer.echo(f"run:      {result.run_id or 'not found in MLflow'}")
+    typer.echo(f"folder:   {result.folder}")
+    typer.echo("files:")
+    for path in result.files:
+        typer.echo(f"  {path}")
 
 
 @mlflow_app.command("ui")
