@@ -8,6 +8,8 @@ from pydantic import Field
 
 from rukh import paths
 from rukh.config import BaseConfig, load_yaml
+from rukh.data.evals import EvalsConfig
+from rukh.data.positions import PositionsConfig
 from rukh.data.uci import UciConfig
 
 
@@ -33,6 +35,8 @@ class PipelineConfig(BaseConfig):
 
     uci: UciConfig = Field(default_factory=UciConfig)
     tokenize: TokenizeConfig = Field(default_factory=TokenizeConfig)
+    positions: PositionsConfig = Field(default_factory=PositionsConfig)
+    evals: EvalsConfig = Field(default_factory=EvalsConfig)
 
 
 def default_config_path() -> Path:
@@ -42,9 +46,3 @@ def default_config_path() -> Path:
 def load_pipeline(path: Path | None = None) -> PipelineConfig:
     """Load ``pipeline.yaml`` (the shipped one when ``path`` is ``None``)."""
     return load_yaml(path or default_config_path(), PipelineConfig)
-
-
-def resolve(rel: str) -> Path:
-    """Absolute path for a config entry: as is if absolute, else under ``paths.root()``."""
-    path = Path(rel)
-    return path if path.is_absolute() else paths.root() / path

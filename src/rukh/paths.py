@@ -36,3 +36,9 @@ def mlruns_dir() -> Path:
 def tools_dir() -> Path:
     """Where downloaded binaries such as Stockfish live (gitignored)."""
     return root() / "tools"
+
+
+def resolve(rel: str | Path) -> Path:
+    """Absolute path for a config entry: as is if absolute, otherwise under ``root()``."""
+    path = Path(rel)
+    return path if path.is_absolute() else root() / path

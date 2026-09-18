@@ -19,9 +19,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pydantic import Field
 
-from rukh import paths
 from rukh.config import BaseConfig
 from rukh.data.manifest import FileHash, Manifest
+from rukh.paths import resolve
 
 BATCH_GAMES = 20_000
 RAW_COLUMNS = [
@@ -203,11 +203,6 @@ def _write_results(
             writer.write_table(pa.table(columns, schema=OUT_SCHEMA))
 
 
-def _resolve(rel: str) -> Path:
-    path = Path(rel)
-    return path if path.is_absolute() else paths.root() / path
-
-
 def month_dirs(raw_dir: Path) -> list[tuple[str, Path]]:
     """``(YYYY-MM, games.parquet)`` for every ``year=YYYY/month=MM`` under ``raw_dir``."""
     found: list[tuple[str, Path]] = []
@@ -218,7 +213,7 @@ def month_dirs(raw_dir: Path) -> list[tuple[str, Path]]:
     return found
 
 
-def _sha256(path: Path) -> str:
+def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
@@ -228,8 +223,8 @@ def _sha256(path: Path) -> str:
 
 def run(cfg: UciConfig) -> Manifest:
     """Convert every month under ``raw_dir`` and write ``out_dir/manifest.json``."""
-    raw_dir = _resolve(cfg.raw_dir)
-    out_dir = _resolve(cfg.out_dir)
+    raw_dir = resolve(cfg.raw_dir)
+    out_dir = resolve(cfg.out_dir)
     months = month_dirs(raw_dir)
     if not months:
         raise FileNotFoundError(f"no year=*/month=*/games.parquet under {raw_dir}")
@@ -248,7 +243,9 @@ def run(cfg: UciConfig) -> Manifest:
         totals = convert_month(src, dst, cfg)
         counts[month] = totals["kept"]
         details[month] = totals
-        files.append(FileHash(path=rel.as_posix(), sha256=_sha256(dst), bytes=dst.stat().st_size))
+        files.append(
+            FileHash(path=rel.as_posix(), sha256=sha256_file(dst), bytes=dst.stat().st_size)
+        )
     filters: dict[str, object] = {
         "min_plies": cfg.min_plies,
         "max_plies": cfg.max_plies,

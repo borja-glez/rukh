@@ -185,6 +185,55 @@ def data_tokenize(
     _echo_written(report.written)
 
 
+def _echo_manifest(manifest: object, as_json: bool, out_dir: str) -> None:
+    from rukh.data.manifest import Manifest
+
+    assert isinstance(manifest, Manifest)
+    if as_json:
+        typer.echo(manifest.model_dump_json(indent=2))
+        return
+    typer.echo(f"dataset:  {manifest.dataset}")
+    if manifest.months:
+        typer.echo(f"months:   {', '.join(manifest.months)}")
+    typer.echo("counts:")
+    for key, value in manifest.counts.items():
+        typer.echo(f"  {key}: {value}")
+    typer.echo("files:")
+    for file in manifest.files:
+        typer.echo(f"  {file.path} ({file.bytes} bytes)")
+    typer.echo(f"manifest: {out_dir}/manifest.json")
+
+
+JsonOption = Annotated[bool, typer.Option("--json", help="Print the manifest as JSON.")]
+
+
+@data_app.command("positions")
+def data_positions(config: PipelineOption = None, as_json: JsonOption = False) -> None:
+    """Walk sampled games into deduplicated 4-field FENs with phase labels."""
+    from rukh.data.pipeline import load_pipeline
+    from rukh.data.positions import run
+
+    cfg = load_pipeline(config).positions
+    _echo_manifest(run(cfg), as_json, cfg.out_dir)
+
+
+@data_app.command("evals")
+def data_evals(
+    config: PipelineOption = None,
+    files: Annotated[
+        str | None,
+        typer.Option("--files", help="Remote file indices, e.g. 0-19, 3 or 0,2,5-7 (default all)."),
+    ] = None,
+    as_json: JsonOption = False,
+) -> None:
+    """Semi-join the positions with the remote Stockfish evaluations (resumable per file)."""
+    from rukh.data.evals import run
+    from rukh.data.pipeline import load_pipeline
+
+    cfg = load_pipeline(config).evals
+    _echo_manifest(run(cfg, files=files), as_json, cfg.out_dir)
+
+
 @mlflow_app.command("ui")
 def mlflow_ui(
     host: Annotated[str, typer.Option("--host", help="Interface to bind.")] = "127.0.0.1",

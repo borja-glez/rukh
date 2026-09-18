@@ -18,3 +18,16 @@ tokenize:
   bpe_train_games: 200000
   stats_n_games: 20000
   max_len: 200
+positions:
+  uci_dir: data/uci
+  month: "2025-01"
+  out_dir: data/positions
+  n_games: 300000
+  max_positions: 5000000
+  workers: 0
+evals:
+  dataset: Lichess/chess-position-evaluations
+  remote_pattern: "hf://datasets/{dataset}/data/data_{index:04d}.parquet"
+  n_files: 20
+  positions: data/positions/positions.parquet
+  out_dir: data/evals

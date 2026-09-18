@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Protocol
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
-from rukh.data.pipeline import TokenizeConfig, resolve
+from rukh.data.pipeline import TokenizeConfig
+from rukh.paths import resolve
 from rukh.tokenize.san_chars import SanCharTokenizer, san_text, uci_to_san
 from rukh.tokenize.uci_vocab import RESULT_TOKENS, UciTokenizer
 
