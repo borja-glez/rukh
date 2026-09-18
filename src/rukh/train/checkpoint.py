@@ -93,8 +93,13 @@ def save_checkpoint(
     data_manifest_sha: str | None = None,
     git_sha: str | None = None,
     best_val: float | None = None,
+    run_id: str | None = None,
 ) -> Path:
-    """Write one checkpoint atomically (temporary file plus replace) and return its path."""
+    """Write one checkpoint atomically (temporary file plus replace) and return its path.
+
+    ``run_id`` is the MLflow run that wrote it, so ``--resume`` can carry on logging into the
+    same run and the loss curve stays one line instead of two.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, Any] = {
@@ -107,6 +112,7 @@ def save_checkpoint(
         "data_manifest_sha": data_manifest_sha,
         "git_sha": git_sha,
         "best_val": best_val,
+        "run_id": run_id,
         "rng": rng_state(),
     }
     tmp = path.with_suffix(path.suffix + ".tmp")

@@ -19,5 +19,7 @@ ckpt_every: 1000 # every checkpoint feeds the TrainingReplay island of M2
 out_dir: checkpoints
 seed: 42
 run_name: tiny
+# A timestamp is appended: a second run must not overwrite the step-*.pt series.
+unique_run_name: true
 workers: 4
 log_every: 10

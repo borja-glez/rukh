@@ -12,7 +12,15 @@ from rukh.train.checkpoint import (
     save_checkpoint,
     step_name,
 )
-from rukh.train.loop import TrainConfig, evaluate, param_groups, pick_device, run_dir, train
+from rukh.train.loop import (
+    TrainConfig,
+    evaluate,
+    param_groups,
+    pick_device,
+    run_dir,
+    skip_batches,
+    train,
+)
 from rukh.train.schedule import lr_at
 
 __all__ = [
@@ -31,6 +39,7 @@ __all__ = [
     "restore",
     "run_dir",
     "save_checkpoint",
+    "skip_batches",
     "step_name",
     "train",
 ]

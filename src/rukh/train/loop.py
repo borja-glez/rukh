@@ -5,6 +5,16 @@ only to matrices), learning rate 6e-4 with 1 000 warmup steps and a cosine decay
 batch of ``batch_size * grad_accum`` sequences, bf16 autocast on CUDA, gradient clipping at 1.0
 and optional ``torch.compile``. Everything the run needs to be reproducible (config, seed, git
 SHA, vocabulary hash, data manifest hash) goes to MLflow and into every checkpoint.
+
+Resuming is meant to be indistinguishable from never having stopped: the batch stream is wound
+forward past the windows the first half of the run already saw, and the MLflow run id travels in
+the checkpoint so the curve carries on in the same run instead of starting a second one.
+
+Two throughput numbers are logged because they answer different questions: ``tokens_per_s``
+counts every position in the window (what the GPU actually processed, comparable across runs)
+and ``real_tokens_per_s`` counts only the non-``<pad>`` targets (what the model learned from).
+The training loss is accumulated token-weighted rather than as a mean of means, so a
+micro-batch with fewer real tokens does not count as much as a full one.
 """
 
 from __future__ import annotations
@@ -67,6 +77,9 @@ class TrainConfig(BaseConfig):
     out_dir: str = "checkpoints"
     seed: int = 42
     run_name: str | None = None
+    unique_run_name: bool = True
+    """Append a timestamp to ``run_name``: a second run must not overwrite the ``step-*.pt``
+    series the ``TrainingReplay`` of the course reads."""
     workers: int = 0  # DataLoader workers; 0 keeps everything in the main process
     log_every: int = 10  # optimizer steps between training metrics
 
@@ -137,11 +150,15 @@ def evaluate(
     device: torch.device,
     autocast: Any = None,
 ) -> tuple[float, float]:
-    """Mean validation loss and top-1 next-token accuracy over at most ``batches`` batches."""
+    """Validation loss and top-1 next-token accuracy over at most ``batches`` batches.
+
+    The loss is token-weighted: each batch's mean is weighted by the number of non-``<pad>``
+    targets it had, so a short last batch does not count as much as a full one.
+    """
     was_training = model.training
     model.eval()
     loss_sum = 0.0
-    seen = 0
+    weighted = 0
     hits = 0
     counted = 0
     for index, (x, y) in enumerate(loader):
@@ -150,23 +167,47 @@ def evaluate(
         x, y = x.to(device), y.to(device)
         with autocast if autocast is not None else nullcontext():
             logits, loss = model(x, y)
-        if loss is not None and torch.isfinite(loss):
-            loss_sum += loss.float().item()
-            seen += 1
         mask = y != IGNORE_INDEX
+        tokens = int(mask.sum())
+        if loss is not None and torch.isfinite(loss) and tokens:
+            loss_sum += loss.float().item() * tokens
+            weighted += tokens
         hits += int((logits.argmax(dim=-1) == y)[mask].sum())
-        counted += int(mask.sum())
+        counted += tokens
     if was_training:
         model.train()
-    return (loss_sum / seen if seen else math.nan, hits / counted if counted else 0.0)
+    return (loss_sum / weighted if weighted else math.nan, hits / counted if counted else 0.0)
 
 
 def run_dir(cfg: TrainConfig, resume: Path | None = None) -> Path:
-    """Where this run writes: the resumed run's folder, or ``out_dir/<run name>``."""
+    """Where this run writes: the resumed run's folder, or ``out_dir/<run name>``.
+
+    The name carries a timestamp unless ``unique_run_name`` is off, because two runs of the same
+    config would otherwise write the same ``step-*.pt`` files and the second would quietly
+    overwrite the checkpoint series of the first.
+    """
     if resume is not None:
         return Path(resume).resolve().parent
-    name = cfg.run_name or f"{cfg.preset}-{datetime.now(UTC):%Y%m%d-%H%M%S}"
+    name = cfg.run_name or cfg.preset
+    if cfg.unique_run_name:
+        name = f"{name}-{datetime.now(UTC):%Y%m%d-%H%M%S}"
     return paths.resolve(cfg.out_dir) / name
+
+
+def skip_batches(batches: Iterator[Batch], count: int) -> int:
+    """Wind the batch stream forward ``count`` batches and return how many were skipped.
+
+    A resumed run must not start again at the first window of the first epoch: it would train
+    twice on the same games while the schedule believes it is halfway. Windows are memmap slices,
+    so winding forward is cheap compared with a step, and it is logged because it is not free.
+    """
+    if count <= 0:
+        return 0
+    started = time.perf_counter()
+    for _ in range(count):
+        next(batches)
+    log.info("skipped %d batches in %.1f s to resume", count, time.perf_counter() - started)
+    return count
 
 
 def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = None) -> Path:
@@ -196,12 +237,15 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
     optimizer = torch.optim.AdamW(param_groups(model, cfg.weight_decay), lr=cfg.lr, betas=cfg.betas)
     start_step = 0
     best_val = math.inf
+    run_id: str | None = None
     if resume is not None:
         payload = load_checkpoint(resume, map_location=where)
         start_step = restore(payload, model, optimizer)
         recorded = payload.get("best_val")
         best_val = float(recorded) if isinstance(recorded, int | float) else best_val
-        log.info("resumed %s at step %d", resume, start_step)
+        previous = payload.get("run_id")
+        run_id = str(previous) if isinstance(previous, str) and previous else None
+        log.info("resumed %s at step %d (mlflow run %s)", resume, start_step, run_id or "new")
 
     use_bf16 = cfg.precision == "bf16" and where.type == "cuda"
     autocast = (
@@ -218,6 +262,7 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
     manifest_sha = read_manifest_sha(paths.data_dir() / "raw" / "manifest.json")
     tokens_per_step = cfg.batch_size * cfg.grad_accum * cfg.block
     batches = forever(train_loader)
+    skip_batches(batches, start_step * cfg.grad_accum)
     final = out_dir / step_name(cfg.max_steps)
 
     from rukh.tracking import git_sha, start_run
@@ -229,8 +274,9 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
         "device": str(where),
         "num_params": model.num_params(),
     }
-    with start_run(out_dir.name, params, tags={"preset": cfg.preset}) as run:
+    with start_run(out_dir.name, params, tags={"preset": cfg.preset}, run_id=run_id) as run:
         log.info("run %s in %s on %s", run.info.run_id, out_dir, where)
+        this_run = str(run.info.run_id)
 
         def save(path: Path, step: int) -> Path:
             return save_checkpoint(
@@ -244,6 +290,7 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
                 data_manifest_sha=manifest_sha,
                 git_sha=git_sha(),
                 best_val=None if math.isinf(best_val) else best_val,
+                run_id=this_run,
             )
 
         clock = time.perf_counter()
@@ -252,7 +299,10 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
             for group in optimizer.param_groups:
                 group["lr"] = lr
             optimizer.zero_grad(set_to_none=True)
-            total = 0.0
+            # Token-weighted, on the device: one synchronisation per step instead of one per
+            # micro-batch, and a micro-batch with fewer real tokens weighs less in the mean.
+            loss_sum = torch.zeros((), device=where)
+            real_tokens = torch.zeros((), device=where)
             for _ in range(cfg.grad_accum):
                 x, y = next(batches)
                 x, y = x.to(where), y.to(where)
@@ -260,20 +310,26 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
                     _, loss = runnable(x, y)
                 assert loss is not None
                 (loss / cfg.grad_accum).backward()
-                total += loss.detach().float().item() / cfg.grad_accum
+                tokens = (y != IGNORE_INDEX).sum()
+                loss_sum += loss.detach().float() * tokens
+                real_tokens += tokens
             grad_norm = float(nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip))
             optimizer.step()
 
             done = step + 1
             last = done == cfg.max_steps
             if done % cfg.log_every == 0 or last:
+                counted = float(real_tokens.item())
+                total = float(loss_sum.item()) / counted if counted else math.nan
                 elapsed = max(time.perf_counter() - clock, 1e-9)
+                steps = min(cfg.log_every, done - start_step)
                 log_metrics(
                     {
                         "train/loss": total,
                         "lr": lr,
                         "grad_norm": grad_norm,
-                        "tokens_per_s": tokens_per_step * min(cfg.log_every, done) / elapsed,
+                        "tokens_per_s": tokens_per_step * steps / elapsed,
+                        "real_tokens_per_s": counted * steps / elapsed,
                     },
                     step=done,
                 )

@@ -11,7 +11,16 @@ import torch
 
 from rukh.models import DecoderConfig, MoveDecoder
 from rukh.tokenize.pack import META_FILE, STARTS_FILE, TOKENS_FILE, PackInfo
-from rukh.train import TrainConfig, evaluate, load_checkpoint, param_groups, pick_device, train
+from rukh.train import (
+    TrainConfig,
+    evaluate,
+    load_checkpoint,
+    param_groups,
+    pick_device,
+    run_dir,
+    skip_batches,
+    train,
+)
 from rukh.train.loop import forever, maybe_compile
 
 pytestmark = pytest.mark.unit
@@ -70,6 +79,7 @@ def toy_config(**overrides: object) -> TrainConfig:
         ckpt_every=3,
         log_every=1,
         run_name="toy",
+        unique_run_name=False,
     )
     return cfg.model_copy(update=dict(overrides))
 
@@ -111,11 +121,78 @@ def test_a_short_run_lowers_the_loss_and_writes_checkpoints(
     losses = metric_history(run_id, "train/loss")
     assert len(losses) == 6
     assert losses[-1] < losses[0]
-    for key in ("lr", "grad_norm", "tokens_per_s"):
+    for key in ("lr", "grad_norm", "tokens_per_s", "real_tokens_per_s"):
         assert len(metric_history(run_id, key)) == 6
+    # Every position in the window is processed; only the non-pad targets are learned from.
+    for window, real in zip(
+        metric_history(run_id, "tokens_per_s"),
+        metric_history(run_id, "real_tokens_per_s"),
+        strict=True,
+    ):
+        assert 0.0 < real <= window
     assert len(metric_history(run_id, "val/loss")) == 2
     top1 = metric_history(run_id, "val/top1")
     assert len(top1) == 2 and all(0.0 <= value <= 1.0 for value in top1)
+
+
+def test_a_run_name_is_unique_by_default(rukh_home: Path) -> None:
+    """Two runs of the same config must not write the same ``step-*.pt`` series."""
+    cfg = toy_config(unique_run_name=True)
+    first = run_dir(cfg)
+    assert first.name.startswith("toy-") and first.name != "toy"
+    assert run_dir(TrainConfig(preset="tiny")).name.startswith("tiny-")
+    assert run_dir(cfg.model_copy(update={"unique_run_name": False})).name == "toy"
+    resumed = run_dir(cfg, resume=rukh_home / "checkpoints" / "toy" / "step-3.pt")
+    assert resumed.name == "toy"  # a resumed run stays where it was
+
+
+def test_skip_batches_winds_the_stream_forward(rukh_home: Path, tokens_dir: Path) -> None:
+    from rukh.tokenize.loader import PackedDataset, make_loader
+
+    def stream() -> object:
+        loader = make_loader(PackedDataset(tokens_dir / "train", block=BLOCK), 4, seed=0)
+        return forever(loader)
+
+    straight = stream()
+    for _ in range(5):
+        next(straight)
+    expected = next(straight)
+
+    skipped = stream()
+    assert skip_batches(skipped, 5) == 5
+    assert torch.equal(next(skipped)[0], expected[0])
+    assert skip_batches(stream(), 0) == 0
+
+
+def test_resume_does_not_replay_the_windows_it_already_saw(
+    rukh_home: Path, tokens_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import rukh.train.loop as loop_module
+
+    seen: list[int] = []
+    real = loop_module.skip_batches
+    monkeypatch.setattr(
+        loop_module,
+        "skip_batches",
+        lambda batches, count: (seen.append(count), real(batches, count))[1],
+    )
+    cfg = toy_config(max_steps=3, ckpt_every=3)
+    first = train(cfg, device="cpu")
+    assert seen == [0]
+    train(toy_config(max_steps=6, ckpt_every=3), resume=first, device="cpu")
+    assert seen == [0, 3 * cfg.grad_accum]  # start_step * grad_accum batches
+
+
+def test_a_resumed_run_keeps_one_mlflow_curve(rukh_home: Path, tokens_dir: Path) -> None:
+    first = train(toy_config(max_steps=3, ckpt_every=3), device="cpu")
+    run_id = load_checkpoint(first)["run_id"]
+    assert run_id == last_run_id()
+
+    train(toy_config(max_steps=6, ckpt_every=3), resume=first, device="cpu")
+    assert load_checkpoint(first.parent / "step-6.pt")["run_id"] == run_id
+    assert last_run_id() == run_id  # no second run was started
+    losses = metric_history(run_id, "train/loss")
+    assert len(losses) == 6  # steps 1-3 from the first half, 4-6 from the resumed one
 
 
 def test_resume_continues_from_the_saved_step(rukh_home: Path, tokens_dir: Path) -> None:
