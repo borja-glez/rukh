@@ -111,3 +111,42 @@ se decide o se desvía durante la ejecución.
 - **Si está mal:** son dos líneas de `styleDirective` en cada `astro.config.mjs`; si expressive-code
   o cm-chessboard pasan a clases o a hojas con hash, se elimina `'unsafe-inline'` y el test de CSP
   se endurece para prohibirlo también en `style-src-attr`.
+
+### D-014 · Preparación de la CSP para P2 (ORT en el navegador)
+- **Qué:** cuando la demo cargue `onnxruntime-web` (P2), `script-src` necesitará
+  `'wasm-unsafe-eval'` (la compilación de WASM está bloqueada por un `script-src` con hashes sin él)
+  y hay que tener en cuenta que la CSP en `<meta>` no gobierna los *dedicated workers*: si se quiere
+  cubrir el worker del modelo, la CSP debe ir como cabecera en nginx (`Content-Security-Policy`)
+  además de, o en lugar de, la meta que genera Astro.
+- **Por qué:** hallazgo de la revisión de P0; se anota aquí para que P2 no lo herede como sorpresa.
+- **Si está mal:** nada que deshacer; es una nota para el plan de P2.
+
+### D-015 · Lighthouse en Windows: `lhci` falla al limpiar el perfil de Chrome
+- **Qué:** `lhci autorun` (chrome-launcher 1.2.1) termina con `EPERM` al borrar su perfil temporal
+  en Windows, después de generar los informes. En local, Lighthouse se ejecuta contra un Chrome
+  headless lanzado aparte (`chrome.exe --headless=new --remote-debugging-port=9333 --user-data-dir=…`)
+  con el CLI de Lighthouse y `--port=9333`. La CI (ubuntu) usa `lhci` tal cual.
+- **Por qué:** fallo conocido de chrome-launcher en Windows; no afecta al runner.
+- **Si está mal:** los scripts `lighthouse*` de los `package.json` no cambian; es solo el modo de
+  ejecutarlos en la máquina de referencia.
+
+## Verificación de P0 (2026-09-18, máquina de referencia)
+
+Evidencia obtenida por el controlador, no por subagentes:
+
+- `rukh`: `uv run rukh info` → Python 3.12.11, torch 2.11.0+cu128, `cuda True`, GPU `NVIDIA GeForce
+  RTX 5090`; `uv run rukh engine check --elo 1400 --plies 40` → Stockfish 19, `UCI_Elo` 1320-3190,
+  partida real (1-0 en 35 plies); `uv run pytest -m unit -q` → 57 passed; ruff limpio.
+- `rukh-web`: `docker build` + `docker run` (nginx) → cabeceras `Content-Security-Policy:
+  frame-ancestors 'none'`, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`,
+  COOP `same-origin`, COEP `require-corp`; `pieces/standard.svg` como `image/svg+xml`. Suite E2E
+  ejecutada contra el contenedor en **Chrome real** (`channel: 'chrome'`, headed, DPR 1,5) en los tres
+  viewports: 24 pruebas verdes (partida por clic, por toque y por arrastre, deshacer con blancas y
+  con negras, nueva partida, exportar PGN, axe, CSP, layout 390/820/1280, 960×900 y 844×390).
+  Lighthouse contra el contenedor (Chrome 153): móvil 0,98 / 1 / 1 / 1; escritorio 1 / 1 / 1 / 1.
+- `rukh-lab`: contenedor con las mismas cabeceras, `gzip`, `/_astro/` inmutable, 404 y
+  `/curso` → `/curso/` relativo; tema persistido sin flash tras recarga (sin errores de CSP en
+  consola); lección 0 con las salidas reales del CLI; 0 botones por debajo de 44 px a 390 px.
+  Lighthouse: `/`, `/curso/` y la lección → móvil 0,98-0,99 / 1 / 1 / 1; escritorio 1 / 1 / 1 / 1.
+- Pendiente de Borja (punto de intervención de P0): repos en GitHub, DNS, apps en Dokploy, merge de
+  `p0-scaffold` y prueba en su móvil real. La CI de los tres repos se verá en verde tras el push.
