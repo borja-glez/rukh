@@ -11,10 +11,10 @@ dist/
 build/
 
 # Project data and runs (never in git)
-data/
-mlruns/
-tools/
-checkpoints/
+/data/
+/mlruns/
+/tools/
+/checkpoints/
 *.onnx
 *.safetensors
 *.pt

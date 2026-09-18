@@ -1,0 +1,10 @@
+# Two recent months of rated standard games, filtered remotely (see docs/spec/01-datos.md).
+dataset: Lichess/standard-chess-games
+months: ["2025-01", "2025-02"]
+min_elo: 1800
+min_base_seconds: 180
+terminations: ["Normal", "Time forfeit"]
+min_plies: 20
+exclude_variants: true
+out_dir: data/raw
+limit: null
