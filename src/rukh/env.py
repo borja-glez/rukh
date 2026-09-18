@@ -10,6 +10,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from rukh import paths
+from rukh.tracking import tracking_uri
 
 
 class EnvReport(BaseModel):
@@ -39,11 +40,6 @@ def _torch_info() -> tuple[str | None, bool, str | None]:
     return torch.__version__, cuda, gpu
 
 
-def _mlflow_uri() -> str:
-    """SQLite tracking URI under the MLflow runs directory (not created here)."""
-    return f"sqlite:///{(paths.mlruns_dir() / 'mlflow.db').as_posix()}"
-
-
 def _find_stockfish() -> Path | None:
     """Stockfish binary: ``RUKH_STOCKFISH``, then ``tools/stockfish/``, then ``PATH``."""
     env = os.environ.get("RUKH_STOCKFISH")
@@ -70,7 +66,7 @@ def collect() -> EnvReport:
         cuda=cuda,
         gpu=gpu,
         stockfish=str(stockfish) if stockfish else None,
-        mlflow_uri=_mlflow_uri(),
+        mlflow_uri=tracking_uri(create=False),
         data_dir=str(paths.data_dir()),
         mlruns_dir=str(paths.mlruns_dir()),
     )

@@ -1,4 +1,4 @@
-"""Command-line interface: ``rukh info``, ``rukh data fetch``."""
+"""Command-line interface: ``rukh info``, ``rukh data fetch``, ``rukh mlflow ui``."""
 
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ app = typer.Typer(
 )
 data_app = typer.Typer(help="Datasets: fetch and describe Lichess games.", no_args_is_help=True)
 app.add_typer(data_app, name="data")
+mlflow_app = typer.Typer(help="Local MLflow tracking.", no_args_is_help=True)
+app.add_typer(mlflow_app, name="mlflow")
 
 
 def _version_callback(value: bool) -> None:
@@ -86,3 +88,15 @@ def data_fetch(
     for path in fetch_plan.out_paths:
         typer.echo(f"  {path}")
     typer.echo(f"manifest: {fetch_plan.manifest_path}")
+
+
+@mlflow_app.command("ui")
+def mlflow_ui(
+    host: Annotated[str, typer.Option("--host", help="Interface to bind.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", help="Port to listen on.")] = 5000,
+) -> None:
+    """Open the MLflow UI on the local SQLite store (blocks until stopped)."""
+    from rukh.tracking import serve_ui, tracking_uri
+
+    typer.echo(f"mlflow ui on http://{host}:{port} (store {tracking_uri()})")
+    raise typer.Exit(code=serve_ui(host=host, port=port))

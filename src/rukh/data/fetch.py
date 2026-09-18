@@ -144,10 +144,9 @@ def run(cfg: FetchConfig, dry_run: bool = False) -> FetchPlan:
             target = Path(out_path)
             target.parent.mkdir(parents=True, exist_ok=True)
             month_query = build_query(cfg.model_copy(update={"months": [month]}))
-            con.execute(f"COPY ({month_query}) TO {_sql_string(target.as_posix())} (FORMAT PARQUET)")
-            row = con.execute(
-                f"SELECT count(*) FROM read_parquet({_sql_string(target.as_posix())})"
-            ).fetchone()
+            target_sql = _sql_string(target.as_posix())
+            con.execute(f"COPY ({month_query}) TO {target_sql} (FORMAT PARQUET)")
+            row = con.execute(f"SELECT count(*) FROM read_parquet({target_sql})").fetchone()
             counts[month] = int(row[0]) if row else 0
             files.append(
                 FileHash(path=out_path, sha256=_sha256(target), bytes=target.stat().st_size)
