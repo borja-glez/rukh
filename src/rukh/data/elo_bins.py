@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import Field
 
 from rukh.config import BaseConfig
+from rukh.data.db import DuckDbConfig, connect
 from rukh.data.manifest import FileHash, Manifest
 from rukh.data.uci import month_dirs, sha256_file
 from rukh.paths import resolve
@@ -21,18 +22,23 @@ class EloBinsConfig(BaseConfig):
     out_dir: str = "data/elo-bins"
     n_per_bin: int = Field(default=50_000, ge=1)
     seed: int = 42
+    duckdb: DuckDbConfig = Field(default_factory=DuckDbConfig)
 
 
-def sample_bins(sources: list[Path], target: Path, n_per_bin: int, seed: int) -> dict[str, int]:
+def sample_bins(
+    sources: list[Path],
+    target: Path,
+    n_per_bin: int,
+    seed: int,
+    duckdb_cfg: DuckDbConfig | None = None,
+) -> dict[str, int]:
     """DuckDB: ``bin = avg(white_elo, black_elo) // 100 * 100``; keep ``n_per_bin`` by hash.
 
     The seed shifts the hash, not the id: ``hash(game_id + seed)`` overflowed BIGINT for ids
     near the top of the range.
     """
-    import duckdb
-
     files = ", ".join(f"'{p.as_posix()}'" for p in sources)
-    con = duckdb.connect()
+    con = connect(duckdb_cfg)
     try:
         con.execute(
             f"""
@@ -68,7 +74,7 @@ def run(cfg: EloBinsConfig) -> Manifest:
     out_dir = resolve(cfg.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / GAMES_FILE
-    counts = sample_bins([p for _, p in months], target, cfg.n_per_bin, cfg.seed)
+    counts = sample_bins([p for _, p in months], target, cfg.n_per_bin, cfg.seed, cfg.duckdb)
     manifest = Manifest(
         dataset="Lichess/standard-chess-games",
         months=[m for m, _ in months],

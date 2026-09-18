@@ -12,6 +12,8 @@ build/
 
 # Project data and runs (never in git)
 /data/
+.tmp/
+duckdb-tmp/
 /mlruns/
 /tools/
 /checkpoints/

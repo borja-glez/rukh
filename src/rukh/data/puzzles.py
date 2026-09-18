@@ -8,6 +8,7 @@ import polars as pl
 from pydantic import Field
 
 from rukh.config import BaseConfig
+from rukh.data.db import DuckDbConfig, connect
 from rukh.data.manifest import FileHash, Manifest
 from rukh.data.uci import sha256_file
 from rukh.paths import resolve
@@ -31,6 +32,7 @@ class PuzzlesConfig(BaseConfig):
     n_test: int = Field(default=2_000, ge=1)
     n_train: int = Field(default=50_000, ge=1)
     seed: int = 42
+    duckdb: DuckDbConfig = Field(default_factory=DuckDbConfig)
 
 
 def band(rating: int) -> str | None:
@@ -48,9 +50,7 @@ def _source(cfg: PuzzlesConfig) -> str:
 
 def load_filtered(cfg: PuzzlesConfig) -> pl.DataFrame:
     """Read the puzzles that pass the quality filters with DuckDB (predicate pushdown)."""
-    import duckdb
-
-    con = duckdb.connect()
+    con = connect(cfg.duckdb)
     try:
         table = con.execute(
             f"""

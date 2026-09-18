@@ -14,6 +14,7 @@ from pathlib import Path
 from pydantic import Field
 
 from rukh.config import BaseConfig
+from rukh.data.db import DuckDbConfig, connect
 from rukh.data.manifest import FileHash, Manifest
 from rukh.data.scoring import BEST_LINE_DOC, MATE_SCORE, RANK_ORDER_SQL, SCORE_WHITE_SQL
 from rukh.data.uci import sha256_file
@@ -32,6 +33,7 @@ class EvalsConfig(BaseConfig):
     n_files: int = Field(default=20, ge=1)
     positions: str = "data/positions/positions.parquet"
     out_dir: str = "data/evals"
+    duckdb: DuckDbConfig = Field(default_factory=DuckDbConfig)
 
 
 def parse_files(spec: str, n_files: int) -> list[int]:
@@ -63,13 +65,11 @@ def part_path(out_dir: Path, index: int) -> Path:
 
 def fetch_part(cfg: EvalsConfig, index: int, positions: Path, out_dir: Path) -> tuple[Path, bool]:
     """Semi-join one remote file with the positions; ``(path, fetched)`` (False = existed)."""
-    import duckdb
-
     target = part_path(out_dir, index)
     if target.is_file():
         return target, False
     tmp = target.with_suffix(".parquet.tmp")
-    con = duckdb.connect()
+    con = connect(cfg.duckdb)
     try:
         con.execute(
             f"""
@@ -86,13 +86,13 @@ def fetch_part(cfg: EvalsConfig, index: int, positions: Path, out_dir: Path) -> 
     return target, True
 
 
-def consolidate(out_dir: Path, positions: Path) -> dict[str, int]:
+def consolidate(
+    out_dir: Path, positions: Path, duckdb_cfg: DuckDbConfig | None = None
+) -> dict[str, int]:
     """Best line per FEN plus ``pvs``, joined back with the positions' metadata."""
-    import duckdb
-
     parts = (out_dir / "part-*.parquet").as_posix()
     target = out_dir / EVAL_FILE
-    con = duckdb.connect()
+    con = connect(duckdb_cfg)
     try:
         con.execute(
             f"""
@@ -159,7 +159,7 @@ def run(cfg: EvalsConfig, files: str | None = None) -> Manifest:
         _, was_fetched = fetch_part(cfg, index, positions, out_dir)
         if was_fetched:
             fetched.append(index)
-    counts = consolidate(out_dir, positions)
+    counts = consolidate(out_dir, positions, cfg.duckdb)
     present = sorted(int(p.stem.split("-")[1]) for p in out_dir.glob("part-*.parquet"))
     target = out_dir / EVAL_FILE
     manifest = Manifest(

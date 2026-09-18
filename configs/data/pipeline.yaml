@@ -1,4 +1,7 @@
 # Every step of `rukh data ...` after `fetch`. Paths are relative to the repo root (RUKH_HOME).
+duckdb:               # applied to every DuckDB connection of the pipeline
+  memory_limit: 32GB
+  threads: 0          # 0 = cpu_count()
 uci:
   raw_dir: data/raw
   out_dir: data/uci

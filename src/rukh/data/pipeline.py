@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from rukh import paths
 from rukh.config import BaseConfig, load_yaml
+from rukh.data.db import DuckDbConfig
 from rukh.data.elite import EliteConfig
 from rukh.data.elo_bins import EloBinsConfig
 from rukh.data.evals import EvalsConfig
@@ -35,9 +36,17 @@ class TokenizeConfig(BaseConfig):
     max_len: int = Field(default=200, ge=8)
 
 
-class PipelineConfig(BaseConfig):
-    """All step configs; each step reads only its own section."""
+DUCKDB_STEPS = ("positions", "evals", "puzzles", "elo_bins")
 
+
+class PipelineConfig(BaseConfig):
+    """All step configs; each step reads only its own section.
+
+    ``duckdb:`` is shared: the top-level settings are copied into every step that opens a
+    DuckDB connection unless that step declares its own.
+    """
+
+    duckdb: DuckDbConfig = Field(default_factory=DuckDbConfig)
     uci: UciConfig = Field(default_factory=UciConfig)
     tokenize: TokenizeConfig = Field(default_factory=TokenizeConfig)
     positions: PositionsConfig = Field(default_factory=PositionsConfig)
@@ -47,6 +56,15 @@ class PipelineConfig(BaseConfig):
     elite: EliteConfig = Field(default_factory=EliteConfig)
     elo_bins: EloBinsConfig = Field(default_factory=EloBinsConfig)
     publish: PublishConfig = Field(default_factory=PublishConfig)
+
+    @model_validator(mode="after")
+    def _share_duckdb(self) -> PipelineConfig:
+        default = DuckDbConfig()
+        for name in DUCKDB_STEPS:
+            step = getattr(self, name)
+            if step.duckdb == default:
+                setattr(self, name, step.model_copy(update={"duckdb": self.duckdb}))
+        return self
 
 
 def default_config_path() -> Path:

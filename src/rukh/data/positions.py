@@ -16,6 +16,8 @@ import pyarrow.parquet as pq
 from pydantic import Field
 
 from rukh.config import BaseConfig
+from rukh.data.db import DuckDbConfig
+from rukh.data.db import connect as db_connect
 from rukh.data.manifest import FileHash, Manifest
 from rukh.data.parallel import run_batches
 from rukh.data.uci import resolve_workers, sha256_file
@@ -48,6 +50,7 @@ class PositionsConfig(BaseConfig):
     n_games: int = Field(default=300_000, ge=1)
     max_positions: int = Field(default=5_000_000, ge=1)
     workers: int = Field(default=0, ge=0)
+    duckdb: DuckDbConfig = Field(default_factory=DuckDbConfig)
 
 
 def fen4(board: object) -> str:
@@ -133,12 +136,12 @@ def _write_parts(parts_dir: Path, results: Iterator[dict[str, list[object]]], se
     return seq
 
 
-def dedupe(parts_dir: Path, out: Path, max_positions: int) -> int:
+def dedupe(
+    parts_dir: Path, out: Path, max_positions: int, duckdb_cfg: DuckDbConfig | None = None
+) -> int:
     """Group the parts by ``fen4`` (first occurrence wins, ``n_seen`` counted) with DuckDB."""
-    import duckdb
-
     glob = (parts_dir / "part-*.parquet").as_posix()
-    con = duckdb.connect()
+    con = db_connect(duckdb_cfg)
     try:
         con.execute(
             f"""
@@ -175,7 +178,7 @@ def run(cfg: PositionsConfig) -> Manifest:
     parts_dir = out_dir / PARTS_DIR
     n_positions = write_parts(games, parts_dir, cfg)
     out = out_dir / POSITIONS_FILE
-    n_distinct = dedupe(parts_dir, out, cfg.max_positions)
+    n_distinct = dedupe(parts_dir, out, cfg.max_positions, cfg.duckdb)
     manifest = Manifest(
         dataset="Lichess/standard-chess-games",
         months=[cfg.month],

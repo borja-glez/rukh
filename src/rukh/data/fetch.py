@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from rukh import paths
 from rukh.config import BaseConfig
+from rukh.data.db import DuckDbConfig, connect
 from rukh.data.manifest import FileHash, Manifest
 
 MONTH_RE = re.compile(r"^(\d{4})-(0[1-9]|1[0-2])$")
@@ -34,6 +35,7 @@ class FetchConfig(BaseConfig):
     exclude_variants: bool = True
     out_dir: str = "data/raw"
     limit: int | None = Field(default=None, ge=1)
+    duckdb: DuckDbConfig = Field(default_factory=DuckDbConfig)
 
     @field_validator("months")
     @classmethod
@@ -148,12 +150,10 @@ def run(cfg: FetchConfig, dry_run: bool = False) -> FetchPlan:
     if dry_run:
         return fetch_plan
 
-    import duckdb
-
     out_dir = Path(fetch_plan.out_dir)
     counts: dict[str, int] = {}
     files: list[FileHash] = []
-    con = duckdb.connect()
+    con = connect(cfg.duckdb)
     try:
         for month, out_path in zip(cfg.months, fetch_plan.out_paths, strict=True):
             target = out_dir / out_path
@@ -171,7 +171,7 @@ def run(cfg: FetchConfig, dry_run: bool = False) -> FetchPlan:
     finally:
         con.close()
 
-    filters = cfg.model_dump(exclude={"dataset", "months", "out_dir", "min_plies"})
+    filters = cfg.model_dump(exclude={"dataset", "months", "out_dir", "min_plies", "duckdb"})
     filters["min_plies_deferred"] = cfg.min_plies
     manifest = Manifest(
         dataset=cfg.dataset,
