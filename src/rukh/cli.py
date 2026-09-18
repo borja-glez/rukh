@@ -1,7 +1,8 @@
-"""Command-line interface: ``info``, ``data ...``, ``engine check`` and ``mlflow ui``."""
+"""Command-line interface: ``info``, ``data ...``, ``train``, ``engine check`` and ``mlflow ui``."""
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Annotated
 
@@ -313,6 +314,51 @@ def data_publish(
     typer.echo("files:")
     for path in result.files:
         typer.echo(f"  {path}")
+
+
+@app.command("train")
+def train_cmd(
+    config: Annotated[
+        Path,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Training YAML config."
+        ),
+    ],
+    model_preset: Annotated[
+        str | None, typer.Option("--preset", help="Override the preset: tiny, small or medium.")
+    ] = None,
+    resume: Annotated[
+        Path | None,
+        typer.Option(
+            "--resume", exists=True, dir_okay=False, readable=True, help="Checkpoint to continue."
+        ),
+    ] = None,
+    max_steps: Annotated[
+        int | None, typer.Option("--max-steps", help="Override max_steps from the config.")
+    ] = None,
+) -> None:
+    """Train a MoveDecoder from a packed token stream, logging the run to MLflow."""
+    from rukh.config import load_yaml
+    from rukh.models import PRESETS
+    from rukh.train import TrainConfig, train
+
+    cfg = load_yaml(config, TrainConfig)
+    if model_preset is not None:
+        if model_preset not in PRESETS:
+            typer.echo(f"error: --preset must be one of {', '.join(PRESETS)}", err=True)
+            raise typer.Exit(code=2)
+        cfg = cfg.model_copy(update={"preset": model_preset, "model": None})
+    if max_steps is not None:
+        cfg = cfg.model_copy(update={"max_steps": max_steps})
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    try:
+        checkpoint = train(cfg, resume=resume)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"preset:     {cfg.preset}")
+    typer.echo(f"steps:      {cfg.max_steps}")
+    typer.echo(f"checkpoint: {checkpoint}")
 
 
 @mlflow_app.command("ui")

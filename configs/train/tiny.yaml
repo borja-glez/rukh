@@ -1,0 +1,23 @@
+# `tiny` (6 layers, d=256, ~5M parameters): the model used to iterate, under 20 minutes on a 5090.
+preset: tiny
+tokens_dir: data/tokens/uci
+block: 200
+batch_size: 128
+grad_accum: 2 # 256 effective sequences
+lr: 1.0e-3
+min_lr_ratio: 0.1
+warmup: 500
+max_steps: 6000
+weight_decay: 0.1
+betas: [0.9, 0.95]
+grad_clip: 1.0
+precision: bf16
+compile: true
+eval_every: 250
+eval_batches: 50
+ckpt_every: 1000 # every checkpoint feeds the TrainingReplay island of M2
+out_dir: checkpoints
+seed: 42
+run_name: tiny
+workers: 4
+log_every: 10
