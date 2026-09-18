@@ -51,8 +51,16 @@ class PositionsConfig(BaseConfig):
 
 
 def fen4(board: object) -> str:
-    """First four FEN fields (python-chess writes the en-passant square only when capturable)."""
-    return " ".join(board.fen().split()[:4])  # type: ignore[attr-defined]
+    """First four FEN fields, built without the move counters python-chess would format.
+
+    The en-passant square is written only when the capture is legal, which is the convention
+    of ``Lichess/chess-position-evaluations``.
+    """
+    import chess
+
+    ep = chess.SQUARE_NAMES[board.ep_square] if board.has_legal_en_passant() else "-"  # type: ignore[attr-defined]
+    turn = "w" if board.turn else "b"  # type: ignore[attr-defined]
+    return f"{board.board_fen()} {turn} {board.castling_xfen()} {ep}"  # type: ignore[attr-defined]
 
 
 def phase(ply: int, n_pieces: int) -> str:
@@ -70,7 +78,7 @@ def walk_game(game_id: int, uci: str, result: str) -> Iterator[tuple[str, int, i
     for ply, token in enumerate(uci.split(), start=1):
         move = chess.Move.from_uci(token)
         board.push(move)
-        yield fen4(board), game_id, ply, token, result, phase(ply, len(board.piece_map()))
+        yield fen4(board), game_id, ply, token, result, phase(ply, chess.popcount(board.occupied))
 
 
 def walk_rows(rows: list[tuple[int, str, str]]) -> dict[str, list[object]]:

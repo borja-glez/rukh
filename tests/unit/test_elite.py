@@ -10,6 +10,7 @@ import pytest
 
 from rukh.data import elite as elite_module
 from rukh.data.elite import EliteConfig, extract_pgn, iter_pgn_rows, run, zip_url
+from rukh.data.uci import convert_rows, game_id
 
 pytestmark = pytest.mark.unit
 
@@ -67,6 +68,67 @@ def test_iter_pgn_rows(tmp_path: Path) -> None:
     assert rows[0]["movetext"].startswith("1. e4 e5") and rows[0]["movetext"].endswith("d6 1-0")
     assert rows[1]["ECO"] == "A00" and rows[2]["ECO"] is None
     assert rows[2]["month"] == "2025-01"
+
+
+NO_SITE_PGN = """[Event "Rated Blitz game"]
+[Result "1-0"]
+[WhiteElo "2600"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 exd4 6. cxd4 Bb4+ 7. Nc3 Nxe4 8. O-O Bxc3
+9. d5 Bf6 10. Re1 Ne7 11. Rxe4 d6 1-0
+
+[Event "Rated Blitz game"]
+[Result "0-1"]
+
+1. d4 d5 2. Nf3 Nf6 3. Nc3 Nc6 4. Bf4 Bf5 5. Qd2 Qd7 6. O-O-O O-O-O 7. e3 e6 8. Bd3 Bd6
+9. Ne5 Ne4 10. Bxe4 Bxe5 0-1
+
+"""
+
+HEADERS_ONLY_PGN = """[Event "Rated Blitz game"]
+[Site "https://lichess.org/empty"]
+[Result "*"]
+[WhiteElo "2700"]
+[BlackElo "2650"]
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/real"]
+[Result "1-0"]
+[ECO "C50"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 exd4 6. cxd4 Bb4+ 7. Nc3 Nxe4 8. O-O Bxc3
+9. d5 Bf6 10. Re1 Ne7 11. Rxe4 d6 1-0
+
+"""
+
+
+def test_iter_pgn_rows_without_site_gives_each_game_its_own_id(tmp_path: Path) -> None:
+    pgn = tmp_path / "no-site.pgn"
+    pgn.write_text(NO_SITE_PGN, encoding="utf-8")
+    rows = list(iter_pgn_rows(pgn, "2025-01"))
+    assert [r["Site"] for r in rows] == ["2025-01:0", "2025-01:1"]
+    ids = convert_rows(rows, min_plies=0, max_plies=300)["columns"]["game_id"]  # type: ignore[index]
+    assert ids == [game_id("2025-01:0"), game_id("2025-01:1")]
+    assert len(set(ids)) == 2
+
+
+def test_iter_pgn_rows_missing_elo_is_none(tmp_path: Path) -> None:
+    pgn = tmp_path / "no-site.pgn"
+    pgn.write_text(NO_SITE_PGN, encoding="utf-8")
+    rows = list(iter_pgn_rows(pgn, "2025-01"))
+    assert rows[0]["WhiteElo"] == 2600 and rows[0]["BlackElo"] is None
+    columns = convert_rows(rows, min_plies=0, max_plies=300)["columns"]  # type: ignore[index]
+    assert columns["black_elo"] == [None, None]
+
+
+def test_iter_pgn_rows_drops_a_game_without_movetext(tmp_path: Path) -> None:
+    pgn = tmp_path / "headers-only.pgn"
+    pgn.write_text(HEADERS_ONLY_PGN, encoding="utf-8")
+    rows = list(iter_pgn_rows(pgn, "2025-01"))
+    assert len(rows) == 1
+    assert rows[0]["Site"] == "https://lichess.org/real"
+    # The dropped game's headers must not leak into the next one.
+    assert rows[0]["WhiteElo"] is None and rows[0]["ECO"] == "C50"
 
 
 def _fake_download(pgn_text: str, calls: list[str]):  # type: ignore[no-untyped-def]

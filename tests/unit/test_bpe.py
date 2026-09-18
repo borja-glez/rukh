@@ -99,6 +99,30 @@ def test_committed_bpe_matches_fixture(repo_root: Path) -> None:
         assert decode(bpe, entry["bpe_ids"]) == entry["uci"]
 
 
+def test_stats_lengths_match_the_encoders(repo_root: Path, trained: Tokenizer) -> None:
+    """The statistics count exactly what each encoder emits (BPE frames with three tokens)."""
+    import polars as pl
+
+    from rukh.data.pipeline import TokenizeConfig
+    from rukh.tokenize.pack import BpeGameEncoder, SanGameEncoder, UciGameEncoder
+    from rukh.tokenize.run import compute_stats
+
+    games = repo_root / "tests" / "fixtures" / "games.parquet"
+    stats = compute_stats(TokenizeConfig(), games, trained)
+    frame = pl.read_parquet(games.as_posix()).select("uci", "white_elo", "black_elo", "result")
+    encoders = {
+        "uci": UciGameEncoder(),
+        "san": SanGameEncoder(),
+        "bpe": BpeGameEncoder(trained),
+    }
+    for scheme, encoder in encoders.items():
+        lengths = [
+            len(encoder.encode_game(uci, int(w), int(b), result, max_len=1 << 30))
+            for uci, w, b, result in frame.iter_rows()
+        ]
+        assert stats["schemes"][scheme]["mean"] == round(sum(lengths) / len(lengths), 2), scheme
+
+
 def test_cli_stats_and_bpe_training(rukh_home: Path, repo_root: Path) -> None:
     games = (repo_root / "tests" / "fixtures" / "games.parquet").as_posix()
     pgn = (repo_root / "tests" / "fixtures" / "games.pgn").as_posix()

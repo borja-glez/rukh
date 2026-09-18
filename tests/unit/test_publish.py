@@ -41,6 +41,9 @@ def test_registry_covers_six_datasets_and_tokenizer() -> None:
     for spec in DATASETS.values():
         assert spec.license == "cc0-1.0"
         assert "manifest.json" in spec.patterns or spec.repo_type == "model"
+        # The Hub card spec only accepts `original` and `extended|<id>` here.
+        assert spec.source_datasets == ["original"]
+    assert {n for n, s in DATASETS.items() if s.large} == {"rukh-games-1800", "rukh-elo-bins"}
 
 
 def test_size_category() -> None:
@@ -71,7 +74,7 @@ def test_render_card_has_mandatory_metadata() -> None:
     assert "license: cc0-1.0" in head
     assert "task_categories:\n  - text-generation" in head
     assert "size_categories:\n  - n<1K" in head
-    assert "source_datasets:\n  - Lichess/standard-chess-games" in head
+    assert "source_datasets:\n  - original" in head
     assert "pretty_name: Rukh games 1800+" in head
     assert "# x/rukh-games-1800" in body
     assert "Rows: **10**" in body
@@ -123,28 +126,73 @@ def test_dry_run_tokenizer_uses_artifact_readme(
     assert "## Scheme 1: fixed UCI vocabulary" in card
 
 
-def test_publish_uploads_through_api(
-    rukh_home: Path, repo_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+class FakeApi:
+    """Records the calls ``publish`` makes; ``calls`` is shared by every instance."""
+
     calls: list[tuple[str, dict[str, object]]] = []
+    has_large: bool = True
 
-    class FakeApi:
-        def create_repo(self, repo_id: str, **kwargs: object) -> None:
-            calls.append(("create_repo", {"repo_id": repo_id, **kwargs}))
+    def __init__(self) -> None:
+        if not FakeApi.has_large:
+            # A huggingface_hub without upload_large_folder must still work.
+            self.upload_large_folder = None  # type: ignore[assignment]
 
-        def upload_file(self, **kwargs: object) -> None:
-            calls.append(("upload_file", kwargs))
+    def create_repo(self, repo_id: str, **kwargs: object) -> None:
+        FakeApi.calls.append(("create_repo", {"repo_id": repo_id, **kwargs}))
 
+    def upload_file(self, **kwargs: object) -> None:
+        FakeApi.calls.append(("upload_file", kwargs))
+
+    def upload_folder(self, **kwargs: object) -> None:
+        FakeApi.calls.append(("upload_folder", kwargs))
+
+    def upload_large_folder(self, **kwargs: object) -> None:
+        FakeApi.calls.append(("upload_large_folder", kwargs))
+
+
+@pytest.fixture
+def fake_api(monkeypatch: pytest.MonkeyPatch) -> type[FakeApi]:
+    FakeApi.calls = []
+    FakeApi.has_large = True
     monkeypatch.setattr(publish_module, "_api", FakeApi)
+    return FakeApi
+
+
+def test_publish_uploads_the_folder_in_one_commit(
+    rukh_home: Path, repo_root: Path, fake_api: type[FakeApi]
+) -> None:
     shutil.copytree(repo_root / "artifacts" / "tokenizer", rukh_home / "artifacts" / "tokenizer")
     result = publish("rukh-tokenizer", PublishConfig(owner="someone"), dry_run=False)
     assert not result.dry_run
-    assert calls[0] == (
+    assert fake_api.calls[0] == (
         "create_repo",
         {"repo_id": "someone/rukh-tokenizer", "repo_type": "model", "exist_ok": True},
     )
-    uploaded = [c[1]["path_in_repo"] for c in calls if c[0] == "upload_file"]
-    assert uploaded == ["vocab.json", "bpe.json", "fixtures/games.json", "README.md"]
+    assert [c[0] for c in fake_api.calls] == ["create_repo", "upload_folder", "upload_file"]
+    folder = fake_api.calls[1][1]
+    assert folder["folder_path"] == str(rukh_home / "artifacts" / "tokenizer")
+    assert folder["allow_patterns"] == DATASETS["rukh-tokenizer"].patterns
+    assert folder["ignore_patterns"] == ["README.md"]
+    assert folder["repo_type"] == "model"
+    assert fake_api.calls[2][1]["path_in_repo"] == "README.md"
+
+
+def test_publish_uses_upload_large_folder_for_the_big_datasets(
+    rukh_home: Path, repo_root: Path, fake_api: type[FakeApi]
+) -> None:
+    out = rukh_home / "data" / "elo-bins"
+    out.mkdir(parents=True)
+    shutil.copy(repo_root / "tests" / "fixtures" / "games.parquet", out / "games.parquet")
+    (out / "manifest.json").write_text(_manifest({"1800": 4}).model_dump_json(), "utf-8")
+    publish("rukh-elo-bins", PublishConfig(), dry_run=False)
+    assert [c[0] for c in fake_api.calls] == ["create_repo", "upload_large_folder", "upload_file"]
+    assert "commit_message" not in fake_api.calls[1][1]
+
+    # Without upload_large_folder in huggingface_hub it falls back to upload_folder.
+    FakeApi.calls = []
+    FakeApi.has_large = False
+    publish("rukh-elo-bins", PublishConfig(), dry_run=False)
+    assert [c[0] for c in fake_api.calls] == ["create_repo", "upload_folder", "upload_file"]
 
 
 def test_publish_unknown_or_missing(rukh_home: Path) -> None:

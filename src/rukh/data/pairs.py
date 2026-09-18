@@ -1,13 +1,14 @@
 """DPO pairs from the multi-PV evaluations: best first move versus a clearly worse one.
 
-``cp`` and ``mate`` come from White's point of view; the comparison is made from the side to
-move (for Black a lower ``cp`` is better). A mate counts as ``+/-10000`` centipawns with the
-sign of the side that mates. Both moves are checked for legality with python-chess. One pair
-per FEN, balanced by phase.
+The lines are ranked with ``rukh.data.scoring``, the same ordering and mate convention the
+``evals`` consolidation uses, so ``chosen`` is always the consolidated ``best_move``. The
+margin is measured from the side to move (for Black a lower ``cp`` is better). Both moves are
+checked for legality with python-chess. One pair per FEN, balanced by phase.
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import polars as pl
@@ -16,11 +17,18 @@ from pydantic import Field
 
 from rukh.config import BaseConfig
 from rukh.data.manifest import FileHash, Manifest
+from rukh.data.scoring import (
+    BEST_LINE_DOC,
+    MATE_SCORE,
+    line_rank_key,
+    score_mover,
+    score_white,
+)
 from rukh.data.uci import sha256_file
 from rukh.paths import resolve
 
+LOGGER = logging.getLogger(__name__)
 PAIRS_FILE = "pairs.parquet"
-MATE_SCORE = 10_000
 PHASES = ("opening", "middlegame", "endgame")
 BATCH_ROWS = 50_000
 
@@ -35,19 +43,20 @@ class PairsConfig(BaseConfig):
     seed: int = 42
 
 
-def score_white(cp: int | None, mate: int | None) -> int | None:
-    """Centipawns from White's view; mates map to ``+/-10000``."""
-    if mate is not None:
-        return MATE_SCORE if mate > 0 else -MATE_SCORE
-    return None if cp is None else int(cp)
-
-
-def score_mover(cp: int | None, mate: int | None, turn: str) -> int | None:
-    """Score from the side to move: unchanged for White, negated for Black."""
-    white = score_white(cp, mate)
-    if white is None:
-        return None
-    return white if turn == "w" else -white
+def rank_lines(fen: str, pvs: list[dict[str, object]]) -> list[tuple[str, int, int]]:
+    """``(move, score_white, score_mover)`` for every scored line, best line first."""
+    turn = fen.split()[1]
+    scored: list[tuple[tuple[bool, int, int, str], str, int, int]] = []
+    for pv in pvs:
+        move = pv.get("move")
+        cp, mate, depth = pv.get("cp"), pv.get("mate"), pv.get("depth")
+        white = score_white(cp, mate)  # type: ignore[arg-type]
+        if not move or white is None:
+            continue
+        key = line_rank_key(cp, mate, depth, str(move), turn)  # type: ignore[arg-type]
+        scored.append((key, str(move), white, score_mover(cp, mate, turn)))  # type: ignore[arg-type]
+    scored.sort(key=lambda item: item[0])
+    return [(move, white, mover) for _, move, white, mover in scored]
 
 
 def make_pair(
@@ -56,23 +65,14 @@ def make_pair(
     """``chosen``/``rejected`` for one FEN or ``None`` when no line is bad enough or illegal."""
     import chess
 
-    turn = fen.split()[1]
-    scored: list[tuple[int, str, int]] = []
-    for pv in pvs:
-        mover = score_mover(pv.get("cp"), pv.get("mate"), turn)  # type: ignore[arg-type]
-        move = pv.get("move")
-        if mover is None or not move:
-            continue
-        white = score_white(pv.get("cp"), pv.get("mate"))  # type: ignore[arg-type]
-        scored.append((mover, str(move), int(white)))  # type: ignore[arg-type]
+    scored = rank_lines(fen, pvs)
     if len(scored) < 2:
         return None
-    scored.sort(key=lambda t: -t[0])
-    best_mover, chosen, cp_chosen = scored[0]
-    rejected: tuple[int, str, int] | None = None
-    for mover, move, white in scored[1:]:
+    chosen, cp_chosen, best_mover = scored[0]
+    rejected: tuple[str, int, int] | None = None
+    for move, white, mover in scored[1:]:
         if move != chosen and best_mover - mover >= min_delta_cp:
-            rejected = (mover, move, white)
+            rejected = (move, white, mover)
             break
     if rejected is None:
         return None
@@ -81,14 +81,14 @@ def make_pair(
     except ValueError:
         return None
     legal = {m.uci() for m in board.legal_moves}
-    if chosen not in legal or rejected[1] not in legal:
+    if chosen not in legal or rejected[0] not in legal:
         return None
     return {
         "fen": fen,
         "chosen": chosen,
-        "rejected": rejected[1],
+        "rejected": rejected[0],
         "cp_chosen": cp_chosen,
-        "cp_rejected": rejected[2],
+        "cp_rejected": rejected[1],
     }
 
 
@@ -119,9 +119,14 @@ def build_pairs(evals: Path, min_delta_cp: int) -> pl.DataFrame:
     return pl.DataFrame(rows, schema=schema)
 
 
+def phase_counts(frame: pl.DataFrame) -> dict[str, int]:
+    """Rows per phase, always with the three keys."""
+    return {ph: int(frame.filter(pl.col("phase") == ph).height) for ph in PHASES}
+
+
 def balance(frame: pl.DataFrame, max_per_phase: int, seed: int) -> pl.DataFrame:
     """Same number of pairs per phase: the smallest phase count, capped at ``max_per_phase``."""
-    counts = {ph: int(frame.filter(pl.col("phase") == ph).height) for ph in PHASES}
+    counts = phase_counts(frame)
     n = min(min(counts.values()), max_per_phase)
     if n == 0:
         return frame.clear()
@@ -137,10 +142,20 @@ def run(cfg: PairsConfig) -> Manifest:
     out_dir = resolve(cfg.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     raw = build_pairs(evals, cfg.min_delta_cp)
+    candidates = phase_counts(raw)
+    empty = [ph for ph, n in candidates.items() if n == 0]
+    if empty:
+        LOGGER.warning(
+            "no DPO candidates for %s: the balanced output is empty (candidates %s). "
+            "Check the coverage of %s.",
+            ", ".join(empty),
+            candidates,
+            evals,
+        )
     balanced = balance(raw, cfg.max_per_phase, cfg.seed)
     target = out_dir / PAIRS_FILE
     balanced.write_parquet(target.as_posix(), compression="zstd")
-    counts = {ph: int(balanced.filter(pl.col("phase") == ph).height) for ph in PHASES}
+    counts = phase_counts(balanced)
     counts["candidates"] = int(raw.height)
     manifest = Manifest(
         dataset="Lichess/chess-position-evaluations",
@@ -151,7 +166,10 @@ def run(cfg: PairsConfig) -> Manifest:
             "seed": cfg.seed,
             "mate_score": MATE_SCORE,
             "cp_point_of_view": "white",
+            "best_line": BEST_LINE_DOC,
             "legality": "python-chess",
+            "candidates_by_phase": candidates,
+            "empty_phases": empty,
         },
         counts=counts,
         files=[FileHash(path=PAIRS_FILE, sha256=sha256_file(target), bytes=target.stat().st_size)],

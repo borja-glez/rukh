@@ -24,7 +24,11 @@ class EloBinsConfig(BaseConfig):
 
 
 def sample_bins(sources: list[Path], target: Path, n_per_bin: int, seed: int) -> dict[str, int]:
-    """DuckDB: ``bin = avg(white_elo, black_elo) // 100 * 100``; keep ``n_per_bin`` by hash."""
+    """DuckDB: ``bin = avg(white_elo, black_elo) // 100 * 100``; keep ``n_per_bin`` by hash.
+
+    The seed shifts the hash, not the id: ``hash(game_id + seed)`` overflowed BIGINT for ids
+    near the top of the range.
+    """
     import duckdb
 
     files = ", ".join(f"'{p.as_posix()}'" for p in sources)
@@ -36,7 +40,7 @@ def sample_bins(sources: list[Path], target: Path, n_per_bin: int, seed: int) ->
               SELECT * EXCLUDE (rk)
               FROM (
                 SELECT *,
-                       row_number() OVER (PARTITION BY bin ORDER BY hash(game_id + {seed})) AS rk
+                       row_number() OVER (PARTITION BY bin ORDER BY hash(game_id) + {seed}) AS rk
                 FROM (
                   SELECT *, ((white_elo + black_elo) // 2) // 100 * 100 AS bin
                   FROM read_parquet([{files}], hive_partitioning = false)

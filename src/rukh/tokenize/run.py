@@ -72,8 +72,10 @@ def _summary(lengths: list[int], max_len: int) -> dict[str, float]:
 def compute_stats(cfg: TokenizeConfig, games: Path, bpe: Tokenizer) -> dict[str, object]:
     """Tokens per game for the three schemes over the first ``stats_n_games`` of ``games``.
 
-    Every scheme counts the same five framing tokens (``<bos>``, two Elo tokens, result,
-    ``<eos>``) on top of its own encoding of the moves, so the columns are comparable.
+    Every count is what the scheme's encoder really emits (``rukh.tokenize.pack``): the UCI
+    scheme frames a game with five tokens (``<bos>``, two Elo tokens, result, ``<eos>``), BPE
+    with three (``<bos>``, result, ``<eos>``) and char-level SAN with two, because there the
+    result is part of the text.
     """
     import polars as pl
 
@@ -92,8 +94,8 @@ def compute_stats(cfg: TokenizeConfig, games: Path, bpe: Tokenizer) -> dict[str,
     bpe_len: list[int] = []
     for uci, w_elo, b_elo, result in frame.iter_rows():
         uci_len.append(len(uci_tok.encode_game(uci, w_elo, b_elo, result, max_len=1 << 30)))
-        san_len.append(len(san_tok.encode(san_text(uci_to_san(uci), result))) + 3)
-        bpe_len.append(len(bpe.encode(bpe_text(uci)).ids) + 5)
+        san_len.append(len(san_tok.encode(san_text(uci_to_san(uci), result))))
+        bpe_len.append(len(bpe.encode(bpe_text(uci)).ids) + 3)
     return {
         "source": {"games": Path(games).name, "n_games": frame.height, "max_len": cfg.max_len},
         "schemes": {

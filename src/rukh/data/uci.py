@@ -131,14 +131,24 @@ def convert_rows(
         out["game_id"].append(game_id(str(row["Site"])))
         out["uci"].append(uci)
         out["n_plies"].append(n_plies)
-        out["white_elo"].append(int(row["WhiteElo"]))  # type: ignore[call-overload]
-        out["black_elo"].append(int(row["BlackElo"]))  # type: ignore[call-overload]
+        out["white_elo"].append(_parse_elo(row["WhiteElo"]))
+        out["black_elo"].append(_parse_elo(row["BlackElo"]))
         out["result"].append(result)
         out["time_control"].append(row["TimeControl"])
         out["utc_date"].append(_parse_date(row["UTCDate"]))
         out["eco"].append(row["ECO"])
         out["month"].append(row["month"])
     return {"columns": out, "counts": counts}
+
+
+def _parse_elo(value: object) -> int | None:
+    """A missing or unparsable rating is ``None``; the column stays nullable int16."""
+    if value is None:
+        return None
+    try:
+        return int(value)  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return None
 
 
 def _parse_date(value: object) -> object:

@@ -35,6 +35,18 @@ def test_run_caps_each_bin(rukh_home: Path, repo_root: Path) -> None:
     assert manifest.filters["n_per_bin"] == 2
 
 
+def test_run_handles_ids_at_the_edge_of_int64(rukh_home: Path, repo_root: Path) -> None:
+    """``game_id`` is a signed 64-bit hash: adding the seed to it would overflow."""
+    src = pl.read_parquet((repo_root / "tests" / "fixtures" / "games.parquet").as_posix())
+    edges = [2**63 - 1, -(2**63), 2**63 - 2, -(2**63) + 1]
+    ids = (edges * ((src.height // len(edges)) + 1))[: src.height]
+    target = rukh_home / "data" / "uci" / "year=2025" / "month=01" / "games.parquet"
+    target.parent.mkdir(parents=True)
+    src.with_columns(pl.Series("game_id", ids, dtype=pl.Int64)).write_parquet(target.as_posix())
+    manifest = run(EloBinsConfig(n_per_bin=1, seed=42))
+    assert sum(manifest.counts.values()) > 0
+
+
 def test_run_is_deterministic(rukh_home: Path, repo_root: Path) -> None:
     _stage(rukh_home, repo_root)
     run(EloBinsConfig(n_per_bin=1, seed=3))

@@ -2,9 +2,11 @@
 
 ``DATASETS`` is the registry: repo name, local directory, files, description, columns and
 license. ``publish`` renders the card (Jinja, English, HF YAML metadata), creates the repo and
-uploads the parquet files, ``manifest.json`` and the card. With ``dry_run`` nothing touches
-the network: the card is written under ``data/publish/<name>/README.md`` and the files are
-listed. All ``HfApi`` calls go through ``_api`` so tests can replace it.
+uploads the matching files in one commit with ``upload_folder`` (``upload_large_folder`` for
+the two multi-gigabyte datasets, which resumes and uploads in parallel), then the card. With
+``dry_run`` nothing touches the network: the card is written under
+``data/publish/<name>/README.md`` and the files are listed. All ``HfApi`` calls go through
+``_api`` so tests can replace it.
 """
 
 from __future__ import annotations
@@ -65,6 +67,8 @@ class DatasetSpec(BaseModel):
     task_categories: list[str]
     tags: list[str] = []
     exclude_counts: list[str] = []
+    large: bool = False
+    """Multi-gigabyte: upload with ``upload_large_folder`` when the Hub client has it."""
 
 
 DATASETS: dict[str, DatasetSpec] = {
@@ -73,6 +77,7 @@ DATASETS: dict[str, DatasetSpec] = {
         DatasetSpec(
             name="rukh-games-1800",
             repo_type="dataset",
+            large=True,
             local_dir="data/uci",
             patterns=["year=*/month=*/games.parquet", "manifest.json"],
             command="fetch` and `rukh data uci",
@@ -85,7 +90,7 @@ DATASETS: dict[str, DatasetSpec] = {
             ),
             columns=UCI_COLUMNS,
             source="`Lichess/standard-chess-games` on the Hugging Face Hub",
-            source_datasets=["Lichess/standard-chess-games"],
+            source_datasets=["original"],
             task_categories=["text-generation"],
             tags=["games", "uci"],
         ),
@@ -111,6 +116,7 @@ DATASETS: dict[str, DatasetSpec] = {
         DatasetSpec(
             name="rukh-elo-bins",
             repo_type="dataset",
+            large=True,
             local_dir="data/elo-bins",
             patterns=["games.parquet", "manifest.json"],
             command="elo-bins",
@@ -121,7 +127,7 @@ DATASETS: dict[str, DatasetSpec] = {
             ),
             columns=UCI_COLUMNS + [("bin", "lower edge of the 100-Elo bin of the average rating")],
             source="`rukh-games-1800` (from `Lichess/standard-chess-games`)",
-            source_datasets=["Lichess/standard-chess-games"],
+            source_datasets=["original"],
             task_categories=["text-generation"],
             tags=["games", "uci", "elo"],
         ),
@@ -157,7 +163,7 @@ DATASETS: dict[str, DatasetSpec] = {
                 "`Lichess/standard-chess-games` (positions) and "
                 "`Lichess/chess-position-evaluations` (evaluations)"
             ),
-            source_datasets=["Lichess/standard-chess-games", "Lichess/chess-position-evaluations"],
+            source_datasets=["original"],
             task_categories=["tabular-regression", "text-classification"],
             tags=["positions", "stockfish"],
             exclude_counts=["lines", "positions"],
@@ -184,7 +190,7 @@ DATASETS: dict[str, DatasetSpec] = {
                 ("split", "`test` or `train`"),
             ],
             source="`Lichess/chess-puzzles` on the Hugging Face Hub",
-            source_datasets=["Lichess/chess-puzzles"],
+            source_datasets=["original"],
             task_categories=["text-generation", "question-answering"],
             tags=["puzzles"],
         ),
@@ -209,7 +215,7 @@ DATASETS: dict[str, DatasetSpec] = {
                 ("phase", "`opening`, `middlegame` or `endgame`"),
             ],
             source="`rukh-positions-eval` (from `Lichess/chess-position-evaluations`)",
-            source_datasets=["Lichess/standard-chess-games", "Lichess/chess-position-evaluations"],
+            source_datasets=["original"],
             task_categories=["text-generation"],
             tags=["dpo", "preferences"],
             exclude_counts=["candidates"],
@@ -226,7 +232,7 @@ DATASETS: dict[str, DatasetSpec] = {
             ),
             columns=[],
             source="enumeration plus a BPE trained on `rukh-games-1800`",
-            source_datasets=["Lichess/standard-chess-games"],
+            source_datasets=["original"],
             task_categories=[],
             tags=["tokenizer"],
         ),
@@ -331,6 +337,34 @@ def _api():  # type: ignore[no-untyped-def]
     return HfApi()
 
 
+def upload_folder(api: object, spec: DatasetSpec, repo_id: str) -> str:
+    """Upload the whole local directory in one go; returns the method that was used.
+
+    The card is always uploaded separately from the staged copy, so ``README.md`` is excluded
+    here. A ``large`` dataset uses ``upload_large_folder`` (resumable, multi-threaded) when the
+    installed ``huggingface_hub`` provides it.
+    """
+    large = callable(getattr(api, "upload_large_folder", None))
+    if spec.large and large:
+        api.upload_large_folder(  # type: ignore[attr-defined]
+            repo_id=repo_id,
+            folder_path=str(resolve(spec.local_dir)),
+            repo_type=spec.repo_type,
+            allow_patterns=spec.patterns,
+            ignore_patterns=["README.md"],
+        )
+        return "upload_large_folder"
+    api.upload_folder(  # type: ignore[attr-defined]
+        repo_id=repo_id,
+        folder_path=str(resolve(spec.local_dir)),
+        repo_type=spec.repo_type,
+        allow_patterns=spec.patterns,
+        ignore_patterns=["README.md"],
+        commit_message="Upload data",
+    )
+    return "upload_folder"
+
+
 def publish(name: str, cfg: PublishConfig, dry_run: bool = False) -> PublishResult:
     """Render the card and upload (or, with ``dry_run``, stage) one registry entry."""
     if name not in DATASETS:
@@ -350,16 +384,7 @@ def publish(name: str, cfg: PublishConfig, dry_run: bool = False) -> PublishResu
     if not dry_run:
         api = _api()
         api.create_repo(repo_id, repo_type=spec.repo_type, exist_ok=True)
-        for path, rel in zip(files, rel_files, strict=True):
-            if rel == "README.md":
-                continue
-            api.upload_file(
-                path_or_fileobj=str(path),
-                path_in_repo=rel,
-                repo_id=repo_id,
-                repo_type=spec.repo_type,
-                commit_message=f"Upload {rel}",
-            )
+        upload_folder(api, spec, repo_id)
         api.upload_file(
             path_or_fileobj=str(card_path),
             path_in_repo="README.md",

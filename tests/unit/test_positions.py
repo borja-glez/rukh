@@ -26,6 +26,16 @@ def test_fen4_drops_counters_and_keeps_castling_and_ep() -> None:
     assert fen4(board).endswith(" b KQkq -")
 
 
+def test_fen4_matches_the_first_four_fen_fields() -> None:
+    board = chess.Board()
+    moves = "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 a7a6 f1e2 e7e5 d4b3 f8e7 e1g1 e8g8"
+    for move in moves.split():
+        board.push_uci(move)
+        assert fen4(board) == " ".join(board.fen().split()[:4])
+    endgame = chess.Board("8/5k2/8/8/3pP3/8/5K2/8 b - e3 0 40")
+    assert fen4(endgame) == " ".join(endgame.fen().split()[:4])
+
+
 def test_phase_thresholds() -> None:
     assert phase(1, 32) == "opening"
     assert phase(10, 32) == "opening"

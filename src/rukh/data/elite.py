@@ -72,16 +72,23 @@ def extract_pgn(zip_path: Path, dest_dir: Path) -> Path:
 
 
 def iter_pgn_rows(pgn_path: Path, month: str) -> Iterator[dict[str, object]]:
-    """Yield raw rows (``RAW_COLUMNS``) from a PGN file with a light line parser."""
+    """Yield raw rows (``RAW_COLUMNS``) from a PGN file with a light line parser.
+
+    A new game starts when a header follows movetext or repeats a tag of the current block, so
+    a game with headers but no moves is dropped instead of polluting the next one. Without a
+    ``Site`` tag the game id falls back to ``month:index`` (every game still gets its own id);
+    a missing or unparsable Elo is recorded as ``None``, never as 0.
+    """
     headers: dict[str, str] = {}
     movetext: list[str] = []
     in_moves = False
+    index = 0
 
-    def flush() -> dict[str, object] | None:
+    def flush(index: int) -> dict[str, object] | None:
         if not headers or not movetext:
             return None
         return {
-            "Site": headers.get("Site", ""),
+            "Site": headers.get("Site") or f"{month}:{index}",
             "movetext": " ".join(movetext),
             "WhiteElo": _int(headers.get("WhiteElo")),
             "BlackElo": _int(headers.get("BlackElo")),
@@ -99,25 +106,27 @@ def iter_pgn_rows(pgn_path: Path, month: str) -> Iterator[dict[str, object]]:
                 match = _HEADER_RE.match(line)
                 if match is None:
                     continue
-                if in_moves:
-                    row = flush()
+                if in_moves or match.group(1) in headers:
+                    row = flush(index)
                     if row is not None:
                         yield row
+                    index += 1
                     headers, movetext, in_moves = {}, [], False
                 headers[match.group(1)] = match.group(2)
             elif line:
                 in_moves = True
                 movetext.append(line)
-    row = flush()
+    row = flush(index)
     if row is not None:
         yield row
 
 
-def _int(value: str | None) -> int:
+def _int(value: str | None) -> int | None:
+    """``None`` when the header is missing or not a number (never a fabricated 0)."""
     try:
-        return int(value) if value is not None else 0
+        return int(value) if value is not None else None
     except ValueError:
-        return 0
+        return None
 
 
 def _batches(rows: Iterator[dict[str, object]]) -> Iterator[list[dict[str, object]]]:

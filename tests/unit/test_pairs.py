@@ -8,6 +8,8 @@ import chess
 import polars as pl
 import pytest
 
+from rukh.data import evals as evals_module
+from rukh.data.evals import EvalsConfig
 from rukh.data.pairs import PairsConfig, balance, make_pair, run, score_mover
 
 pytestmark = pytest.mark.unit
@@ -16,16 +18,18 @@ WHITE = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -"
 BLACK = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -"
 
 
-def _pv(move: str, cp: int | None = None, mate: int | None = None) -> dict[str, object]:
-    return {"move": move, "cp": cp, "mate": mate, "depth": 30}
+def _pv(
+    move: str, cp: int | None = None, mate: int | None = None, depth: int = 30
+) -> dict[str, object]:
+    return {"move": move, "cp": cp, "mate": mate, "depth": depth}
 
 
 def test_score_mover_sign_and_mate() -> None:
     assert score_mover(150, None, "w") == 150
     assert score_mover(150, None, "b") == -150
-    assert score_mover(None, 2, "w") == 10_000
-    assert score_mover(None, 2, "b") == -10_000
-    assert score_mover(None, -1, "b") == 10_000
+    assert score_mover(None, 2, "w") == 9_998
+    assert score_mover(None, 2, "b") == -9_998
+    assert score_mover(None, -1, "b") == 9_999
     assert score_mover(None, None, "w") is None
 
 
@@ -44,10 +48,16 @@ def test_make_pair_white_and_black_perspective() -> None:
 def test_make_pair_margin_and_mates() -> None:
     assert make_pair(WHITE, [_pv("g1f3", 40), _pv("b1c3", -50)], 100) is None
     pair = make_pair(WHITE, [_pv("g1f3", None, 2), _pv("b1c3", 300)], 100)
-    assert pair is not None and pair["chosen"] == "g1f3" and pair["cp_chosen"] == 10_000
+    assert pair is not None and pair["chosen"] == "g1f3" and pair["cp_chosen"] == 9_998
     pair = make_pair(BLACK, [_pv("e7e5", None, -3), _pv("c7c5", -400)], 100)
-    assert pair is not None and pair["chosen"] == "e7e5" and pair["cp_chosen"] == -10_000
+    assert pair is not None and pair["chosen"] == "e7e5" and pair["cp_chosen"] == -9_997
     assert pair["rejected"] == "c7c5"
+    # A mate in 1 outranks a mate in 5, but the margin between them is only 4 centipawns.
+    assert make_pair(WHITE, [_pv("g1f3", None, 5), _pv("b1c3", None, 1)], 100) is None
+    # Depth outranks the score: the deepest line is chosen, a shallow better one is no pair.
+    assert make_pair(WHITE, [_pv("g1f3", 900, depth=12), _pv("b1c3", 40, depth=30)], 100) is None
+    pair = make_pair(WHITE, [_pv("g1f3", 40, depth=30), _pv("b1c3", -400, depth=12)], 100)
+    assert pair is not None and pair["chosen"] == "g1f3" and pair["rejected"] == "b1c3"
     assert make_pair(WHITE, [_pv("g1f3", 40)], 100) is None
 
 
@@ -105,3 +115,66 @@ def test_run_writes_balanced_pairs(rukh_home: Path) -> None:
         assert chosen in legal and rejected in legal and chosen != rejected
         mover = 1 if board.turn == chess.WHITE else -1
         assert mover * (cp_c - cp_r) >= 100
+
+
+def test_chosen_is_the_consolidated_best_move(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``pairs`` and the ``evals`` consolidation must agree, mates included."""
+    board = chess.Board()
+    board.push_uci("f2f3")
+    board.push_uci("e7e5")
+    board.push_uci("g2g4")  # 2...Qh4# is mate in 1 for Black
+    mate_fen = " ".join(board.fen().split()[:4])
+    quiet = " ".join(chess.Board().fen().split()[:4])
+    quiet_moves = [m.uci() for m in list(chess.Board().legal_moves)[:3]]
+    rows = [
+        # Black to move: the mate in 1 must win over the deeper, better-looking cp line.
+        (mate_fen, "d8h4", 12, None, -1),
+        (mate_fen, "d7d5", 40, -300, None),
+        (mate_fen, "b8c6", 40, 200, None),
+        # White to move: deepest line first, then the best cp.
+        (quiet, quiet_moves[0], 40, 30, None),
+        (quiet, quiet_moves[1], 40, -200, None),
+        (quiet, quiet_moves[2], 12, 900, None),
+    ]
+    remote = rukh_home / "remote.parquet"
+    pl.DataFrame(
+        [
+            {
+                "fen": fen,
+                "line": f"{move} a7a6",
+                "depth": depth,
+                "knodes": 10,
+                "cp": cp,
+                "mate": mate,
+            }
+            for fen, move, depth, cp, mate in rows
+        ]
+    ).write_parquet(remote.as_posix())
+    positions = rukh_home / "data" / "positions" / "positions.parquet"
+    positions.parent.mkdir(parents=True)
+    pl.DataFrame(
+        {
+            "fen4": [mate_fen, quiet],
+            "game_id": [1, 2],
+            "ply": [3, 0],
+            "last_move": ["g2g4", "e2e4"],
+            "result": ["0-1", "1-0"],
+            "phase": ["opening", "opening"],
+            "n_seen": [1, 1],
+        }
+    ).write_parquet(positions.as_posix())
+    monkeypatch.setattr(evals_module, "_source", lambda cfg, index: remote.as_posix())
+    evals_module.run(EvalsConfig(n_files=1), files="0")
+
+    consolidated = pl.read_parquet(
+        (rukh_home / "data" / "evals" / "positions-eval.parquet").as_posix()
+    )
+    assert consolidated.height == 2
+    for row in consolidated.to_dicts():
+        pair = make_pair(row["fen"], row["pvs"], 100)
+        assert pair is not None, row["fen"]
+        assert pair["chosen"] == row["best_move"]
+    best_by_fen = {r["fen"]: r["best_move"] for r in consolidated.to_dicts()}
+    assert best_by_fen[mate_fen] == "d8h4"

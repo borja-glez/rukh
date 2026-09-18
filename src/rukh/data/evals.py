@@ -2,9 +2,9 @@
 
 Each remote file ``data_00NN.parquet`` is semi-joined with the local positions by ``fen`` and
 written as ``data/evals/part-NN.parquet``; an existing part is skipped, so an interrupted run
-resumes where it stopped. ``consolidate`` then keeps one row per FEN with the best line
-(deepest lines, mates first, then the best ``cp`` for the side to move) and every line as
-``pvs``.
+resumes where it stopped. ``consolidate`` then keeps one row per FEN with the best line and
+every line as ``pvs``; the ordering and the mate convention come from ``rukh.data.scoring``,
+shared with ``rukh.data.pairs``.
 """
 
 from __future__ import annotations
@@ -15,11 +15,13 @@ from pydantic import Field
 
 from rukh.config import BaseConfig
 from rukh.data.manifest import FileHash, Manifest
+from rukh.data.scoring import BEST_LINE_DOC, MATE_SCORE, RANK_ORDER_SQL, SCORE_WHITE_SQL
 from rukh.data.uci import sha256_file
 from rukh.paths import resolve
 
 EVAL_FILE = "positions-eval.parquet"
-MATE_SCORE = 10_000
+
+__all__ = ["MATE_SCORE", "EvalsConfig", "consolidate", "fetch_part", "parse_files", "run"]
 
 
 class EvalsConfig(BaseConfig):
@@ -99,23 +101,16 @@ def consolidate(out_dir: Path, positions: Path) -> dict[str, int]:
                    split_part(line, ' ', 1) AS move,
                    depth, knodes, cp, mate,
                    CASE WHEN split_part(fen, ' ', 2) = 'w' THEN 1 ELSE -1 END AS sign,
-                   CASE WHEN mate IS NOT NULL
-                        THEN CASE WHEN mate > 0 THEN {MATE_SCORE} - mate
-                                  ELSE -{MATE_SCORE} - mate END
-                        ELSE cp END AS score_white
+                   {SCORE_WHITE_SQL} AS score_white
             FROM read_parquet('{parts}')
             WHERE line IS NOT NULL AND line <> ''
             """
         )
         con.execute(
-            """
+            f"""
             CREATE TEMP TABLE ranked AS
             SELECT *, sign * score_white AS score_mover,
-                   row_number() OVER (
-                     PARTITION BY fen
-                     ORDER BY (mate IS NOT NULL AND sign * mate > 0) DESC,
-                              depth DESC, sign * score_white DESC, move
-                   ) AS rk
+                   row_number() OVER (PARTITION BY fen ORDER BY {RANK_ORDER_SQL}) AS rk
             FROM lines
             """
         )
@@ -178,7 +173,8 @@ def run(cfg: EvalsConfig, files: str | None = None) -> Manifest:
             "coverage": round(counts["evaluated"] / counts["positions"], 4)
             if counts["positions"]
             else 0.0,
-            "best_line": "deepest; mate for the mover first; then best cp for the side to move",
+            "best_line": BEST_LINE_DOC,
+            "mate_score": MATE_SCORE,
         },
         counts=counts,
         files=[FileHash(path=EVAL_FILE, sha256=sha256_file(target), bytes=target.stat().st_size)],
