@@ -203,3 +203,21 @@ Evidencia obtenida por el controlador, no por subagentes:
   fragmento de código sin contexto y alarga una lección que ya cubre tres esquemas de tokenización,
   el empaquetado y los dataloaders.
 - **Si está mal:** es mover una sección de `m2` a `m1` en el MDX; no afecta al código.
+
+### D-021 · El BPE se entrena sobre la partida UCI sin espacios
+- **Qué:** el esquema `bpe` codifica `e2e4e7e5g1f3…` (jugadas concatenadas), no `e2e4 e7e5 g1f3…`.
+  La fixture de paridad (`artifacts/tokenizer/fixtures/games.json`) usa ese mismo texto y los dos
+  tokenizadores TS lo replican.
+- **Por qué:** el pre-tokenizador obligatorio es `WhitespaceSplit`, así que con espacios ninguna
+  fusión puede cruzar de una jugada a la siguiente y el lab 5 ("mira qué aperturas enteras aprende
+  el BPE", `docs/spec/03`) se queda sin objeto. Sin espacios, cada partida es una palabra y las
+  fusiones largas son secuencias de apertura reales.
+- **Si está mal:** cambiar `bpe_text()` en `src/rukh/tokenize/bpe.py`, regenerar `bpe.json` y la
+  fixture, y sincronizar las dos webs; los tests de paridad detectan cualquier olvido.
+
+### D-022 · Los scripts de los labs de M1 viven en `labs/m1/`
+- **Qué:** `labs/m1/{explore,loader_check,bpe_merges}.py` son copias exactas de los bloques de
+  código de la lección M1, con un README que dice de qué paso del pipeline depende cada uno.
+- **Por qué:** la lección pide guardarlos en el repo `rukh` para ejecutarlos; tenerlos versionados
+  evita que el lector los copie mal y permite que `ruff` los revise.
+- **Si está mal:** si la lección y el script divergen, manda la lección; el README lo advierte.
