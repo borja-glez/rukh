@@ -485,6 +485,67 @@ def eval_cmd(
         typer.echo(f"table:    {report.web}")
 
 
+@app.command("export")
+def export_cmd(
+    ckpt: Annotated[
+        Path,
+        typer.Option(
+            "--ckpt", exists=True, dir_okay=False, readable=True, help="Checkpoint to export."
+        ),
+    ],
+    out: Annotated[Path, typer.Option("--out", help="Output directory (or .onnx file).")],
+    opset: Annotated[int, typer.Option("--opset", help="ONNX opset version.")] = 18,
+    seq_len: Annotated[
+        int, typer.Option("--seq-len", help="Example length the exporter traces.")
+    ] = 200,
+    fp16: Annotated[bool, typer.Option("--fp16", help="Also write the fp16 model.")] = False,
+    int8: Annotated[bool, typer.Option("--int8", help="Also write the int8 model.")] = False,
+    check_parity: Annotated[
+        bool, typer.Option("--check-parity", help="Compare every file with PyTorch.")
+    ] = False,
+    positions: Annotated[
+        int, typer.Option("--positions", help="Positions used by the parity check.")
+    ] = 1000,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Export the next-move head to ONNX, quantize it and check parity with PyTorch."""
+    from rukh.export import export_all
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    try:
+        bundle = export_all(
+            ckpt,
+            out,
+            opset=opset,
+            seq_len=seq_len,
+            fp16=fp16,
+            int8=int8,
+            check_parity=check_parity,
+            parity_positions=positions,
+        )
+    except (ImportError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(bundle.model_dump_json(indent=2))
+        return
+    typer.echo(f"exporter: {bundle.onnx.exporter} (opset {bundle.onnx.opset})")
+    if bundle.onnx.warning:
+        typer.echo(f"warning:  {bundle.onnx.warning}")
+    typer.echo(f"fp32:     {bundle.onnx.path} ({bundle.onnx.bytes} bytes)")
+    for quantized in (bundle.fp16, bundle.int8):
+        if quantized is not None:
+            typer.echo(
+                f"{quantized.kind}:     {quantized.path} ({quantized.bytes} bytes, "
+                f"{quantized.ratio:.2f} of fp32, {quantized.method})"
+            )
+    for kind, result in bundle.parity.items():
+        typer.echo(
+            f"parity {kind}: {result.agreement:.4f} on {result.positions} positions "
+            f"(max |delta logits| {result.max_abs_logit_delta:.4g})"
+        )
+
+
 @mlflow_app.command("ui")
 def mlflow_ui(
     host: Annotated[str, typer.Option("--host", help="Interface to bind.")] = "127.0.0.1",
