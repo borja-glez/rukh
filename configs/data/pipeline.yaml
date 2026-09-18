@@ -31,3 +31,30 @@ evals:
   n_files: 20
   positions: data/positions/positions.parquet
   out_dir: data/evals
+puzzles:
+  dataset: Lichess/chess-puzzles
+  remote_glob: "hf://datasets/{dataset}/**/*.parquet"
+  out_dir: data/puzzles
+  max_rating_deviation: 100
+  min_plays: 100
+  n_test: 2000
+  n_train: 50000
+  seed: 42
+pairs:
+  positions_eval: data/evals/positions-eval.parquet
+  out_dir: data/pairs
+  min_delta_cp: 100
+  max_per_phase: 200000
+  seed: 42
+elite:
+  base_url: https://database.nikonoel.fr
+  months: ["2025-01", "2025-02"]
+  out_dir: data/elite
+  min_plies: 20
+  max_plies: 300
+  workers: 0
+elo_bins:
+  uci_dir: data/uci
+  out_dir: data/elo-bins
+  n_per_bin: 50000
+  seed: 42

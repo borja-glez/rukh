@@ -234,6 +234,46 @@ def data_evals(
     _echo_manifest(run(cfg, files=files), as_json, cfg.out_dir)
 
 
+@data_app.command("puzzles")
+def data_puzzles(config: PipelineOption = None, as_json: JsonOption = False) -> None:
+    """Filter Lichess puzzles and split them by difficulty band with a fixed seed."""
+    from rukh.data.pipeline import load_pipeline
+    from rukh.data.puzzles import run
+
+    cfg = load_pipeline(config).puzzles
+    _echo_manifest(run(cfg), as_json, cfg.out_dir)
+
+
+@data_app.command("pairs")
+def data_pairs(config: PipelineOption = None, as_json: JsonOption = False) -> None:
+    """Build phase-balanced DPO pairs from the multi-PV evaluations."""
+    from rukh.data.pairs import run
+    from rukh.data.pipeline import load_pipeline
+
+    cfg = load_pipeline(config).pairs
+    _echo_manifest(run(cfg), as_json, cfg.out_dir)
+
+
+@data_app.command("elite")
+def data_elite(config: PipelineOption = None, as_json: JsonOption = False) -> None:
+    """Download the Lichess Elite Database months and convert them to UCI."""
+    from rukh.data.elite import run
+    from rukh.data.pipeline import load_pipeline
+
+    cfg = load_pipeline(config).elite
+    _echo_manifest(run(cfg), as_json, cfg.out_dir)
+
+
+@data_app.command("elo-bins")
+def data_elo_bins(config: PipelineOption = None, as_json: JsonOption = False) -> None:
+    """Sample up to n_per_bin games per 100-Elo bin of the average rating."""
+    from rukh.data.elo_bins import run
+    from rukh.data.pipeline import load_pipeline
+
+    cfg = load_pipeline(config).elo_bins
+    _echo_manifest(run(cfg), as_json, cfg.out_dir)
+
+
 @mlflow_app.command("ui")
 def mlflow_ui(
     host: Annotated[str, typer.Option("--host", help="Interface to bind.")] = "127.0.0.1",

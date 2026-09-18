@@ -8,8 +8,12 @@ from pydantic import Field
 
 from rukh import paths
 from rukh.config import BaseConfig, load_yaml
+from rukh.data.elite import EliteConfig
+from rukh.data.elo_bins import EloBinsConfig
 from rukh.data.evals import EvalsConfig
+from rukh.data.pairs import PairsConfig
 from rukh.data.positions import PositionsConfig
+from rukh.data.puzzles import PuzzlesConfig
 from rukh.data.uci import UciConfig
 
 
@@ -37,6 +41,10 @@ class PipelineConfig(BaseConfig):
     tokenize: TokenizeConfig = Field(default_factory=TokenizeConfig)
     positions: PositionsConfig = Field(default_factory=PositionsConfig)
     evals: EvalsConfig = Field(default_factory=EvalsConfig)
+    puzzles: PuzzlesConfig = Field(default_factory=PuzzlesConfig)
+    pairs: PairsConfig = Field(default_factory=PairsConfig)
+    elite: EliteConfig = Field(default_factory=EliteConfig)
+    elo_bins: EloBinsConfig = Field(default_factory=EloBinsConfig)
 
 
 def default_config_path() -> Path:
