@@ -3,6 +3,7 @@
 from rukh.train.checkpoint import (
     BEST_NAME,
     load_checkpoint,
+    load_model,
     read_manifest_sha,
     read_vocab_hash,
     restore,
@@ -17,6 +18,7 @@ __all__ = [
     "TrainConfig",
     "evaluate",
     "load_checkpoint",
+    "load_model",
     "lr_at",
     "param_groups",
     "pick_device",

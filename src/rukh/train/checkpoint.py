@@ -19,6 +19,8 @@ import numpy as np
 import torch
 from torch import nn
 
+from rukh.models import DecoderConfig, MoveDecoder
+
 BEST_NAME = "best.pt"
 
 
@@ -117,6 +119,16 @@ def load_checkpoint(path: Path, map_location: str | torch.device = "cpu") -> dic
     if not isinstance(payload, dict) or "model_state" not in payload:
         raise ValueError(f"{path} is not a rukh checkpoint")
     return payload
+
+
+def load_model(
+    path: Path, map_location: str | torch.device = "cpu"
+) -> tuple[MoveDecoder, dict[str, Any]]:
+    """Rebuild the decoder a checkpoint describes, in eval mode, plus the whole payload."""
+    payload = load_checkpoint(path, map_location=map_location)
+    model = MoveDecoder(DecoderConfig.model_validate(payload["model_cfg"]))
+    model.load_state_dict(payload["model_state"])
+    return model.eval(), payload
 
 
 def restore(

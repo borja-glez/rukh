@@ -188,6 +188,23 @@ def test_a_failing_compile_falls_back_to_eager(monkeypatch: pytest.MonkeyPatch) 
     assert maybe_compile(model, enabled=True) is model
 
 
+def test_a_compile_that_only_fails_on_the_first_forward_falls_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = MoveDecoder(TOY)
+
+    def lazy(_: object) -> object:
+        def explode(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("Compiler: cl is not found.")
+
+        return explode
+
+    monkeypatch.setattr(torch, "compile", lazy)
+    sample = torch.ones((2, BLOCK), dtype=torch.long)
+    assert maybe_compile(model, enabled=True, sample=sample) is model
+    assert all(p.grad is None for p in model.parameters())
+
+
 def test_device_comes_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUKH_DEVICE", "cpu")
     assert pick_device() == "cpu"

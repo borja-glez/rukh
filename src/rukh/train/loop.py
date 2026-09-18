@@ -100,14 +100,32 @@ def forever(loader: DataLoader[Batch]) -> Iterator[Batch]:
         yield from loader
 
 
-def maybe_compile(model: MoveDecoder, enabled: bool) -> nn.Module:
-    """``torch.compile`` the model when asked; a failure is a warning, never a stopped run."""
+def maybe_compile(
+    model: MoveDecoder, enabled: bool, sample: torch.Tensor | None = None
+) -> nn.Module:
+    """``torch.compile`` the model when asked; a failure is a warning, never a stopped run.
+
+    ``torch.compile`` is lazy: on Windows without MSVC it only fails when the first forward
+    reaches Inductor. ``sample`` (one batch of the training shape) forces that compilation here,
+    where it can still fall back to eager, and Dynamo's own error suppression covers any later
+    recompilation for a different shape.
+    """
     if not enabled:
         return model
     try:
-        return torch.compile(model)
+        import torch._dynamo as dynamo
+
+        dynamo.config.suppress_errors = True
+        compiled = torch.compile(model)
+        if sample is not None:
+            _, loss = compiled(sample, sample)
+            if loss is not None:
+                loss.backward()
+            model.zero_grad(set_to_none=True)
+        return compiled
     except Exception as exc:  # noqa: BLE001 - compilation backends fail in many ways
         log.warning("torch.compile is unavailable, training eagerly: %s", exc)
+        model.zero_grad(set_to_none=True)
         return model
 
 
@@ -189,7 +207,9 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
     autocast = (
         torch.autocast(device_type="cuda", dtype=torch.bfloat16) if use_bf16 else nullcontext()
     )
-    runnable = maybe_compile(model, cfg.compile)
+    warmup = torch.ones((cfg.batch_size, cfg.block), dtype=torch.long, device=where)
+    with autocast:  # compile under the same precision the loop will use
+        runnable = maybe_compile(model, cfg.compile, warmup)
     runnable.train()
 
     out_dir = run_dir(cfg, resume)

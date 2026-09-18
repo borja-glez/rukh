@@ -1,4 +1,7 @@
-"""Command-line interface: ``info``, ``data ...``, ``train``, ``engine check`` and ``mlflow ui``."""
+"""Command-line interface: ``info``, ``data ...``, ``train``, ``play``, ``engine`` and ``mlflow``.
+
+Every command is a thin shell over the library: parse options, call one function, print.
+"""
 
 from __future__ import annotations
 
@@ -359,6 +362,68 @@ def train_cmd(
     typer.echo(f"preset:     {cfg.preset}")
     typer.echo(f"steps:      {cfg.max_steps}")
     typer.echo(f"checkpoint: {checkpoint}")
+
+
+@app.command("play")
+def play_cmd(
+    ckpt: Annotated[
+        Path,
+        typer.Option(
+            "--ckpt", exists=True, dir_okay=False, readable=True, help="Checkpoint to play with."
+        ),
+    ],
+    games: Annotated[int, typer.Option("--games", help="Number of games to play.")] = 1,
+    opponent: Annotated[
+        str, typer.Option("--opponent", help="Opponent: random or stockfish.")
+    ] = "random",
+    elo: Annotated[int, typer.Option("--elo", help="UCI_Elo of the Stockfish opponent.")] = 1400,
+    temperature: Annotated[
+        float, typer.Option("--temperature", help="Sampling temperature (0 = argmax).")
+    ] = 0.6,
+    top_k: Annotated[int, typer.Option("--top-k", help="Top-k truncation; 0 disables it.")] = 20,
+    no_mask: Annotated[
+        bool, typer.Option("--no-mask", help="Sample without the legality mask (measures it).")
+    ] = False,
+    seed: Annotated[int, typer.Option("--seed", help="Seed for sampling and the opponent.")] = 0,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the games as JSON only.")] = False,
+) -> None:
+    """Play games between a trained decoder and an opponent, with or without the legality mask."""
+    import json
+
+    from rukh.infer import RandomOpponent, SampleConfig, StockfishOpponent, play_game
+    from rukh.tokenize.uci_vocab import UciTokenizer
+    from rukh.train import load_model
+
+    if opponent not in ("random", "stockfish"):
+        typer.echo("error: --opponent must be random or stockfish", err=True)
+        raise typer.Exit(code=2)
+    model, _ = load_model(ckpt)
+    tok = UciTokenizer()
+    cfg = SampleConfig(
+        temperature=temperature,
+        top_k=top_k or None,
+        mask_illegal=not no_mask,
+        seed=seed,
+    )
+    rival = RandomOpponent(seed) if opponent == "random" else StockfishOpponent(elo=elo)
+    try:
+        results = [
+            play_game(model, tok, rival, cfg, model_color=index % 2 == 0) for index in range(games)
+        ]
+    finally:
+        if isinstance(rival, StockfishOpponent):
+            rival.close()
+    if as_json:
+        typer.echo(json.dumps([result.model_dump() for result in results], indent=2))
+        return
+    typer.echo(f"opponent: {opponent}")
+    typer.echo(f"mask:     {'on' if cfg.mask_illegal else 'off'}")
+    for index, result in enumerate(results):
+        typer.echo(
+            f"  game {index + 1}: {result.result:<7} {result.plies:>3} plies  "
+            f"{result.illegal_proposals} illegal  ({result.termination})"
+        )
+    typer.echo(f"illegal:  {sum(r.illegal_proposals for r in results)} proposals")
 
 
 @mlflow_app.command("ui")
