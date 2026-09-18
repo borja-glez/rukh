@@ -150,3 +150,56 @@ Evidencia obtenida por el controlador, no por subagentes:
   Lighthouse: `/`, `/curso/` y la lección → móvil 0,98-0,99 / 1 / 1 / 1; escritorio 1 / 1 / 1 / 1.
 - Pendiente de Borja (punto de intervención de P0): repos en GitHub, DNS, apps en Dokploy, merge de
   `p0-scaffold` y prueba en su móvil real. La CI de los tres repos se verá en verde tras el push.
+
+## P1 · Datos (2026-09-18/19)
+
+### D-016 · La rama `p1-datos` nace de `p0-scaffold`
+- **Qué:** en los tres repos, `p1-datos` sale de `p0-scaffold` en lugar de `main`.
+- **Por qué:** P0 sigue sin fusionar (falta el punto de intervención de Borja: repos en GitHub,
+  DNS, Dokploy y prueba en su móvil). Partir de `main` habría dejado P1 sin el scaffold, el CLI,
+  la configuración pydantic ni la CI que P1 usa en cada paso.
+- **Si está mal:** al fusionar P0 primero y P1 después no hay conflicto; si se decidiera fusionar
+  P1 antes, habría que rebasarla sobre `main` (historia lineal, sin cambios de contenido).
+
+### D-017 · Tope de 3 000 000 de partidas por mes en el recorte de Lichess
+- **Qué:** `configs/data/lichess-2025-01-02.yaml` lleva `limit: 3000000`, así que cada mes aporta
+  como mucho 3 M partidas (los primeros ~12 ficheros parquet del mes, es decir los primeros días)
+  y los dos meses suman 6 M. El manifiesto lo registra como recorte temporal.
+- **Por qué:** sondeo del 2026-09-18 sobre el primer fichero de 2025-01: de 1 394 617 partidas,
+  **251 618 (18 %)** pasan los filtros de `docs/spec/01` (ambos Elo ≥ 1800, base ≥ 180 s,
+  terminaciones normales). Extrapolado a los 72 ficheros del mes son ≈ 18 M partidas/mes, muy por
+  encima de los 3-6 M que pide el spec para los dos meses; sin tope, `fetch` tardaría horas y
+  llenaría el disco sin mejorar el entrenamiento de M2.
+- **Si está mal:** subir o quitar `limit` y relanzar `fetch`; el resto del pipeline no cambia. El
+  sesgo que introduce es temporal (solo los primeros días del mes), no de fuerza ni de ritmo.
+
+### D-018 · Los pares DPO salen de las líneas múltiples del dataset de evaluaciones
+- **Qué:** `rukh data pairs` construye `chosen`/`rejected` a partir de las varias líneas por FEN de
+  `Lichess/chess-position-evaluations` (≈ 7 de media), sin ejecutar Stockfish. `chosen` es la
+  primera jugada de la mejor línea y `rejected` la de una línea al menos 100 centipeones peor para
+  el que mueve.
+- **Por qué:** el dataset ya trae multi-PV con profundidad alta; generar los pares con el motor
+  costaría horas de GPU/CPU por unos datos que ya existen y que además son reproducibles por
+  cualquiera. `docs/spec/01` no exigía Stockfish para este paso.
+- **Si está mal:** los pares se pueden regenerar con el motor (`rukh.engine`) reutilizando las
+  mismas posiciones; el esquema de columnas no cambiaría.
+
+### D-019 · Empaquetado en flujo con ventanas alineadas a `<bos>`
+- **Qué:** `pack.py` escribe un único flujo `tokens.npy` (uint16) con las partidas codificadas
+  enteras y concatenadas más `starts.npy` con el desplazamiento de cada `<bos>`; el `PackedDataset`
+  corta ventanas de `block` tokens que empiezan en un `<bos>`. Con `block = 200`, los tokens de una
+  partida más allá de la posición 200 **no se ven** durante el entrenamiento.
+- **Por qué:** un flujo continuo evita rellenar cada partida hasta el bloque (menos padding, menos
+  memoria) y alinear a `<bos>` garantiza que el modelo siempre ve el prefijo de control
+  (`<bos>`, Elo de ambos, jugadas) en el mismo sitio. `docs/spec/01` admite truncar a 200 tokens.
+- **Si está mal:** `start_at_game=False` ya recorre el flujo en bloques consecutivos (ve todas las
+  partidas completas, a cambio de ventanas que empiezan a mitad de partida); no hay que reempaquetar.
+
+### D-020 · El lab de M1 aplaza la máscara causal a M2
+- **Qué:** la lección M1 del curso se queda en datos y tokenización (labs 1-5 de `docs/spec/03`) y
+  no incluye el lab 4 tal como está escrito allí: la máscara causal se explica y se implementa en
+  M2, junto con la atención.
+- **Por qué:** la máscara solo se entiende con el bloque de atención delante; en M1 sería un
+  fragmento de código sin contexto y alarga una lección que ya cubre tres esquemas de tokenización,
+  el empaquetado y los dataloaders.
+- **Si está mal:** es mover una sección de `m2` a `m1` en el MDX; no afecta al código.

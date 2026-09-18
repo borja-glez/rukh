@@ -42,9 +42,44 @@ Notas:
   estadísticas (por defecto `data/uci/year=2025/month=01/games.parquet`).
 - `workers: 0` en `uci`, `positions` y `elite` significa `cpu_count() - 1`. En Windows los procesos
   usan `spawn`: los comandos funcionan desde el CLI o desde un `.py`, nunca desde un script leído por
-  stdin.
+  stdin. Los lotes se envían al pool con contrapresión (como mucho `2 x workers` en vuelo), así que
+  la memoria del proceso padre no crece con el tamaño del mes.
+- La sección `duckdb:` de `configs/data/pipeline.yaml` se aplica a todas las conexiones
+  (`fetch`, `positions`, `evals`, `puzzles`, `elo-bins`): `memory_limit` (32 GB por defecto),
+  `threads` (0 = todos los núcleos) y el directorio de volcado `data/duckdb-tmp`, que se crea solo y
+  está en `.gitignore`. Si una consulta falla por memoria, bajar `memory_limit` obliga a DuckDB a
+  volcar antes a disco en vez de abortar; si el disco de datos se queda sin sitio, el volcado está
+  en `data/`, no en `%TEMP%`.
+- `elite`: una partida sin cabecera `Site` recibe un `game_id` derivado de `mes:indice` (dos
+  partidas distintas nunca comparten id) y un Elo ausente o ilegible se guarda como **nulo**, nunca
+  como 0, para que las medias y los tramos no se hundan. Una entrada con cabeceras pero sin jugadas
+  se descarta sin contaminar la siguiente.
+- `publish` sube la carpeta entera en un commit (`upload_folder`); `rukh-games-1800` y
+  `rukh-elo-bins`, que pesan varios GB, usan `upload_large_folder` (reanudable y en paralelo) cuando
+  la versión instalada de `huggingface_hub` lo trae. La card siempre se sube aparte desde
+  `data/publish/<nombre>/README.md`.
 - Los pasos 9 y 12 (`rukh-positions-eval`, `rukh-pairs-dpo`) necesitan `positions-eval.parquet`; si
   `evals` no ha terminado, el consolidado cubre solo las partes descargadas (ver abajo).
+
+## Empaquetado y dataloaders
+
+`pack.py` escribe un **flujo continuo**: las partidas codificadas enteras, una detrás de otra, en
+`tokens.npy` (uint16), más `starts.npy` con el desplazamiento de cada `<bos>` (D-019). El parquet se
+lee por lotes y el flujo se copia al memmap en trozos de 64 MiB, así que empaquetar un mes de 3 M
+partidas no necesita más memoria que uno de 20.
+
+`PackedDataset(dir, block=200, start_at_game=True)` devuelve `(x, y)` de `block` tokens:
+
+- `y = x[1:]` más un `<pad>` al final: la **última posición de `y` es relleno**
+  (`y[-1] = 0`), porque el token que seguiría está fuera de la ventana. La pérdida tiene que usar
+  `ignore_index=0`, si no el modelo aprende a predecir `<pad>` una vez por ventana.
+- Con `start_at_game=True` (lo normal) cada elemento empieza en un `<bos>`, es decir hay un elemento
+  por partida y **los tokens de una partida más allá de la posición `block` no se ven nunca**: con
+  `block = 200` una partida de 300 plies aporta solo su primer tercio (truncado admitido por
+  `docs/spec/01`; D-019). Si hace falta ver el resto, `start_at_game=False` corta el flujo en bloques
+  consecutivos: se ve todo, pero las ventanas empiezan a mitad de partida y el prefijo de control
+  (`<bos>`, Elo, resultado) deja de estar siempre al principio.
+- Una ventana que se sale del final del flujo se rellena con `<pad>`.
 
 ## Reanudar `evals`
 
@@ -70,7 +105,13 @@ de una parte, borrar su `part-NN.parquet`.
   `evals.coverage` ≥ 0,6 con los 20 ficheros; `pairs` con las tres fases al mismo tamaño; `puzzles`
   con 2 000 `test` por tramo; `elo-bins` sin tramo por encima de `n_per_bin`.
 - `artifacts/web/tokenizer-stats.json`: `uci.pct_le_max_len` cerca del 95 % y `bpe` con fusiones
-  de varias jugadas en `bpe_longest_tokens`.
+  de varias jugadas en `bpe_longest_tokens`. Los conteos son los que emite cada codificador: UCI
+  enmarca con 5 tokens (`<bos>`, dos de Elo, resultado, `<eos>`), BPE con 3 y SAN con 2 (ahí el
+  resultado va dentro del texto).
+- `pairs` y `evals` comparten el orden de las líneas (`rukh/data/scoring.py`): mate a favor del que
+  mueve primero, luego profundidad, luego `cp` desde su punto de vista, y un mate en `n` vale
+  `+/-(10000 - n)`. Comprobación rápida: el `chosen` de `pairs.parquet` coincide con el `best_move`
+  de `positions-eval.parquet` para el mismo FEN.
 - `uv run pytest -m unit -q` verde (no usa `data/`).
 - `pnpm test` en `rukh-web` y `rukh-lab` tras `pnpm sync:tokenizer` (paridad con la fixture).
 - Tras `publish`, abrir `https://huggingface.co/datasets/chorcat/<nombre>` y comprobar la card
@@ -88,5 +129,9 @@ de una parte, borrar su `part-NN.parquet`.
   captura es legal).
 - `publish` sin `HF_TOKEN`: `huggingface_hub` devuelve 401; exportar el token en la sesión o usar
   `--dry-run` para revisar la card antes.
+- `pairs` con `pairs.parquet` vacío: el equilibrado iguala las tres fases al tamaño de la más
+  pequeña, así que una fase sin candidatos lo vacía todo. El paso avisa por log y el manifiesto
+  lleva `candidates_by_phase` y `empty_phases`; la causa habitual es un `positions-eval.parquet`
+  parcial (pocas partes de `evals` descargadas) o un `min_delta_cp` demasiado alto.
 - `tokenize --scheme san --pack` demasiado lento: es conversión UCI→SAN con python-chess en un solo
   proceso; ejecutarlo en segundo plano o solo sobre el mes de validación.
