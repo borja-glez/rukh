@@ -1,4 +1,4 @@
-"""Command-line interface: ``info``, ``data ...``, ``train``, ``play``, ``engine`` and ``mlflow``.
+"""Command-line interface: ``info``, ``data``, ``train``, ``play``, ``eval``, ``engine``.
 
 Every command is a thin shell over the library: parse options, call one function, print.
 """
@@ -424,6 +424,65 @@ def play_cmd(
             f"{result.illegal_proposals} illegal  ({result.termination})"
         )
     typer.echo(f"illegal:  {sum(r.illegal_proposals for r in results)} proposals")
+
+
+@app.command("eval")
+def eval_cmd(
+    model: Annotated[
+        Path,
+        typer.Option(
+            "--model", exists=True, dir_okay=False, readable=True, help="Checkpoint to evaluate."
+        ),
+    ],
+    suite: Annotated[str, typer.Option("--suite", help="Suite name: full or quick.")] = "full",
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Suite YAML override."
+        ),
+    ] = None,
+    stage: Annotated[
+        str | None, typer.Option("--stage", help="Row name in the results table.")
+    ] = None,
+    no_cache: Annotated[
+        bool, typer.Option("--no-cache", help="Recompute every game and puzzle.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Measure legality, next-move accuracy, puzzles and Elo, and write the report."""
+    from rukh.eval import load_suite, run_suite
+    from rukh.eval.suite import SUITES
+
+    if suite not in SUITES:
+        typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
+        raise typer.Exit(code=2)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_suite(suite, config)
+    if stage is not None:
+        cfg = cfg.model_copy(update={"stage": stage})
+    result, report = run_suite(model, cfg, suite=suite, use_cache=not no_cache)
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(f"stage:    {result.stage} ({result.params:,} parameters)")
+    typer.echo(f"suite:    {result.suite}{' (cache off)' if no_cache else ''}")
+    if result.legality:
+        typer.echo(f"legality: {result.legality.rate:.4f} without the mask")
+    if result.accuracy:
+        typer.echo(f"accuracy: top1 {result.accuracy.top1:.4f}  top3 {result.accuracy.top3:.4f}")
+    if result.puzzles:
+        typer.echo(f"puzzles:  {result.puzzles.rate:.4f} solved")
+    if result.elo:
+        typer.echo(
+            f"elo:      {result.elo.elo:.0f} "
+            f"(95% CI {result.elo.ci_low:.0f}-{result.elo.ci_high:.0f}, {result.elo.games} games)"
+        )
+    for note in result.notes:
+        typer.echo(f"note:     {note}")
+    typer.echo(f"report:   {report.markdown}")
+    typer.echo(f"results:  {report.results}")
+    if report.web:
+        typer.echo(f"table:    {report.web}")
 
 
 @mlflow_app.command("ui")

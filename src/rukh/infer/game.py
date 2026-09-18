@@ -40,13 +40,18 @@ class RandomOpponent:
 
 
 class StockfishOpponent:
-    """Stockfish limited to ``elo``; close it (or use it as a context manager) when done."""
+    """Stockfish limited to ``elo``; close it (or use it as a context manager) when done.
+
+    ``UCI_Elo`` bottoms out at 1320, so a ``skill`` between 0 and 20 may be given instead: it
+    selects ``Skill Level``, the only way to get rungs below that floor for the Elo harness.
+    """
 
     def __init__(
         self,
         elo: int = 1400,
         move_time: float = MOVE_TIME_SECONDS,
         path: Path | None = None,
+        skill: int | None = None,
     ) -> None:
         from rukh.engine import EngineNotFound, find_stockfish
 
@@ -55,7 +60,10 @@ class StockfishOpponent:
             raise EngineNotFound("Stockfish not found; set RUKH_STOCKFISH or run get_stockfish.py")
         self.move_time = move_time
         self.engine = chess.engine.SimpleEngine.popen_uci(str(binary))
-        self.engine.configure({"UCI_LimitStrength": True, "UCI_Elo": elo})
+        if skill is None:
+            self.engine.configure({"UCI_LimitStrength": True, "UCI_Elo": elo})
+        else:
+            self.engine.configure({"UCI_LimitStrength": False, "Skill Level": skill})
 
     def choose(self, board: chess.Board) -> chess.Move:
         played = self.engine.play(board, chess.engine.Limit(time=self.move_time))

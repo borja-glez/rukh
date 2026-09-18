@@ -1,0 +1,80 @@
+"""Evaluation harness: legality, next-move accuracy, puzzles, Elo, cache and reporting."""
+
+from rukh.eval.accuracy import AccuracyResult, BandAccuracy, accuracy, elo_band
+from rukh.eval.cache import EvalCache, file_sha
+from rukh.eval.elo import (
+    DEFAULT_RUNGS,
+    EloResult,
+    EloRung,
+    GameRecord,
+    RungResult,
+    bootstrap_ci,
+    estimate,
+    fit_elo,
+    play_rung,
+    play_rungs,
+    score_of,
+)
+from rukh.eval.legality import (
+    LegalityResult,
+    Position,
+    board_of,
+    legality,
+    position_at,
+    sample_positions,
+)
+from rukh.eval.puzzles import (
+    PuzzleAttempt,
+    PuzzleItem,
+    PuzzleResult,
+    load_puzzles,
+    model_source,
+    run_puzzles,
+    solve_puzzle,
+)
+from rukh.eval.report import ReportPaths, WebRow, render_markdown, row_of, upsert_row, write_report
+from rukh.eval.suite import EvalConfig, SuiteResult, evaluate, load_suite, run_suite
+
+__all__ = [
+    "DEFAULT_RUNGS",
+    "AccuracyResult",
+    "BandAccuracy",
+    "EloResult",
+    "EloRung",
+    "EvalCache",
+    "EvalConfig",
+    "GameRecord",
+    "LegalityResult",
+    "Position",
+    "PuzzleAttempt",
+    "PuzzleItem",
+    "PuzzleResult",
+    "ReportPaths",
+    "RungResult",
+    "SuiteResult",
+    "WebRow",
+    "accuracy",
+    "board_of",
+    "bootstrap_ci",
+    "elo_band",
+    "estimate",
+    "evaluate",
+    "file_sha",
+    "fit_elo",
+    "legality",
+    "load_puzzles",
+    "load_suite",
+    "model_source",
+    "play_rung",
+    "play_rungs",
+    "position_at",
+    "render_markdown",
+    "row_of",
+    "run_puzzles",
+    "run_suite",
+    "sample_positions",
+    "score_of",
+    "solve_puzzle",
+    "upsert_row",
+    "write_report",
+]

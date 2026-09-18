@@ -1,0 +1,20 @@
+# Full evaluation suite (docs/spec/02, component 5): the numbers that go in the results table.
+# Hours of Stockfish games; the SQLite cache makes a re-run cheap.
+games: data/uci/year=2025/month=02/games.parquet
+puzzles: data/puzzles/puzzles.parquet
+puzzle_split: test
+legality_positions: 10000
+accuracy_positions: 10000
+position_pool: 50000
+puzzles_per_band: 2000
+elo_games: 100
+elo_move_time: 0.05
+bootstrap: 1000
+temperature: 0.6
+top_k: 20
+block: 200
+seed: 42
+out_dir: artifacts/eval
+web_results: artifacts/web/results.json
+cache_db: artifacts/eval/cache.sqlite
+track: true

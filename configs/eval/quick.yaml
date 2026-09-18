@@ -1,0 +1,20 @@
+# Quick suite: the same metrics with a tenth of the work, for iterating on `tiny`.
+# The numbers it produces are noisy on purpose; the table is written from `full`.
+games: data/uci/year=2025/month=02/games.parquet
+puzzles: data/puzzles/puzzles.parquet
+puzzle_split: test
+legality_positions: 1000
+accuracy_positions: 1000
+position_pool: 20000
+puzzles_per_band: 200
+elo_games: 20
+elo_move_time: 0.05
+bootstrap: 500
+temperature: 0.6
+top_k: 20
+block: 200
+seed: 42
+out_dir: artifacts/eval
+web_results: artifacts/web/results.json
+cache_db: artifacts/eval/cache.sqlite
+track: true
