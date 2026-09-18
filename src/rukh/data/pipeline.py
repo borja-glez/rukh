@@ -8,6 +8,7 @@ from pydantic import Field
 
 from rukh import paths
 from rukh.config import BaseConfig, load_yaml
+from rukh.data.uci import UciConfig
 
 
 class TokenizeConfig(BaseConfig):
@@ -30,6 +31,7 @@ class TokenizeConfig(BaseConfig):
 class PipelineConfig(BaseConfig):
     """All step configs; each step reads only its own section."""
 
+    uci: UciConfig = Field(default_factory=UciConfig)
     tokenize: TokenizeConfig = Field(default_factory=TokenizeConfig)
 
 

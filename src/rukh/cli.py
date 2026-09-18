@@ -111,6 +111,33 @@ def _echo_written(written: list[str]) -> None:
         typer.echo(f"  {path}")
 
 
+@data_app.command("uci")
+def data_uci(
+    config: PipelineOption = None,
+    workers: Annotated[
+        int | None, typer.Option("--workers", help="Override the pool size from the config.")
+    ] = None,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Print the manifest as JSON only.")
+    ] = False,
+) -> None:
+    """Convert fetched SAN movetext to legal UCI games, one parquet per month."""
+    from rukh.data.pipeline import load_pipeline
+    from rukh.data.uci import run
+
+    cfg = load_pipeline(config).uci
+    if workers is not None:
+        cfg = cfg.model_copy(update={"workers": workers})
+    manifest = run(cfg)
+    if as_json:
+        typer.echo(manifest.model_dump_json(indent=2))
+        return
+    typer.echo(f"months:   {', '.join(manifest.months)}")
+    for month, count in manifest.counts.items():
+        typer.echo(f"  {month}: {count} games kept")
+    typer.echo(f"manifest: {cfg.out_dir}/manifest.json")
+
+
 @data_app.command("tokenize")
 def data_tokenize(
     config: PipelineOption = None,

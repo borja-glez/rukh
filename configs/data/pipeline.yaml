@@ -1,4 +1,10 @@
 # Every step of `rukh data ...` after `fetch`. Paths are relative to the repo root (RUKH_HOME).
+uci:
+  raw_dir: data/raw
+  out_dir: data/uci
+  min_plies: 20
+  max_plies: 300
+  workers: 0          # 0 = cpu_count() - 1
 tokenize:
   uci_dir: data/uci
   out_dir: data/tokens
