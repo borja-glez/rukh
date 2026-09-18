@@ -10,6 +10,12 @@ what ``docs/spec/02`` asks for) and falls back to the legacy TorchScript tracer 
 when dynamo is unavailable or fails; which path produced the file is recorded in the metadata,
 because the two exporters do not emit the same graph and a parity check is only meaningful when
 it is known which one ran.
+
+``dynamic_seq`` is not taken on trust. The legacy tracer happily bakes the traced length into
+the graph while still being asked for a dynamic axis, and the demo feeds a sequence that grows
+by one token per move, so the exported file is **run** at two different lengths and the flag
+reports what actually worked. The model's context (``block``) travels with the file as ONNX
+metadata, so the browser knows the limit without being told separately.
 """
 
 from __future__ import annotations
@@ -22,6 +28,7 @@ import torch
 from pydantic import BaseModel, ConfigDict
 from torch import Tensor, nn
 
+from rukh import __version__
 from rukh.models import MoveDecoder
 
 log = logging.getLogger(__name__)
@@ -32,6 +39,7 @@ OUTPUT_NAME = "logits"
 BATCH_AXIS = "batch"
 SEQUENCE_AXIS = "sequence"
 DEFAULT_OPSET = 18
+METADATA_PREFIX = "rukh_"
 
 
 class LastStepLogits(nn.Module):
@@ -55,8 +63,15 @@ class ExportResult(BaseModel):
     exporter: Literal["dynamo", "legacy"]
     opset: int
     seq_len: int
+    block: int
+    """The model's context: the exported graph must never be fed more than this many tokens."""
     dynamic_batch: bool
     dynamic_seq: bool
+    """What the file really accepts, not what was asked for: verified by running it."""
+    dynamic_seq_verified: bool = False
+    """Whether ``dynamic_seq`` was checked by running the file (needs ``onnxruntime``)."""
+    metadata: dict[str, str] = {}
+    """``metadata_props`` written into the file, empty when ``onnx`` is not installed."""
     vocab_size: int
     params: int
     bytes: int
@@ -142,18 +157,91 @@ def export_onnx(
                 dynamic_axes=_dynamic_axes(dynamic_batch, dynamic_seq),
                 **common,
             )
+    works = verify_dynamic_seq(path, seq_len, model.cfg.block)
+    if dynamic_seq and works is False:
+        raise ValueError(
+            f"{path} was exported with a dynamic sequence axis but only runs at length "
+            f"{seq_len}: the {exporter} exporter baked the length in. Re-export with "
+            "dynamic_seq=False and pad the input, or fix the exporter."
+        )
+    really_dynamic = dynamic_seq if works is None else works
+    metadata = write_metadata(
+        path,
+        {
+            "block": model.cfg.block,
+            "vocab_size": model.cfg.vocab_size,
+            "seq_len": seq_len,
+            "dynamic_batch": dynamic_batch,
+            "dynamic_seq": really_dynamic,
+            "exporter": exporter,
+            "version": __version__,
+        },
+    )
     return ExportResult(
         path=path.as_posix(),
         exporter=exporter,
         opset=opset,
         seq_len=seq_len,
+        block=model.cfg.block,
         dynamic_batch=dynamic_batch,
-        dynamic_seq=dynamic_seq,
+        dynamic_seq=really_dynamic,
+        dynamic_seq_verified=works is not None,
+        metadata=metadata,
         vocab_size=model.cfg.vocab_size,
         params=model.num_params(non_embedding=False),
         bytes=path.stat().st_size,
         warning=warning,
     )
+
+
+def sequence_lengths(seq_len: int, block: int) -> list[int]:
+    """Two lengths to run the exported file at: the traced one and a different, legal one."""
+    other = seq_len + 1 if seq_len < block else max(1, seq_len - 1)
+    return sorted({seq_len, other})
+
+
+def verify_dynamic_seq(path: Path, seq_len: int, block: int) -> bool | None:
+    """Run the file at two sequence lengths; None when ``onnxruntime`` is not installed."""
+    import numpy as np
+
+    try:
+        import onnxruntime as ort
+    except ImportError:
+        log.warning("onnxruntime is not installed: the dynamic sequence axis was not verified")
+        return None
+    lengths = sequence_lengths(seq_len, block)
+    if len(lengths) < 2:  # pragma: no cover - block of 1 is not a usable model
+        return None
+    session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+    for length in lengths:
+        try:
+            session.run(None, {INPUT_NAME: np.zeros((1, length), dtype=np.int64)})
+        except Exception as exc:  # noqa: BLE001 - any refusal means the axis is not dynamic
+            log.info("the exported graph refused a sequence of %d tokens: %s", length, exc)
+            return False
+    return True
+
+
+def write_metadata(path: Path, props: dict[str, Any]) -> dict[str, str]:
+    """Write ``rukh_*`` metadata into the file; empty when ``onnx`` is not installed."""
+    try:
+        import onnx
+    except ImportError:
+        log.warning("onnx is not installed: the model metadata (block, vocab) was not written")
+        return {}
+    entries = {f"{METADATA_PREFIX}{key}": str(value) for key, value in props.items()}
+    model = onnx.load(str(path))
+    onnx.helper.set_model_props(model, entries)
+    onnx.save(model, str(path))
+    return entries
+
+
+def read_metadata(path: Path) -> dict[str, str]:
+    """The ``rukh_*`` metadata of an exported file (needs ``onnx``)."""
+    import onnx
+
+    model = onnx.load(str(path))
+    return {entry.key: entry.value for entry in model.metadata_props}
 
 
 def _load(ckpt: Path) -> MoveDecoder:

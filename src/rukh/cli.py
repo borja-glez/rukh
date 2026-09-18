@@ -517,6 +517,16 @@ def export_cmd(
     positions: Annotated[
         int, typer.Option("--positions", help="Positions used by the parity check.")
     ] = 1000,
+    games: Annotated[
+        Path | None,
+        typer.Option(
+            "--games",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Validation games parquet for the parity positions.",
+        ),
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
 ) -> None:
     """Export the next-move head to ONNX, quantize it and check parity with PyTorch."""
@@ -532,7 +542,8 @@ def export_cmd(
             fp16=fp16,
             int8=int8,
             check_parity=check_parity,
-            parity_positions=positions,
+            positions=positions,
+            games=games,
         )
     except (ImportError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
@@ -543,6 +554,11 @@ def export_cmd(
     typer.echo(f"exporter: {bundle.onnx.exporter} (opset {bundle.onnx.opset})")
     if bundle.onnx.warning:
         typer.echo(f"warning:  {bundle.onnx.warning}")
+    checked = "verified" if bundle.onnx.dynamic_seq_verified else "not verified"
+    typer.echo(
+        f"shapes:   batch dynamic={bundle.onnx.dynamic_batch}, "
+        f"sequence dynamic={bundle.onnx.dynamic_seq} ({checked}), block={bundle.onnx.block}"
+    )
     typer.echo(f"fp32:     {bundle.onnx.path} ({bundle.onnx.bytes} bytes)")
     for quantized in (bundle.fp16, bundle.int8):
         if quantized is not None:
@@ -552,9 +568,12 @@ def export_cmd(
             )
     for kind, result in bundle.parity.items():
         typer.echo(
-            f"parity {kind}: {result.agreement:.4f} on {result.positions} positions "
+            f"parity {kind}: {result.agreement:.4f} on {result.positions} "
+            f"{bundle.parity_source} positions "
             f"(max |delta logits| {result.max_abs_logit_delta:.4g})"
         )
+    if bundle.parity_warning:
+        typer.echo(f"warning:  {bundle.parity_warning}")
 
 
 @publish_app.command("model")

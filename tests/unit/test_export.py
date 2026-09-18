@@ -17,10 +17,14 @@ from rukh.export import (
     LastStepLogits,
     export_onnx,
     parity,
+    parity_positions,
     quantize_int8,
     random_prefixes,
+    read_metadata,
+    sequence_lengths,
     target_path,
     to_fp16,
+    validation_prefixes,
 )
 from rukh.models import DecoderConfig, MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer
@@ -30,9 +34,11 @@ pytestmark = pytest.mark.unit
 # ``rukh.export`` re-exports ``parity`` under the module's own name, so the module object for
 # monkeypatching has to be asked for explicitly.
 parity_module = importlib.import_module("rukh.export.parity")
+onnx_module = importlib.import_module("rukh.export.onnx")
 
 TOY = DecoderConfig(vocab_size=2030, n_layer=2, n_head=2, d_model=32, block=64)
 SEQ_LEN = 16
+GAME = "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6"
 HAS_ONNX = all(importlib.util.find_spec(name) for name in ("onnx", "onnxruntime"))
 requires_onnx = pytest.mark.skipif(not HAS_ONNX, reason="onnx and onnxruntime are not installed")
 
@@ -148,6 +154,98 @@ def test_parity_without_positions_is_an_error(
 
 
 @pytest.fixture
+def games(tmp_path: Path) -> Path:
+    import polars as pl
+
+    path = tmp_path / "games.parquet"
+    pl.DataFrame(
+        {
+            "game_id": [1, 2, 3],
+            "uci": [GAME, GAME, GAME],
+            "white_elo": [1850, 2150, 1900],
+            "black_elo": [1950, 2050, 1900],
+        }
+    ).write_parquet(path)
+    return path
+
+
+def test_parity_positions_come_from_the_validation_games(tok: UciTokenizer, games: Path) -> None:
+    prefixes, source, warning = parity_positions(tok, n=3, block=TOY.block, seed=0, games=games)
+    assert source == "validation" and warning is None
+    assert prefixes == validation_prefixes(games, tok, n=3, block=TOY.block, seed=0)
+    for ids in prefixes:
+        assert ids[0] == tok.bos_id
+        assert ids[1] in (tok.vocab["<w1800>"], tok.vocab["<w2100>"], tok.vocab["<w1900>"])
+        # every prefix is a real continuation of the validation game
+        assert [tok.ids[i] for i in ids[3:]] == GAME.split()[: len(ids) - 3]
+
+
+def test_parity_falls_back_to_random_walks_with_a_warning(
+    tok: UciTokenizer, tmp_path: Path
+) -> None:
+    prefixes, source, warning = parity_positions(
+        tok, n=5, block=TOY.block, seed=0, games=tmp_path / "absent.parquet"
+    )
+    assert source == "random-walk"
+    assert warning is not None and "random legal walks" in warning
+    assert prefixes == random_prefixes(tok, 5, seed=0)
+
+
+def test_the_verification_runs_the_file_at_two_different_lengths() -> None:
+    assert sequence_lengths(16, 64) == [16, 17]
+    assert sequence_lengths(64, 64) == [63, 64]
+
+
+@pytest.fixture
+def fake_export(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
+    """Stand in for ``torch.onnx.export``: it needs ``onnx``, and these tests do not.
+
+    What is under test here is what ``export_onnx`` does with the answer of the verification,
+    not the exporter itself; the real file is exercised by the ``requires_onnx`` tests.
+    """
+
+    def export(_wrapper: Any, _args: Any, path: str, **_kwargs: Any) -> None:
+        Path(path).write_bytes(b"onnx")
+
+    monkeypatch.setattr(torch.onnx, "export", export)
+
+
+def test_a_baked_in_length_is_an_error_when_dynamic_was_asked_for(
+    model: MoveDecoder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_export: None
+) -> None:
+    monkeypatch.setattr(onnx_module, "verify_dynamic_seq", lambda *_args: False)
+    with pytest.raises(ValueError, match="baked the length in"):
+        export_onnx(model, tmp_path, seq_len=SEQ_LEN, dynamic_seq=True)
+
+
+def test_a_fixed_export_reports_what_the_file_really_does(
+    model: MoveDecoder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_export: None
+) -> None:
+    monkeypatch.setattr(onnx_module, "verify_dynamic_seq", lambda *_args: False)
+    result = export_onnx(model, tmp_path, seq_len=SEQ_LEN, dynamic_seq=False)
+    assert result.dynamic_seq is False and result.dynamic_seq_verified is True
+    assert result.block == TOY.block
+
+
+def test_an_unverifiable_export_says_so(
+    model: MoveDecoder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_export: None
+) -> None:
+    monkeypatch.setattr(onnx_module, "verify_dynamic_seq", lambda *_args: None)
+    result = export_onnx(model, tmp_path, seq_len=SEQ_LEN, dynamic_seq=True)
+    assert result.dynamic_seq is True and result.dynamic_seq_verified is False
+    assert result.metadata == {} or result.metadata["rukh_block"] == str(TOY.block)
+
+
+def test_a_verified_dynamic_axis_is_recorded_as_such(
+    model: MoveDecoder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_export: None
+) -> None:
+    monkeypatch.setattr(onnx_module, "verify_dynamic_seq", lambda *_args: True)
+    result = export_onnx(model, tmp_path, seq_len=SEQ_LEN, dynamic_seq=True)
+    assert (result.dynamic_seq, result.dynamic_seq_verified) == (True, True)
+    assert result.block == TOY.block and result.params == model.num_params(non_embedding=False)
+
+
+@pytest.fixture
 def exported(model: MoveDecoder, tmp_path: Path):  # type: ignore[no-untyped-def]
     return export_onnx(model, tmp_path, seq_len=SEQ_LEN)
 
@@ -181,10 +279,22 @@ def test_the_batch_axis_is_dynamic(exported: Any, model: MoveDecoder) -> None:
 def test_the_sequence_axis_is_dynamic(exported: Any) -> None:
     import onnxruntime as ort
 
+    assert exported.dynamic_seq is True
+    assert exported.dynamic_seq_verified is True  # it was run before being claimed
     session = ort.InferenceSession(exported.path, providers=["CPUExecutionProvider"])
     for length in (SEQ_LEN, SEQ_LEN + 5):
         idx = np.zeros((1, length), dtype=np.int64)
         assert session.run(None, {INPUT_NAME: idx})[0].shape == (1, TOY.vocab_size)
+
+
+@requires_onnx
+def test_the_file_carries_the_context_length_in_its_metadata(exported: Any) -> None:
+    metadata = read_metadata(Path(exported.path))
+    assert metadata["rukh_block"] == str(TOY.block)
+    assert metadata["rukh_vocab_size"] == str(TOY.vocab_size)
+    assert metadata["rukh_dynamic_seq"] == "True"
+    assert metadata["rukh_exporter"] == exported.exporter
+    assert exported.metadata == metadata
 
 
 @requires_onnx
