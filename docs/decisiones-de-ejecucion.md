@@ -72,3 +72,29 @@ se decide o se desvía durante la ejecución.
 - **Por qué:** el plan pedía la interfaz `run(cfg, dry_run)` y la regla de no dejar marcadores;
   la implementación es pequeña y coincide con el paso 1 del pipeline de `docs/spec/01`.
 - **Si está mal:** P1 la sustituye o la ajusta con datos reales.
+
+### D-011 · `TRY_CAST` en el filtro de control de tiempo
+- **Qué:** el filtro de `min_base_seconds` usa `TRY_CAST(split_part(TimeControl, '+', 1) AS INTEGER)`
+  en vez del `CAST` que dicen literalmente `docs/spec/01` y el plan de P0. Las filas cuyo base no es
+  un entero (partidas por correspondencia, que Lichess exporta con `TimeControl = '-'`) se descartan
+  en silencio en lugar de abortar la consulta entera.
+- **Por qué:** detectado en la ola de correcciones de P0: con `CAST`, un solo mes con partidas por
+  correspondencia hacía fallar todo el `COPY`. Hay test unitario con un parquet local que incluye
+  una fila con `'-'`.
+- **Si está mal:** si en P1 hace falta conservar esas partidas, se cambia el predicado; el manifest
+  sigue registrando `min_base_seconds`.
+
+### D-012 · `hive_partitioning = false`, rutas relativas en el manifest y `min_plies_deferred`
+- **Qué:** (1) `read_parquet(..., hive_partitioning = false)`: DuckDB detectaba `year=YYYY/month=MM`
+  en la ruta e inyectaba columnas `year` y `month`, y el alias explícito `'YYYY-MM' AS month`
+  acababa como `month_1`; ahora solo existe la columna `month` del alias. (2) `FetchPlan.out_paths`,
+  `FetchPlan.manifest_path` y `Manifest.files[].path` son rutas relativas a `out_dir` en forma
+  POSIX (`year=2025/month=01/games.parquet`); `FetchPlan.out_dir` lleva la ruta absoluta una sola
+  vez y el `--dry-run` la imprime en su propia línea. (3) El manifest registra `min_plies_deferred`
+  en lugar de `min_plies`, porque este paso no filtra por plies: se hace en P1 tras convertir
+  `movetext` a UCI (ver `docs/backlog.md`).
+- **Por qué:** ola de correcciones de P0. El manifest es el registro de procedencia y no debe
+  contener rutas de máquina ni afirmar filtros que no se aplicaron. El test unitario de `run`
+  escribe el parquet de origen bajo `year=2025/month=01/` para ejercitar el layout real.
+- **Si está mal:** cambiar el alias o el formato de rutas es un cambio local en
+  `src/rukh/data/fetch.py`; los manifests escritos en P0 no se han publicado.
