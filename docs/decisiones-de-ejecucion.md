@@ -56,3 +56,19 @@ se decide o se desvía durante la ejecución.
 - **Qué:** `docs/plans/2026-09-18-p0-scaffold.md` entró en `chore: initial commit` de `rukh` en vez
   de en la rama. Se deja así; no se reescribe historia.
 - **Si está mal:** ninguno; es documentación.
+
+### D-009 · Patrones de `.gitignore` anclados a la raíz
+- **Qué:** `data/`, `mlruns/`, `tools/` y `checkpoints/` pasan a `/data/`, `/mlruns/`, `/tools/` y
+  `/checkpoints/`.
+- **Por qué:** el patrón sin anclar ocultaba `src/rukh/data/` y `configs/data/` (git no los veía y
+  `ruff` tampoco los revisaba). Detectado en la tarea 2 de P0.
+- **Si está mal:** ninguno; solo cambia qué carpetas de primer nivel se ignoran.
+
+### D-010 · `rukh.data.fetch.run` ejecuta la descarga en vez de dejar un marcador
+- **Qué:** con `dry_run=False`, `run` hace `COPY` con DuckDB por mes a
+  `<out_dir>/year=YYYY/month=MM/games.parquet`, cuenta filas, calcula sha256 y escribe
+  `manifest.json`. `limit` se aplica por mes. Probado con un parquet local; no se ha ejecutado
+  contra `hf://` en P0 (queda en `docs/backlog.md` para P1).
+- **Por qué:** el plan pedía la interfaz `run(cfg, dry_run)` y la regla de no dejar marcadores;
+  la implementación es pequeña y coincide con el paso 1 del pipeline de `docs/spec/01`.
+- **Si está mal:** P1 la sustituye o la ajusta con datos reales.
