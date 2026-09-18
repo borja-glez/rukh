@@ -98,3 +98,16 @@ se decide o se desvía durante la ejecución.
   escribe el parquet de origen bajo `year=2025/month=01/` para ejercitar el layout real.
 - **Si está mal:** cambiar el alias o el formato de rutas es un cambio local en
   `src/rukh/data/fetch.py`; los manifests escritos en P0 no se han publicado.
+
+### D-013 · `style-src-attr 'unsafe-inline'` en las dos webs; `script-src` y `style-src` solo por hash
+- **Qué:** la CSP de `rukh-lab` y de `rukh-web` permite estilos en línea únicamente en atributos
+  (`style-src-attr 'unsafe-inline'`). `script-src` y `style-src` siguen siendo `'self'` más hashes
+  generados por Astro, sin `'unsafe-inline'`, y los tests E2E de CSP lo comprueban.
+- **Por qué:** en el curso, expressive-code colorea la sintaxis con atributos `style="--0:…"` por
+  token, que un hash no puede cubrir; en la demo, cm-chessboard posiciona la pieza arrastrada con
+  `setAttribute('style', …)`. Ninguno de los dos admite una alternativa por clase sin bifurcar la
+  librería. Un atributo `style` no ejecuta código y no puede cargar recursos externos con
+  `img-src 'self' data:` y `font-src 'self'`, así que el riesgo se limita a la presentación.
+- **Si está mal:** son dos líneas de `styleDirective` en cada `astro.config.mjs`; si expressive-code
+  o cm-chessboard pasan a clases o a hojas con hash, se elimina `'unsafe-inline'` y el test de CSP
+  se endurece para prohibirlo también en `style-src-attr`.
