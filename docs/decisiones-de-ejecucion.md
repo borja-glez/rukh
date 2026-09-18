@@ -234,3 +234,55 @@ Evidencia obtenida por el controlador, no por subagentes:
   dejar la máquina parada varias horas.
 - **Si está mal:** `p2-decoder` se rebasa sobre `p1-datos` cuando P1 cierre; los artefactos que P1
   regenera (`artifacts/tokenizer/*`, `artifacts/web/tokenizer-stats.json`) se traen con un merge.
+
+### D-024 · `torch.compile` no está disponible en este Windows: el bucle entrena en eager
+- **Qué:** `maybe_compile` intenta `torch.compile` con una pasada de calentamiento (un lote de la
+  forma real) antes del bucle. En esta máquina Inductor falla con
+  `torch._inductor.exc.TritonMissing` (no hay Triton ni MSVC, y no hay `nvcc`), así que
+  `dynamo.config.suppress_errors = True` se traga el error en 3 s y el modelo se ejecuta en eager
+  aunque `compile: true` siga en el YAML. El rendimiento medido en la 5090 sin compilar es de
+  **440 000 tokens/s** con lotes de 256×200, o sea que `small` ve 1 500 M de tokens en algo más de
+  una hora.
+- **Por qué:** el plan de P2 ya preveía este riesgo ("`torch.compile` en Windows sin `nvcc`: si
+  falla, `compile: false`"). Dejar la opción a `true` y fallar hacia eager es mejor que apagarla en
+  la configuración: el mismo YAML compila en una máquina con Triton (Linux, o Windows con Triton
+  instalado) y aquí no rompe nada. La pasada de calentamiento existe para que el fallo ocurra en un
+  sitio controlado y no a mitad del entrenamiento.
+- **Si está mal:** instalar Triton para Windows y volver a medir; si compilar diera menos del 10 %
+  de mejora, poner `compile: false` en los dos YAML y ahorrarse la pasada de calentamiento. La
+  cifra de tokens/s está en MLflow (`tokens_per_s` y `real_tokens_per_s`) de cada run.
+
+### D-025 · El harness de Elo adjudica las partidas cortadas por el contexto
+- **Qué:** una partida que llega al límite de contexto (`block - 4` = 196 medias jugadas) terminaba
+  con `*` y `score_of` la contaba como tablas. Ahora `play_game` devuelve el FEN final y
+  `record_of` la adjudica: con el motor del propio peldaño (`engine.analyse` a profundidad 8) gana
+  quien tenga 200 centipeones o más; sin motor, el recuento de material con el mismo margen (2
+  peones). El informe y `results.json` dicen cuántas partidas se cortaron y cuántas se
+  adjudicaron, por peldaño. Además los cuatro peldaños por debajo de 1320 se declaran en el
+  informe, en `results.json` y en la card como anclas nominales de `Skill Level` (no son fuerzas
+  medidas), el tiempo por jugada sube de 0,05 s a 0,1 s, y cuando todas las partidas se ganan (o
+  se pierden) se marca `separated` y se publica una cota unilateral en vez de un intervalo del
+  95 % de anchura cero.
+- **Por qué:** medio punto por partida cortada empuja el ajuste hacia el centro de los peldaños,
+  justo en el umbral de 1200 que GOAL pone como criterio de aceptación: una tabla regalada por
+  quedarse sin contexto no es una tabla. Y un intervalo simétrico calculado sobre resultados
+  separados es un número inventado; el bootstrap devuelve siempre el mismo tope. Las anclas y el
+  tiempo por jugada se dicen en voz alta porque el intervalo solo cubre el ruido de muestreo: la
+  incertidumbre real de la calibración de Stockfish no está dentro.
+- **Si está mal:** el margen (`ADJUDICATION_CP`) y la profundidad (`ADJUDICATION_DEPTH`) están en
+  `src/rukh/infer/game.py` y la caché de evaluación ya incluye la configuración en su clave, así
+  que cambiarlos vuelve a jugar las partidas en vez de reutilizar las viejas. Si se prefiere no
+  adjudicar, basta con no llamar a `adjudicate` en `record_of`: el campo `cut` seguiría estando.
+
+### D-026 · La legalidad se publica dos veces: argmax y muestreada
+- **Qué:** `rukh eval` mide la legalidad sin máscara con las dos definiciones y las publica las
+  dos: `legality_argmax` (el token más probable, sin temperatura ni top-k) es el titular y
+  `legality_sampled` (temperatura 0,6 y top-k 20, como juega la demo) va al lado, con las dos
+  definiciones escritas en `report.md`, en `results.json` y en la model card.
+- **Por qué:** el listón del ≥ 99 % de `GOAL.md` habla de lo que saben los pesos, y eso es el
+  argmax; medirlo con un muestreo a temperatura 0,6 mezcla una propiedad del modelo con un ajuste
+  del muestreador y siempre da peor. Publicar solo el argmax sería quedarse con el número bonito,
+  así que van los dos con su definición al lado.
+- **Si está mal:** `legality(..., mode=...)` acepta las dos y el informe imprime lo que haya; si
+  algún día el listón se redefine sobre el muestreo, solo cambia qué columna es el titular en
+  `WebRow.legality`.
