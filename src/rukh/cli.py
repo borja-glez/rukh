@@ -137,8 +137,12 @@ def data_tokenize(
             help="UCI games parquet for BPE training and statistics (default from config).",
         ),
     ] = None,
+    pack: Annotated[
+        bool,
+        typer.Option("--pack", help="Pack train/val months into data/tokens/<scheme>/."),
+    ] = False,
 ) -> None:
-    """Build tokenizer artifacts, the Python/TypeScript parity fixture and statistics."""
+    """Build tokenizer artifacts, the parity fixture, statistics and packed token streams."""
     from rukh.data.pipeline import load_pipeline
     from rukh.tokenize.run import SCHEMES, run
 
@@ -146,7 +150,9 @@ def data_tokenize(
         typer.echo(f"error: --scheme must be one of {', '.join(SCHEMES)}", err=True)
         raise typer.Exit(code=2)
     cfg = load_pipeline(config).tokenize
-    report = run(cfg, scheme=scheme, export_fixture=export_fixture, stats=stats, games=games)
+    report = run(
+        cfg, scheme=scheme, export_fixture=export_fixture, stats=stats, games=games, pack=pack
+    )
     typer.echo(f"scheme:     {report.scheme}")
     typer.echo(f"vocab_size: {report.vocab_size}")
     _echo_written(report.written)

@@ -118,12 +118,14 @@ def run(
     export_fixture: bool = False,
     stats: bool = False,
     games: Path | None = None,
+    pack: bool = False,
 ) -> TokenizeReport:
     """Run the requested tokenizer step(s) for ``scheme``.
 
     ``--scheme bpe`` (re)trains ``bpe.json`` from ``games``; ``--stats`` needs a BPE, so it
     trains one from ``games`` when none exists. ``--export-fixture`` adds ``bpe_ids`` to the
-    fixture whenever ``bpe.json`` is available.
+    fixture whenever ``bpe.json`` is available. ``--pack`` writes ``train_month`` and
+    ``val_month`` as memmap token streams under ``out_dir/<scheme>/``.
     """
     if scheme not in SCHEMES:
         raise ValueError(f"scheme must be one of {SCHEMES}, got {scheme!r}")
@@ -135,13 +137,17 @@ def run(
         bpe = _ensure_bpe(cfg, games_path, retrain=scheme == "bpe")
         if scheme == "bpe":
             written.append(_bpe_path(cfg))
-    elif export_fixture and _bpe_path(cfg).is_file():
+    elif (export_fixture or pack) and _bpe_path(cfg).is_file():
         from rukh.tokenize.bpe import load_bpe
 
         bpe = load_bpe(_bpe_path(cfg))
 
     if stats and bpe is not None:
         written.append(write_stats(cfg, games_path, bpe))
+    if pack:
+        from rukh.tokenize.pack import pack_scheme
+
+        written.extend(pack_scheme(cfg, scheme, bpe))
     if export_fixture:
         written.extend(export_artifacts(cfg, bpe))
 
