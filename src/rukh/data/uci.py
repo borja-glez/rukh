@@ -9,7 +9,6 @@ process pool (Windows-safe: every worker entry point is a module-level function)
 from __future__ import annotations
 
 import hashlib
-import multiprocessing
 import os
 import re
 from collections.abc import Iterator
@@ -21,6 +20,7 @@ from pydantic import Field
 
 from rukh.config import BaseConfig
 from rukh.data.manifest import FileHash, Manifest
+from rukh.data.parallel import run_batches
 from rukh.paths import resolve
 
 BATCH_GAMES = 20_000
@@ -153,12 +153,13 @@ def _parse_date(value: object) -> object:
         return None
 
 
-def _convert_batch(args: tuple[list[dict[str, object]], int, int]) -> dict[str, object]:
+def convert_batch(args: tuple[list[dict[str, object]], int, int]) -> dict[str, object]:
+    """Worker entry point: ``(rows, min_plies, max_plies)`` into columns and counts."""
     rows, min_plies, max_plies = args
     return convert_rows(rows, min_plies, max_plies)
 
 
-def _iter_batches(src: Path) -> Iterator[list[dict[str, object]]]:
+def iter_batches(src: Path) -> Iterator[list[dict[str, object]]]:
     reader = pq.ParquetFile(src)
     columns = [c for c in RAW_COLUMNS if c in reader.schema_arrow.names]
     for batch in reader.iter_batches(batch_size=BATCH_GAMES, columns=columns):
@@ -179,19 +180,13 @@ def convert_month(src: Path, dst: Path, cfg: UciConfig) -> dict[str, int]:
     dst.parent.mkdir(parents=True, exist_ok=True)
     totals = {"rows": 0, "kept": 0, "illegal": 0, "short": 0, "long": 0}
     workers = resolve_workers(cfg.workers)
-    jobs = ((rows, cfg.min_plies, cfg.max_plies) for rows in _iter_batches(Path(src)))
+    jobs = ((rows, cfg.min_plies, cfg.max_plies) for rows in iter_batches(Path(src)))
     with pq.ParquetWriter(dst, OUT_SCHEMA, compression="zstd") as writer:
-        if workers == 1:
-            results: Iterator[dict[str, object]] = map(_convert_batch, jobs)
-            _write_results(writer, results, totals)
-        else:
-            ctx = multiprocessing.get_context("spawn")
-            with ctx.Pool(workers) as pool:
-                _write_results(writer, pool.imap(_convert_batch, jobs), totals)
+        write_results(writer, run_batches(convert_batch, jobs, workers), totals)
     return totals
 
 
-def _write_results(
+def write_results(
     writer: pq.ParquetWriter, results: Iterator[dict[str, object]], totals: dict[str, int]
 ) -> None:
     for result in results:

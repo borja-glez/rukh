@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import multiprocessing
 import re
 import zipfile
 from collections.abc import Iterator
@@ -13,13 +12,14 @@ from pydantic import Field
 
 from rukh.config import BaseConfig
 from rukh.data.manifest import FileHash, Manifest
+from rukh.data.parallel import run_batches
 from rukh.data.uci import (
     OUT_SCHEMA,
     RAW_COLUMNS,
-    _convert_batch,
-    _write_results,
+    convert_batch,
     resolve_workers,
     sha256_file,
+    write_results,
 )
 from rukh.paths import resolve
 
@@ -145,12 +145,7 @@ def convert_pgns(pgns: list[tuple[str, Path]], dst: Path, cfg: EliteConfig) -> d
 
     dst.parent.mkdir(parents=True, exist_ok=True)
     with pq.ParquetWriter(dst, OUT_SCHEMA, compression="zstd") as writer:
-        if workers == 1:
-            _write_results(writer, map(_convert_batch, jobs()), totals)
-        else:
-            ctx = multiprocessing.get_context("spawn")
-            with ctx.Pool(workers) as pool:
-                _write_results(writer, pool.imap(_convert_batch, jobs()), totals)
+        write_results(writer, run_batches(convert_batch, jobs(), workers), totals)
     return totals
 
 

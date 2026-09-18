@@ -139,6 +139,16 @@ def test_convert_month_keeps_four_of_five(tmp_path: Path) -> None:
     assert str(frame["utc_date"][0]) == "2025-01-01"
 
 
+def test_convert_month_with_two_workers(tmp_path: Path) -> None:
+    """The spawn pool path: on Windows every worker re-imports the entry point module."""
+    src = tmp_path / "raw.parquet"
+    _write_raw(src)
+    dst = tmp_path / "out" / "games.parquet"
+    counts = convert_month(src, dst, UciConfig(workers=2))
+    assert counts == {"rows": 5, "kept": 4, "illegal": 1, "short": 0, "long": 0}
+    assert pl.read_parquet(dst.as_posix()).height == 4
+
+
 def test_run_writes_months_and_manifest(rukh_home: Path) -> None:
     for month in ("01", "02"):
         _write_raw(rukh_home / "data" / "raw" / "year=2025" / f"month={month}" / "games.parquet")

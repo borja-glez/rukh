@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import polars as pl
+import pyarrow.parquet as pq
 from pydantic import Field
 
 from rukh.config import BaseConfig
@@ -21,6 +22,7 @@ from rukh.paths import resolve
 PAIRS_FILE = "pairs.parquet"
 MATE_SCORE = 10_000
 PHASES = ("opening", "middlegame", "endgame")
+BATCH_ROWS = 50_000
 
 
 class PairsConfig(BaseConfig):
@@ -91,13 +93,21 @@ def make_pair(
 
 
 def build_pairs(evals: Path, min_delta_cp: int) -> pl.DataFrame:
-    frame = pl.read_parquet(evals.as_posix(), columns=["fen", "phase", "pvs"])
+    """One pair per FEN, reading the evaluations parquet batch by batch."""
+    reader = pq.ParquetFile(evals)
     rows: list[dict[str, object]] = []
-    for fen, ph, pvs in frame.iter_rows():
-        pair = make_pair(fen, pvs, min_delta_cp)
-        if pair is not None:
-            pair["phase"] = ph
-            rows.append(pair)
+    for batch in reader.iter_batches(batch_size=BATCH_ROWS, columns=["fen", "phase", "pvs"]):
+        records = zip(
+            batch.column("fen").to_pylist(),
+            batch.column("phase").to_pylist(),
+            batch.column("pvs").to_pylist(),
+            strict=True,
+        )
+        for fen, ph, pvs in records:
+            pair = make_pair(fen, pvs, min_delta_cp)
+            if pair is not None:
+                pair["phase"] = ph
+                rows.append(pair)
     schema = {
         "fen": pl.String,
         "chosen": pl.String,

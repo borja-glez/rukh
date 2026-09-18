@@ -8,7 +8,6 @@ the ``game_id``/``ply``/``last_move``/``result`` columns.
 
 from __future__ import annotations
 
-import multiprocessing
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -18,6 +17,7 @@ from pydantic import Field
 
 from rukh.config import BaseConfig
 from rukh.data.manifest import FileHash, Manifest
+from rukh.data.parallel import run_batches
 from rukh.data.uci import resolve_workers, sha256_file
 from rukh.paths import resolve
 
@@ -87,14 +87,23 @@ def walk_rows(rows: list[tuple[int, str, str]]) -> dict[str, list[object]]:
     return out
 
 
-def _iter_games(games: Path, n_games: int) -> Iterator[list[tuple[int, str, str]]]:
-    import polars as pl
-
-    frame = (
-        pl.scan_parquet(games.as_posix()).select("game_id", "uci", "result").head(n_games).collect()
-    )
-    for chunk in frame.iter_slices(BATCH_GAMES):
-        yield list(chunk.iter_rows())
+def iter_games(games: Path, n_games: int) -> Iterator[list[tuple[int, str, str]]]:
+    """Batches of ``(game_id, uci, result)``, read from the parquet in row groups."""
+    reader = pq.ParquetFile(games)
+    remaining = n_games
+    for batch in reader.iter_batches(batch_size=BATCH_GAMES, columns=["game_id", "uci", "result"]):
+        if remaining <= 0:
+            return
+        rows = list(
+            zip(
+                batch.column("game_id").to_pylist(),
+                batch.column("uci").to_pylist(),
+                batch.column("result").to_pylist(),
+                strict=True,
+            )
+        )[:remaining]
+        remaining -= len(rows)
+        yield rows
 
 
 def write_parts(games: Path, parts_dir: Path, cfg: PositionsConfig) -> int:
@@ -103,16 +112,8 @@ def write_parts(games: Path, parts_dir: Path, cfg: PositionsConfig) -> int:
     for old in parts_dir.glob("part-*.parquet"):
         old.unlink()
     workers = resolve_workers(cfg.workers)
-    batches = _iter_games(games, cfg.n_games)
-    seq = 0
-    if workers == 1:
-        results: Iterator[dict[str, list[object]]] = map(walk_rows, batches)
-        seq = _write_parts(parts_dir, results, seq)
-    else:
-        ctx = multiprocessing.get_context("spawn")
-        with ctx.Pool(workers) as pool:
-            seq = _write_parts(parts_dir, pool.imap(walk_rows, batches), seq)
-    return seq
+    batches = iter_games(games, cfg.n_games)
+    return _write_parts(parts_dir, run_batches(walk_rows, batches, workers), 0)
 
 
 def _write_parts(parts_dir: Path, results: Iterator[dict[str, list[object]]], seq: int) -> int:

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
+import pyarrow.parquet as pq
 from pydantic import BaseModel, ConfigDict
 
 from rukh.data.pipeline import TokenizeConfig
@@ -28,6 +29,7 @@ TOKENS_FILE = "tokens.npy"
 STARTS_FILE = "starts.npy"
 META_FILE = "meta.json"
 CHUNK_GAMES = 20_000
+COPY_TOKENS = (64 << 20) // 2  # 64 MiB of uint16 per copy into the memmap
 
 
 class GameEncoder(Protocol):
@@ -158,11 +160,10 @@ def make_encoder(scheme: str, bpe: Tokenizer | None = None) -> GameEncoder:
 def pack_month(games: Path, encoder: GameEncoder, out: Path) -> PackInfo:
     """Encode every game of ``games`` (a UCI parquet) into ``out/tokens.npy`` + ``starts.npy``.
 
-    Games are streamed in chunks so memory stays flat; the token stream is first appended to a
-    raw file and then copied into a proper ``.npy`` once its length is known.
+    The parquet is read row group by row group and the token stream is appended to a raw file;
+    once its length is known the raw file is copied into the ``.npy`` memmap in 64 MiB chunks,
+    so neither the games nor the whole stream are ever held in memory at once.
     """
-    import polars as pl
-
     if encoder.vocab_size() > np.iinfo(np.uint16).max + 1:
         raise ValueError("vocabulary does not fit in uint16")
     out = Path(out)
@@ -170,13 +171,20 @@ def pack_month(games: Path, encoder: GameEncoder, out: Path) -> PackInfo:
     raw_path = out / "tokens.bin"
     starts: list[int] = []
     n_tokens = 0
-    frame = pl.scan_parquet(Path(games).as_posix()).select(
-        "uci", "white_elo", "black_elo", "result"
-    )
+    reader = pq.ParquetFile(Path(games))
     with raw_path.open("wb") as raw:
-        for chunk in frame.collect().iter_slices(CHUNK_GAMES):
+        for batch in reader.iter_batches(
+            batch_size=CHUNK_GAMES, columns=["uci", "white_elo", "black_elo", "result"]
+        ):
             buffer: list[int] = []
-            for uci, w_elo, b_elo, result in chunk.iter_rows():
+            rows = zip(
+                batch.column("uci").to_pylist(),
+                batch.column("white_elo").to_pylist(),
+                batch.column("black_elo").to_pylist(),
+                batch.column("result").to_pylist(),
+                strict=True,
+            )
+            for uci, w_elo, b_elo, result in rows:
                 ids = encoder.encode_game(uci, int(w_elo), int(b_elo), result, max_len=1 << 30)
                 starts.append(n_tokens)
                 n_tokens += len(ids)
@@ -185,8 +193,7 @@ def pack_month(games: Path, encoder: GameEncoder, out: Path) -> PackInfo:
     tokens = np.lib.format.open_memmap(
         out / TOKENS_FILE, mode="w+", dtype=np.uint16, shape=(n_tokens,)
     )
-    if n_tokens:
-        tokens[:] = np.fromfile(raw_path, dtype=np.uint16)
+    _copy_raw(raw_path, tokens, n_tokens)
     tokens.flush()
     del tokens
     raw_path.unlink()
@@ -201,6 +208,18 @@ def pack_month(games: Path, encoder: GameEncoder, out: Path) -> PackInfo:
     )
     (out / META_FILE).write_text(info.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return info
+
+
+def _copy_raw(raw_path: Path, tokens: np.ndarray, n_tokens: int) -> None:
+    """Copy the raw token file into the memmap in ``COPY_TOKENS``-sized chunks."""
+    offset = 0
+    with raw_path.open("rb") as raw:
+        while offset < n_tokens:
+            chunk = np.fromfile(raw, dtype=np.uint16, count=min(COPY_TOKENS, n_tokens - offset))
+            if not len(chunk):
+                raise OSError(f"{raw_path}: expected {n_tokens} tokens, got {offset}")
+            tokens[offset : offset + len(chunk)] = chunk
+            offset += len(chunk)
 
 
 def read_pack_info(directory: Path) -> PackInfo:

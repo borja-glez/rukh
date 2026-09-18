@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -10,6 +11,8 @@ import pytest
 
 from rukh.tokenize.bpe import load_bpe
 from rukh.tokenize.pack import (
+    STARTS_FILE,
+    TOKENS_FILE,
     BpeGameEncoder,
     SanGameEncoder,
     UciGameEncoder,
@@ -48,6 +51,32 @@ def test_pack_month_layout(tmp_path: Path, games_parquet: Path) -> None:
     assert meta["scheme"] == "uci" and meta["vocab_size"] == 2030
     assert len(meta["vocab_hash"]) == 64
     assert read_pack_info(tmp_path / "pack") == info
+
+
+def test_pack_month_bytes_are_stable(tmp_path: Path, games_parquet: Path, repo_root: Path) -> None:
+    """The packed bytes are a published contract: streaming must not change them."""
+    expected = {
+        "uci": (
+            "a9df9aa63875adee99b42d4d1ef8ed2db7ba4dd087c5b0533dc88705bb82eb30",
+            "91ffa8971d5552917893774c773245cfd980c0c7db1fe5c103140360cd08b1da",
+        ),
+        "bpe": (
+            "028a4281a0cade6ccbb55abbe68a393354da394d74554caea12626c3afda5a18",
+            "cc8eda0b46c069c982b6e9ad1a4ea1ac39dcf37f303a220a292e33919c72d60f",
+        ),
+    }
+    encoders = {
+        "uci": UciGameEncoder(),
+        "bpe": BpeGameEncoder(load_bpe(repo_root / "artifacts" / "tokenizer" / "bpe.json")),
+    }
+    for scheme, encoder in encoders.items():
+        out = tmp_path / scheme
+        pack_month(games_parquet, encoder, out)
+        digests = tuple(
+            hashlib.sha256((out / name).read_bytes()).hexdigest()
+            for name in (TOKENS_FILE, STARTS_FILE)
+        )
+        assert digests == expected[scheme], scheme
 
 
 def test_san_and_bpe_encoders(tmp_path: Path, games_parquet: Path, repo_root: Path) -> None:

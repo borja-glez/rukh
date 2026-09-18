@@ -73,6 +73,15 @@ def test_run_dedupes_with_counts(rukh_home: Path, repo_root: Path) -> None:
     assert manifest.files[0].path == "positions.parquet"
 
 
+def test_run_with_two_workers(rukh_home: Path, repo_root: Path) -> None:
+    """The spawn pool path, exercised end to end on the fixture month."""
+    _stage_uci(rukh_home, repo_root)
+    manifest = run(PositionsConfig(workers=2, n_games=4))
+    frame = pl.read_parquet((rukh_home / "data" / "positions" / "positions.parquet").as_posix())
+    assert manifest.counts["distinct"] == frame.height > 0
+    assert frame["fen4"].n_unique() == frame.height
+
+
 def test_run_respects_caps(rukh_home: Path, repo_root: Path) -> None:
     _stage_uci(rukh_home, repo_root)
     manifest = run(PositionsConfig(workers=1, n_games=2, max_positions=30))
