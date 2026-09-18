@@ -20,6 +20,7 @@ from rukh.export.onnx import (
     export_onnx,
     read_metadata,
     sequence_lengths,
+    set_metadata,
     target_path,
     verify_dynamic_seq,
     write_metadata,
@@ -83,6 +84,11 @@ def export_all(
         bundle.fp16 = to_fp16(Path(bundle.onnx.path))
     if int8:
         bundle.int8 = quantize_int8(Path(bundle.onnx.path))
+    # The demo loads the fp16 or the int8 file, not the fp32 one, so the context length has to
+    # travel with them too; neither converter promises to keep the metadata of its input.
+    for quantized in (bundle.fp16, bundle.int8):
+        if quantized is not None and bundle.onnx.metadata:
+            set_metadata(Path(quantized.path), bundle.onnx.metadata)
     if check_parity:
         prefixes, source, warning = parity_positions(
             UciTokenizer(), n=positions, block=model.cfg.block, seed=seed, games=games
@@ -122,6 +128,7 @@ __all__ = [
     "random_prefixes",
     "read_metadata",
     "sequence_lengths",
+    "set_metadata",
     "target_path",
     "to_fp16",
     "validation_prefixes",

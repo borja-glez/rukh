@@ -222,18 +222,24 @@ def verify_dynamic_seq(path: Path, seq_len: int, block: int) -> bool | None:
     return True
 
 
-def write_metadata(path: Path, props: dict[str, Any]) -> dict[str, str]:
-    """Write ``rukh_*`` metadata into the file; empty when ``onnx`` is not installed."""
+def set_metadata(path: Path, entries: dict[str, str]) -> dict[str, str]:
+    """Write ``metadata_props`` verbatim into a file; empty when ``onnx`` is not installed."""
     try:
         import onnx
     except ImportError:
         log.warning("onnx is not installed: the model metadata (block, vocab) was not written")
         return {}
-    entries = {f"{METADATA_PREFIX}{key}": str(value) for key, value in props.items()}
     model = onnx.load(str(path))
     onnx.helper.set_model_props(model, entries)
     onnx.save(model, str(path))
     return entries
+
+
+def write_metadata(path: Path, props: dict[str, Any]) -> dict[str, str]:
+    """Write ``rukh_*`` metadata into the file; empty when ``onnx`` is not installed."""
+    return set_metadata(
+        path, {f"{METADATA_PREFIX}{key}": str(value) for key, value in props.items()}
+    )
 
 
 def read_metadata(path: Path) -> dict[str, str]:
