@@ -1,0 +1,13 @@
+# Every step of `rukh data ...` after `fetch`. Paths are relative to the repo root (RUKH_HOME).
+tokenize:
+  uci_dir: data/uci
+  out_dir: data/tokens
+  artifacts_dir: artifacts/tokenizer
+  web_artifacts_dir: artifacts/web
+  fixture_pgn: tests/fixtures/games.pgn
+  train_month: "2025-01"
+  val_month: "2025-02"
+  stats_games: data/uci/year=2025/month=01/games.parquet
+  bpe_vocab_size: 4096
+  bpe_train_games: 200000
+  max_len: 200

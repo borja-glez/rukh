@@ -1,0 +1,351 @@
+[Event "Rukh tokenizer fixture"]
+[Site "opera-1858"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Morphy, Paul"]
+[Black "Duke Karl / Count Isouard"]
+[Result "1-0"]
+[WhiteElo "2600"]
+[BlackElo "2000"]
+
+1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 9. Bg5 b5
+10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8
+17. Rd8# 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "scholars-mate"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Amateur"]
+[Black "Beginner"]
+[Result "1-0"]
+[WhiteElo "1200"]
+[BlackElo "800"]
+
+1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "fools-mate"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Beginner"]
+[Black "Amateur"]
+[Result "0-1"]
+[WhiteElo "700"]
+[BlackElo "1100"]
+
+1. f3 e5 2. g4 Qh4# 0-1
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "immortal-1851"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Anderssen, Adolf"]
+[Black "Kieseritzky, Lionel"]
+[Result "1-0"]
+[WhiteElo "2600"]
+[BlackElo "2500"]
+
+1. e4 e5 2. f4 exf4 3. Bc4 Qh4+ 4. Kf1 b5 5. Bxb5 Nf6 6. Nf3 Qh6 7. d3 Nh5 8. Nh4 Qg5 9. Nf5 c6 10.
+g4 Nf6 11. Rg1 cxb5 12. h4 Qg6 13. h5 Qg5 14. Qf3 Ng8 15. Bxf4 Qf6 16. Nc3 Bc5 17. Nd5 Qxb2 18. Bd6
+Bxg1 19. e5 Qxa1+ 20. Ke2 Na6 21. Nxg7+ Kd8 22. Qf6+ Nxf6 23. Be7# 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "evergreen-1852"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Anderssen, Adolf"]
+[Black "Dufresne, Jean"]
+[Result "1-0"]
+[WhiteElo "2600"]
+[BlackElo "2400"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4 5. c3 Ba5 6. d4 exd4 7. O-O d3 8. Qb3 Qf6 9. e5 Qg6 10.
+Re1 Nge7 11. Ba3 b5 12. Qxb5 Rb8 13. Qa4 Bb6 14. Nbd2 Bb7 15. Ne4 Qf5 16. Bxd3 Qh5 17. Nf6+ gxf6
+18. exf6 Rg8 19. Rad1 Qxf3 20. Rxe7+ Nxe7 21. Qxd7+ Kxd7 22. Bf5+ Ke8 23. Bd7+ Kf8 24. Bxe7# 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "byrne-fischer-1956"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Byrne, Donald"]
+[Black "Fischer, Robert James"]
+[Result "0-1"]
+[WhiteElo "2400"]
+[BlackElo "2500"]
+
+1. Nf3 Nf6 2. c4 g6 3. Nc3 Bg7 4. d4 O-O 5. Bf4 d5 6. Qb3 dxc4 7. Qxc4 c6 8. e4 Nbd7 9. Rd1 Nb6 10.
+Qc5 Bg4 11. Bg5 Na4 12. Qa3 Nxc3 13. bxc3 Nxe4 14. Bxe7 Qb6 15. Bc4 Nxc3 16. Bc5 Rfe8+ 17. Kf1 Be6
+18. Bxb6 Bxc4+ 19. Kg1 Ne2+ 20. Kf1 Nxd4+ 21. Kg1 Ne2+ 22. Kf1 Nc3+ 23. Kg1 axb6 24. Qb4 Ra4 25.
+Qxb6 Nxd1 26. h3 Rxa2 27. Kh2 Nxf2 28. Re1 Rxe1 29. Qd8+ Bf8 30. Nxe1 Bd5 31. Nf3 Ne4 32. Qb8 b5
+33. h4 h5 34. Ne5 Kg7 35. Kg1 Bc5+ 36. Kf1 Ng3+ 37. Ke1 Bb4+ 38. Kd1 Bb3+ 39. Kc1 Ne2+ 40. Kb1 Nc3+
+41. Kc1 Rc2# 0-1
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "kasparov-topalov-1999"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Kasparov, Garry"]
+[Black "Topalov, Veselin"]
+[Result "1-0"]
+[WhiteElo "2812"]
+[BlackElo "2700"]
+
+1. e4 d6 2. d4 Nf6 3. Nc3 g6 4. Be3 Bg7 5. Qd2 c6 6. f3 b5 7. Nge2 Nbd7 8. Bh6 Bxh6 9. Qxh6 Bb7 10.
+a3 e5 11. O-O-O Qe7 12. Kb1 a6 13. Nc1 O-O-O 14. Nb3 exd4 15. Rxd4 c5 16. Rd1 Nb6 17. g3 Kb8 18.
+Na5 Ba8 19. Bh3 d5 20. Qf4+ Ka7 21. Rhe1 d4 22. Nd5 Nbxd5 23. exd5 Qd6 24. Rxd4 cxd4 25. Re7+ Kb6
+26. Qxd4+ Kxa5 27. b4+ Ka4 28. Qc3 Qxd5 29. Ra7 Bb7 30. Rxb7 Qc4 31. Qxf6 Kxa3 32. Qxa6+ Kxb4 33.
+c3+ Kxc3 34. Qa1+ Kd2 35. Qb2+ Kd1 36. Bf1 Rd2 37. Rd7 Rxd7 38. Bxc4 bxc4 39. Qxh8 Rd3 40. Qa8 c3
+41. Qa4+ Ke1 42. f4 f5 43. Kc1 Rd2 44. Qa7 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "deepblue-kasparov-1997-6"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Deep Blue"]
+[Black "Kasparov, Garry"]
+[Result "1-0"]
+[WhiteElo "2800"]
+[BlackElo "2795"]
+
+1. e4 c6 2. d4 d5 3. Nc3 dxe4 4. Nxe4 Nd7 5. Ng5 Ngf6 6. Bd3 e6 7. N1f3 h6 8. Nxe6 Qe7 9. O-O fxe6
+10. Bg6+ Kd8 11. Bf4 b5 12. a4 Bb7 13. Re1 Nd5 14. Bg3 Kc8 15. axb5 cxb5 16. Qd3 Bc6 17. Bf5 exf5
+18. Rxe7 Bxe7 19. c4 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "reti-tartakower-1910"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Reti, Richard"]
+[Black "Tartakower, Savielly"]
+[Result "1-0"]
+[WhiteElo "2500"]
+[BlackElo "2500"]
+
+1. e4 c6 2. d4 d5 3. Nc3 dxe4 4. Nxe4 Nf6 5. Qd3 e5 6. dxe5 Qa5+ 7. Bd2 Qxe5 8. O-O-O Nxe4 9. Qd8+
+Kxd8 10. Bg5+ Kc7 11. Bd8# 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "lasker-bauer-1889"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Lasker, Emanuel"]
+[Black "Bauer, Johann"]
+[Result "1-0"]
+[WhiteElo "2600"]
+[BlackElo "2400"]
+
+1. f4 d5 2. e3 Nf6 3. b3 e6 4. Bb2 Be7 5. Bd3 b6 6. Nc3 Bb7 7. Nf3 Nbd7 8. O-O O-O 9. Ne2 c5 10.
+Ng3 Qc7 11. Ne5 Nxe5 12. Bxe5 Qc6 13. Qe2 a6 14. Nh5 Nxh5 15. Bxh7+ Kxh7 16. Qxh5+ Kg8 17. Bxg7
+Kxg7 18. Qg4+ Kh7 19. Rf3 e5 20. Rh3+ Qh6 21. Rxh6+ Kxh6 22. Qd7 Bf6 23. Qxb7 Kg7 24. Rf1 Rab8 25.
+Qd7 Rfd8 26. Qg4+ Kf8 27. fxe5 Bg7 28. e6 Rb7 29. Qg6 f6 30. Rxf6+ Bxf6 31. Qxf6+ Ke8 32. Qh8+ Ke7
+33. Qg7+ Kxe6 34. Qxb7 Rd6 35. Qxa6 d4 36. exd4 cxd4 37. h4 d3 38. Qxd3 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "rotlewi-rubinstein-1907"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Rotlewi, Georg"]
+[Black "Rubinstein, Akiba"]
+[Result "0-1"]
+[WhiteElo "2500"]
+[BlackElo "2650"]
+
+1. d4 d5 2. Nf3 e6 3. e3 c5 4. c4 Nc6 5. Nc3 Nf6 6. dxc5 Bxc5 7. a3 a6 8. b4 Bd6 9. Bb2 O-O 10. Qd2
+Qe7 11. Bd3 dxc4 12. Bxc4 b5 13. Bd3 Rd8 14. Qe2 Bb7 15. O-O Ne5 16. Nxe5 Bxe5 17. f4 Bc7 18. e4
+Rac8 19. e5 Bb6+ 20. Kh1 Ng4 21. Be4 Qh4 22. g3 Rxc3 23. gxh4 Rd2 24. Qxd2 Bxe4+ 25. Qg2 Rh3 0-1
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "karpov-kasparov-1985-16"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Karpov, Anatoly"]
+[Black "Kasparov, Garry"]
+[Result "0-1"]
+[WhiteElo "2720"]
+[BlackElo "2700"]
+
+1. e4 c5 2. Nf3 e6 3. d4 cxd4 4. Nxd4 Nc6 5. Nb5 d6 6. c4 Nf6 7. N1c3 a6 8. Na3 d5 9. cxd5 exd5 10.
+exd5 Nb4 11. Be2 Bc5 12. O-O O-O 13. Bf3 Bf5 14. Bg5 Re8 15. Qd2 b5 16. Rad1 Nd3 17. Nab1 h6 18.
+Bh4 b4 19. Na4 Bd6 20. Bg3 Rc8 21. b3 g5 22. Bxd6 Qxd6 23. g3 Nd7 24. Bg2 Qf6 25. a3 a5 26. axb4
+axb4 27. Qa2 Bg6 28. d6 g4 29. Qd2 Kg7 30. f3 Qxd6 31. fxg4 Qd4+ 32. Kh1 Nf6 33. Rf4 Ne4 34. Qxd3
+Nf2+ 35. Rxf2 Bxd3 36. Rfd2 Qe3 37. Rxd3 Rc1 38. Nb2 Qf2 39. Nd2 Rxd1+ 40. Nxd1 Re1+ 0-1
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "en-passant-a"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Rukh W1"]
+[Black "Rukh B1"]
+[Result "1-0"]
+[WhiteElo "1900"]
+[BlackElo "1850"]
+
+1. e4 Nf6 2. e5 d5 3. exd6 exd6 4. d4 Be7 5. Nf3 O-O 6. Bd3 Nc6 7. O-O Nb4 8. Bb5 Bg4 9. Na3 c6 10.
+Bc4 Re8 11. c3 d5 12. Be2 Na6 13. h3 Kf8 14. hxg4 Qd6 15. g5 Kg8 16. Bxa6 Ng4 17. Be2 Bxg5 18. Bd3
+Be3 19. Bxh7+ Kh8 20. fxe3 Qh6 21. Bb1 g5 22. Bf5 Nh2 23. Qe1 g4 24. Ng5 Qf8 25. Rf4 Kg7 26. Qf2 f6
+27. Nh3 Nf3+ 28. Rxf3 Re4 29. Bxg4 Qd6 30. Nf4 Rh8 31. b4 Rxf4 32. exf4 Rh2 33. Kxh2 f5 34. Nb5 Qf6
+35. Bd2 c5 36. Bh3 Kf8 37. bxc5 a5 38. a3 a4 39. c6 Qxc6 40. c4 Qxb5 41. cxb5 Kg8 42. g4 b6 43.
+gxf5 Kf8 44. Re3 Kf7 45. Kh1 Kg7 46. Qg2+ Kh8 47. Rg1 Kh7 48. Bc3 Kh6 49. Bb2 Kh5 50. Qg7 Kh4 51.
+Qh7# 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "underpromotion-knight"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Rukh W2"]
+[Black "Rukh B2"]
+[Result "1/2-1/2"]
+[WhiteElo "2050"]
+[BlackElo "1980"]
+
+1. e4 d5 2. exd5 c6 3. dxc6 Nf6 4. cxb7 Bd7 5. bxa8=N Nc6 6. Nc7+ Qxc7 7. Nf3 e5 8. d3 Nb4 9. c3 e4
+10. dxe4 Ng4 11. Na3 Bc5 12. Be3 Nxe3 13. Qd2 Qb6 14. Ne5 Nxg2+ 15. Bxg2 Bxf2+ 16. Kf1 Bb5+ 17. c4
+Be3 18. Qe2 Ba6 19. Bf3 O-O 20. h4 f5 21. Nd7 Qc7 22. Qxe3 f4 23. Qc5 Rc8 24. Rd1 Qxc5 25. Nxc5
+Rxc5 26. Ke1 Nc6 27. b3 Ra5 28. Rd6 Rxa3 29. Rxc6 Bb7 30. Rd6 Rxa2 31. Rd1 Ba8 32. Rc1 Ra3 33. Rb1
+Bc6 34. Rh3 Ra2 35. e5 Bxf3 36. Rxf3 Rg2 37. Rc1 Rg1+ 38. Kd2 Rg2+ 39. Kd1 Rg1+ 40. Kc2 Rg3 41. b4
+Rxf3 42. Ra1 Re3 43. b5 Rxe5 44. Rxa7 f3 45. b6 f2 46. b7 Re2+ 47. Kb3 Re8 48. Ra8 f1=Q 49. Rxe8+
+Kf7 50. Rf8+ Kxf8 51. b8=Q+ Kf7 52. Qc7+ Ke6 53. Ka4 Qd3 54. Qc6+ Qd6 55. Qe8+ Kf6 56. Kb5 Qd3 57.
+Qf8+ Ke6 58. Qg8+ Kf6 59. Kb6 Qg6 60. Qc8 Ke7+ 61. Ka7 Qd3 62. c5 Qd4 63. Qd7+ Qxd7+ 64. Kb6 Ke6
+65. Ka6 Kf5 66. Ka5 Qd4 67. Kb6 Qxh4 68. Ka6 Qf4 69. Kb6 Qd4 70. Kc7 Qb4 71. Kc6 Kg4 72. Kc7 Qxc5+
+73. Kb8 Qg1 74. Ka8 g5 75. Kb7 Qe3 76. Ka6 h6 77. Kb7 Qe6 78. Ka8 Qf7 79. Kb8 Qc4 80. Kb7 Qc2 81.
+Ka6 Qb3 82. Ka5 Kh3 83. Ka6 g4 84. Ka5 Qe3 85. Ka6 Qb3 86. Ka7 Qb2 87. Ka6 1/2-1/2
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "promotion-queen-check"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Rukh W3"]
+[Black "Rukh B3"]
+[Result "1/2-1/2"]
+[WhiteElo "1800"]
+[BlackElo "1820"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Bxc6 dxc6 5. d4 exd4 6. Qxd4 Qxd4 7. Nxd4 c5 8. Nf3 Bd6 9. Nc3 Nf6
+10. O-O O-O 11. Bg5 h6 12. Bxf6 gxf6 13. Rad1 Be6 14. Nd5 Bxd5 15. exd5 Rfe8 16. Rfe1 Kf8 17. Kf1
+f5 18. Nh4 f4 19. c4 b5 20. Rxe8+ Kxe8 21. Rc1 Kd7 22. b3 a5 23. cxb5 a4 24. Nf5 h5 25. g4 axb3 26.
+axb3 hxg4 27. Nxd6 Kxd6 28. Kg2 Kd7 29. Rc4 Ra5 30. Rxf4 Ke8 31. b4 Rxb5 32. bxc5 Ke7 33. Re4+ Kd7
+34. d6 Rxc5 35. dxc7 f5 36. Rf4 Kxc7 37. Kg3 Kd6 38. Kh4 Ke6 39. Rd4 Rc8 40. Rd2 Ke5 41. Kg3 Rc3+
+42. Kg2 Rb3 43. f4+ Ke6 44. Ra2 Rd3 45. Rb2 Rh3 46. Rb1 Rc3 47. Rb5 Ra3 48. h4 Rf3 49. Rb8 Rxf4 50.
+h5 Rf3 51. Rb1 Rh3 52. Rb6+ Kd5 53. Kg1 Ke4 54. Rb4+ Ke5 55. Rb1 Kf4 56. Kg2 Rb3 57. Rxb3 Kg5 58.
+Kf1 Kh6 59. Kf2 Kxh5 60. Rb8 f4 61. Ke2 Kh6 62. Rb4 Kg5 63. Ra4 Kh5 64. Rxf4 Kg6 65. Kd3 g3 66. Ke3
+g2 67. Rg4+ Kh6 68. Rxg2 Kh5 69. Kf2 Kh6 70. Ke1 Kh5 71. Kd1 Kh4 72. Kd2 Kh3 73. Rg1 Kh4 74. Kc3
+Kh3 75. Rg7 Kh4 76. Kc2 Kh5 77. Rg1 Kh6 78. Rg2 Kh7 79. Rg3 Kh6 80. Rg2 Kh5 81. Kd3 Kh6 1/2-1/2
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "promotion-rook"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Rukh W4"]
+[Black "Rukh B4"]
+[Result "0-1"]
+[WhiteElo "2200"]
+[BlackElo "2250"]
+
+1. d4 d5 2. c4 dxc4 3. e3 b5 4. a4 c6 5. axb5 cxb5 6. Qf3 Nc6 7. Qxc6+ Bd7 8. Qxa8 Qxa8 9. Nc3 e6
+10. Nxb5 Bxb5 11. Bd2 f6 12. b3 Kf7 13. Rxa7+ Qxa7 14. f3 Qa8 15. Kf2 Qa2 16. Kg3 Qxd2 17. Be2 g5
+18. Kh3 g4+ 19. fxg4 Qb4 20. Nf3 Qxb3 21. Ne5+ fxe5 22. g3 Nh6 23. Rf1+ Kg6 24. dxe5 Kg7 25. Bf3 c3
+26. Re1 c2 27. Kg2 Qb2 28. Kh1 c1=R 29. Rg1 Rxg1+ 30. Kxg1 Qb1+ 31. Bd1 Qxd1+ 32. Kf2 Qh1 33. h4
+Nf5 34. gxf5 Qf1# 0-1
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "castle-queenside-both"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Rukh W5"]
+[Black "Rukh B5"]
+[Result "0-1"]
+[WhiteElo "2300"]
+[BlackElo "2280"]
+
+1. d4 Nf6 2. c4 e6 3. Nc3 Bb4 4. Qc2 d5 5. a3 Bxc3+ 6. Qxc3 Ne4 7. Qc2 c5 8. dxc5 Nc6 9. e3 Qa5+
+10. Bd2 Nxd2 11. Qxd2 dxc4 12. Qxa5 Nxa5 13. Bxc4 Nxc4 14. Nf3 Rg8 15. O-O Nd2 16. Nxd2 Ke7 17.
+Rfc1 Bd7 18. f3 Rgc8 19. Kf2 b6 20. Ne4 Rab8 21. b3 f5 22. h3 fxe4 23. cxb6 axb6 24. fxe4 e5 25.
+Ke1 h5 26. h4 b5 27. b4 Rc4 28. Ke2 Ra8 29. Kd2 Be6 30. Kd1 Rxc1+ 31. Kxc1 Rg8 32. Kc2 g5 33. g3
+Bd7 34. Rd1 gxh4 35. Rxd7+ Kxd7 36. gxh4 Kc6 37. Kd3 Rg4 38. Ke2 Kc7 39. a4 Kd6 40. a5 Rg7 41. Kf3
+Rg4 42. Ke2 Rxh4 43. Kf1 Rg4 44. Ke1 h4 45. a6 Rg8 46. a7 Ra8 47. Ke2 Kc6 48. Kd2 Rxa7 49. Kc1 Rd7
+50. Kb1 h3 51. Kb2 h2 52. Kb1 Rd1+ 53. Ka2 h1=Q 54. Kb3 Kc7 55. Kc2 Rc1+ 56. Kb2 Ra1 57. Kc3 Qc1+
+58. Kd3 Qc4+ 59. Kd2 Ra2+ 60. Kd1 Qf1# 0-1
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "en-passant-b"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Rukh W6"]
+[Black "Rukh B6"]
+[Result "1-0"]
+[WhiteElo "1650"]
+[BlackElo "1700"]
+
+1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 h6 7. Bh4 b6 8. cxd5 Nxd5 9. Bxe7 Qxe7 10.
+Nxd5 exd5 11. Rc1 Be6 12. Qa4 c5 13. Qa3 Rc8 14. Bb5 a6 15. dxc5 bxc5 16. O-O Ra7 17. Be2 Nd7 18.
+Nd4 Qf8 19. Nxe6 fxe6 20. e4 d4 21. f4 Qe7 22. e5 Rb8 23. Bc4 Kh8 24. Qh3 Nf8 25. b3 a5 26. f5 exf5
+27. Rxf5 Nh7 28. Rcf1 Qd8 29. Qg3 Re7 30. h4 Rbb7 31. e6 Rbc7 32. Qe5 Qe8 33. a4 Qd8 34. R1f2 Qe8
+35. R2f3 Qd8 36. Bd3 Qe8 37. Qe4 Nf6 38. Rxf6 gxf6 39. Rxf6 Kg8 40. Bc4 Kh8 41. Qf4 Rg7 42. Bd3 Qd7
+43. Rf8+ Rg8 44. exd7 Rc6 45. Qe5+ Rf6 46. Qxf6# 1-0
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "engine-7"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Rukh W7"]
+[Black "Rukh B7"]
+[Result "1/2-1/2"]
+[WhiteElo "2179"]
+[BlackElo "1871"]
+
+1. c4 e6 2. Nf3 Be7 3. e3 h6 4. b3 c5 5. Bb2 Nf6 6. Nc3 b6 7. g3 Ba6 8. e4 O-O 9. e5 Ng4 10. h3
+Nxe5 11. Nxe5 Bb7 12. Nf3 d5 13. Na4 d4 14. d3 b5 15. Bg2 Qa5+ 16. Qd2 Qxd2+ 17. Kxd2 bxa4 18. Ke2
+e5 19. Ba3 Bc6 20. Kf1 Bd6 21. bxa4 Nd7 22. Nh4 Rfc8 23. g4 Rab8 24. Nf5 Rb6 25. a5 Ra6 26. h4 Bf8
+27. g5 e4 28. Bxe4 Bxe4 29. dxe4 Re8 30. Rh3 Rxe4 31. gxh6 gxh6 32. h5 Rf6 33. Rf3 Ne5 34. Bc1 Nxf3
+35. Bxh6 Ree6 36. Bg7 Nd2+ 37. Kg2 Rxf5 38. Bf6 Rfxf6 39. a3 Rf3 40. Rc1 Re4 41. a4 Ref4 42. a6
+Rxf2+ 43. Kh3 Ne4 44. Rg1+ Kh8 45. Rg3 Nxg3 46. Kxg3 R4f3+ 47. Kg4 Bd6 48. h6 Rg3+ 49. Kh4 Rf1 50.
+Kh5 f6 51. Kh4 Bf4 52. Kh5 Bd6 53. Kh4 Bb8 54. Kh5 1/2-1/2
+
+
+[Event "Rukh tokenizer fixture"]
+[Site "engine-11"]
+[Date "2026.09.18"]
+[Round "-"]
+[White "Rukh W11"]
+[Black "Rukh B11"]
+[Result "1/2-1/2"]
+[WhiteElo "2567"]
+[BlackElo "2083"]
+
+1. e3 Nc6 2. Nf3 e6 3. Bb5 Bd6 4. Be2 h6 5. c4 b6 6. Nc3 Bb4 7. O-O d5 8. Qa4 Bd7 9. h3 Nd4 10. Qa6
+Bxc3 11. Qa5 Nxf3+ 12. gxf3 bxa5 13. bxc3 d4 14. cxd4 h5 15. d3 Rh6 16. Rd1 a4 17. Kh2 c6 18. Kg1
+a6 19. Kh1 a3 20. Rb1 Qh4 21. Bf1 Qe7 22. e4 Rh8 23. Be2 f6 24. f4 Rc8 25. h4 a5 26. e5 Qf8 27. d5
+g6 28. Bxa3 exd5 29. Bxf8 Kxf8 30. Bf3 Rh7 31. cxd5 fxe5 32. Rdc1 cxd5 33. Rxc8+ Bxc8 34. Bxd5 Rc7
+35. Bb3 Ne7 36. Kh2 Nf5 37. Rg1 Nxh4 38. Kg3 Nf5+ 39. Kf3 Rc6 40. fxe5 Ne7 41. Rb1 h4 42. Bc4 Kg7
+43. Rb5 a4 44. Ra5 Rc7 45. Rxa4 Nc6 46. Ke4 Re7 47. d4 h3 48. Bd5 Bd7 49. f4 h2 50. Kd3 Nxe5+ 51.
+dxe5 Bxa4 52. e6 Bb5+ 53. Bc4 h1=Q 54. Bxb5 Qf3+ 55. Kd2 Qd3+ 56. Bxd3 Rxe6 57. Bc2 Kh6 58. Bd3 Kh5
+59. f5 gxf5 60. Bxf5 Rh6 61. Bh3 Rd6+ 62. Ke3 Ra6 63. Bf5 Ra3+ 64. Ke4 Kg5 65. Bh7 Kf6 66. Bg8 Rxa2
+67. Bd5 Ra4+ 68. Ke3 Ke5 69. Bg8 Ra8 70. Bh7 Rb8 71. Bg6 Rb7 72. Bh5 Rb3+ 73. Kf2 Ra3 74. Bg6 Kf6
+75. Be8 Ra6 76. Bd7 Rd6 77. Be8 Rd8 78. Bg6 Kxg6 79. Kg3 Rd5 80. Kh4 Rd1 81. Kg4 Rd6 82. Kf4 Kg7
+83. Ke5 Ra6 84. Kf5 Ra7 85. Kg5 Ra1 86. Kg4 Kf8 87. Kf4 Rb1 88. Kf5 Re1 89. Kf4 Rb1 90. Ke5 Ra1 91.
+Kd6 Kf7 92. Kd5 Rh1 93. Ke4 Rh8 94. Kf4 Rh5 95. Kg3 Kg8 96. Kf4 Kh8 97. Kf3 Rh4 98. Kf2 Rh6 99. Kg1
+Rc6 100. Kf2 Rc1 101. Kg3 Rc8 102. Kf2 Rc7 103. Ke2 Ra7 104. Kf2 Rg7 105. Kf1 Rg3 106. Ke2 Rg5 107.
+Kf3 Kh7 108. Ke3 Rc5 109. Kf4 Rc1 110. Kf3 Rc3+ 111. Kg2 Ra3 112. Kg1 Ra2 113. Kh1 Rf2 114. Kg1 Rb2
+115. Kh1 Rd2 116. Kg1 Rd5 117. Kg2 Kg6 118. Kf2 Ra5 119. Kg2 Ra6 120. Kf2 Kh6 121. Ke2 Kg7 122. Kf2
+Kg6 123. Kf3 Kf7 124. Kg4 Rf6 125. Kh3 Rg6 126. Kh4 Rg2 127. Kh3 Rd2 128. Kg4 1/2-1/2
+
+

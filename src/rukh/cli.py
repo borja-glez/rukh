@@ -1,4 +1,4 @@
-"""Command-line interface: ``info``, ``data fetch``, ``engine check`` and ``mlflow ui``."""
+"""Command-line interface: ``info``, ``data ...``, ``engine check`` and ``mlflow ui``."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
-data_app = typer.Typer(help="Datasets: fetch and describe Lichess games.", no_args_is_help=True)
+data_app = typer.Typer(help="Datasets: fetch, convert, tokenize and publish.", no_args_is_help=True)
 app.add_typer(data_app, name="data")
 mlflow_app = typer.Typer(help="Local MLflow tracking.", no_args_is_help=True)
 app.add_typer(mlflow_app, name="mlflow")
@@ -91,6 +91,52 @@ def data_fetch(
     for path in fetch_plan.out_paths:
         typer.echo(f"  {path}")
     typer.echo(f"manifest: {fetch_plan.manifest_path}")
+
+
+PipelineOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--config",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="Pipeline YAML (default: configs/data/pipeline.yaml).",
+    ),
+]
+
+
+def _echo_written(written: list[str]) -> None:
+    typer.echo("written:")
+    for path in written:
+        typer.echo(f"  {path}")
+
+
+@data_app.command("tokenize")
+def data_tokenize(
+    config: PipelineOption = None,
+    scheme: Annotated[
+        str, typer.Option("--scheme", help="Tokenization scheme: uci, san or bpe.")
+    ] = "uci",
+    export_fixture: Annotated[
+        bool,
+        typer.Option(
+            "--export-fixture",
+            help="Write artifacts/tokenizer/vocab.json and fixtures/games.json.",
+        ),
+    ] = False,
+) -> None:
+    """Build tokenizer artifacts and the Python/TypeScript parity fixture."""
+    from rukh.data.pipeline import load_pipeline
+    from rukh.tokenize.run import SCHEMES, run
+
+    if scheme not in SCHEMES:
+        typer.echo(f"error: --scheme must be one of {', '.join(SCHEMES)}", err=True)
+        raise typer.Exit(code=2)
+    cfg = load_pipeline(config).tokenize
+    report = run(cfg, scheme=scheme, export_fixture=export_fixture)
+    typer.echo(f"scheme:     {report.scheme}")
+    typer.echo(f"vocab_size: {report.vocab_size}")
+    _echo_written(report.written)
 
 
 @mlflow_app.command("ui")

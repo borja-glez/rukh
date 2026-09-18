@@ -19,6 +19,9 @@ dependencies = [
   "numpy>=2",
   "huggingface_hub>=1.32",
   "datasets>=5",
+  "tokenizers>=0.22",
+  "jinja2>=3.1",
+  "requests>=2.32",
 ]
 
 [project.optional-dependencies]
