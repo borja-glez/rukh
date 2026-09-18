@@ -1,0 +1,68 @@
+---
+license: {{ license }}
+pretty_name: {{ pretty_name }}
+language:
+  - en
+task_categories:
+{%- for task in task_categories %}
+  - {{ task }}
+{%- endfor %}
+size_categories:
+  - {{ size_category }}
+source_datasets:
+{%- for source in source_datasets %}
+  - {{ source }}
+{%- endfor %}
+tags:
+  - chess
+  - rukh
+{%- for tag in tags %}
+  - {{ tag }}
+{%- endfor %}
+---
+
+# {{ repo_id }}
+
+{{ description }}
+
+Part of [Rukh](https://github.com/borja-glez/rukh), a chess language model built from scratch
+as a course on generative and agentic AI. Every derived dataset ships with the exact filters and
+counts of its `manifest.json`, so it can be regenerated with `rukh data {{ command }}`.
+
+## Files
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+{%- for file in files %}
+| `{{ file.path }}` | {{ file.bytes }} | `{{ file.sha256 }}` |
+{%- endfor %}
+
+Rows: **{{ rows }}**.
+
+## Columns
+
+| Column | Description |
+|---|---|
+{%- for name, doc in columns %}
+| `{{ name }}` | {{ doc }} |
+{%- endfor %}
+
+## Provenance and filters
+
+Source: {{ source }}{% if months %} (months {{ months | join(", ") }}){% endif %}.
+
+```json
+{{ filters_json }}
+```
+
+Counts:
+
+```json
+{{ counts_json }}
+```
+
+Generated on {{ created_at }} with `rukh` {{ rukh_version }}.
+
+## License
+
+{{ license_text }}

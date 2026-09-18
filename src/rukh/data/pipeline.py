@@ -13,6 +13,7 @@ from rukh.data.elo_bins import EloBinsConfig
 from rukh.data.evals import EvalsConfig
 from rukh.data.pairs import PairsConfig
 from rukh.data.positions import PositionsConfig
+from rukh.data.publish import PublishConfig
 from rukh.data.puzzles import PuzzlesConfig
 from rukh.data.uci import UciConfig
 
@@ -45,6 +46,7 @@ class PipelineConfig(BaseConfig):
     pairs: PairsConfig = Field(default_factory=PairsConfig)
     elite: EliteConfig = Field(default_factory=EliteConfig)
     elo_bins: EloBinsConfig = Field(default_factory=EloBinsConfig)
+    publish: PublishConfig = Field(default_factory=PublishConfig)
 
 
 def default_config_path() -> Path:

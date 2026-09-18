@@ -274,6 +274,47 @@ def data_elo_bins(config: PipelineOption = None, as_json: JsonOption = False) ->
     _echo_manifest(run(cfg), as_json, cfg.out_dir)
 
 
+@data_app.command("publish")
+def data_publish(
+    name: Annotated[
+        str | None, typer.Option("--name", help="Registry entry, e.g. rukh-games-1800.")
+    ] = None,
+    config: PipelineOption = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Render the card and list files; no network.")
+    ] = False,
+    list_names: Annotated[bool, typer.Option("--list", help="List the registry and exit.")] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON.")] = False,
+) -> None:
+    """Render the dataset card and upload one dataset (or the tokenizer) to the Hub."""
+    from rukh.data.pipeline import load_pipeline
+    from rukh.data.publish import DATASETS, publish
+
+    if list_names:
+        for spec in DATASETS.values():
+            typer.echo(f"{spec.name:<22} {spec.repo_type:<8} {spec.local_dir}")
+        return
+    if name is None:
+        typer.echo("error: --name is required (see --list)", err=True)
+        raise typer.Exit(code=2)
+    cfg = load_pipeline(config).publish
+    try:
+        result = publish(name, cfg, dry_run=dry_run)
+    except (KeyError, FileNotFoundError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(f"repo:     {result.repo_id} ({result.repo_type})")
+    typer.echo(f"mode:     {'dry-run (card staged, nothing uploaded)' if dry_run else 'uploaded'}")
+    typer.echo(f"rows:     {result.rows}")
+    typer.echo(f"card:     {result.card_path}")
+    typer.echo("files:")
+    for path in result.files:
+        typer.echo(f"  {path}")
+
+
 @mlflow_app.command("ui")
 def mlflow_ui(
     host: Annotated[str, typer.Option("--host", help="Interface to bind.")] = "127.0.0.1",
