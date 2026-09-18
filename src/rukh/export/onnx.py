@@ -20,7 +20,10 @@ metadata, so the browser knows the limit without being told separately.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
@@ -103,6 +106,30 @@ def _dynamic_axes(dynamic_batch: bool, dynamic_seq: bool) -> dict[str, dict[int,
     return axes
 
 
+@contextlib.contextmanager
+def _utf8_console() -> Iterator[None]:
+    """Let the exporter print its progress ticks on a legacy Windows code page.
+
+    ``torch.onnx.export(dynamo=True)`` writes check marks to stdout. On Windows the console
+    is cp1252 by default, so that raises ``UnicodeEncodeError`` inside the exporter and the
+    whole export fails for a reason that has nothing to do with the model. Reconfiguring the
+    streams to replace unencodable characters keeps the modern exporter usable; without it
+    every Windows export silently falls back to the deprecated TorchScript one, which in turn
+    produces an fp16 graph that onnxruntime refuses to load.
+    """
+    streams = [s for s in (sys.stdout, sys.stderr) if hasattr(s, "reconfigure")]
+    previous = [(s, s.encoding, s.errors) for s in streams]
+    for stream in streams:
+        with contextlib.suppress(Exception):
+            stream.reconfigure(errors="replace")
+    try:
+        yield
+    finally:
+        for stream, encoding, errors in previous:
+            with contextlib.suppress(Exception):
+                stream.reconfigure(encoding=encoding, errors=errors)
+
+
 def export_onnx(
     ckpt: Path | MoveDecoder,
     out: Path,
@@ -135,7 +162,7 @@ def export_onnx(
     warning: str | None = None
     exporter: Literal["dynamo", "legacy"] = "dynamo"
     try:
-        with torch.no_grad():
+        with torch.no_grad(), _utf8_console():
             torch.onnx.export(
                 wrapper,
                 (example,),

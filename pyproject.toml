@@ -22,6 +22,11 @@ dependencies = [
   "tokenizers>=0.22",
   "jinja2>=3.1",
   "requests>=2.32",
+  "onnx>=1.23",
+  "onnxscript>=0.6",
+  "onnxruntime>=1.30",
+  "onnxconverter-common>=1.16",
+  "safetensors>=0.6",
 ]
 
 [project.optional-dependencies]

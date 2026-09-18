@@ -196,6 +196,23 @@ def test_the_verification_runs_the_file_at_two_different_lengths() -> None:
     assert sequence_lengths(64, 64) == [63, 64]
 
 
+def _minimal_onnx_bytes() -> bytes:
+    """Serialized identity model, small enough to stand in for a real export."""
+    try:
+        from onnx import TensorProto, helper
+    except ModuleNotFoundError:  # pragma: no cover - the fixture is only used with onnx around
+        return b"onnx"
+    idx = helper.make_tensor_value_info("idx", TensorProto.INT64, ["batch", "seq"])
+    out = helper.make_tensor_value_info("logits", TensorProto.FLOAT, ["batch", 2030])
+    node = helper.make_node("Cast", ["idx"], ["logits"], to=TensorProto.FLOAT)
+    graph = helper.make_graph([node], "fake", [idx], [out])
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+    return model.SerializeToString()
+
+
+_MINIMAL_ONNX = _minimal_onnx_bytes()
+
+
 @pytest.fixture
 def fake_export(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
     """Stand in for ``torch.onnx.export``: it needs ``onnx``, and these tests do not.
@@ -205,7 +222,10 @@ def fake_export(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def
     """
 
     def export(_wrapper: Any, _args: Any, path: str, **_kwargs: Any) -> None:
-        Path(path).write_bytes(b"onnx")
+        # A parseable, minimal model: `export_onnx` writes metadata into whatever the exporter
+        # produced, so a placeholder of raw bytes would fail inside `onnx.load` once `onnx` is
+        # installed (which it now is) and hide what the test is actually about.
+        Path(path).write_bytes(_MINIMAL_ONNX)
 
     monkeypatch.setattr(torch.onnx, "export", export)
 
@@ -254,7 +274,11 @@ def exported(model: MoveDecoder, tmp_path: Path):  # type: ignore[no-untyped-def
 def test_the_exported_file_runs_and_matches_pytorch(
     model: MoveDecoder, prefixes: list[list[int]], exported: Any
 ) -> None:
-    assert exported.exporter in ("dynamo", "legacy")
+    # The modern exporter must actually be the one that ran. It used to lose to a
+    # UnicodeEncodeError on Windows (it prints check marks and the console is cp1252), and the
+    # silent fallback produced an fp16 graph that onnxruntime refuses to load.
+    assert exported.exporter == "dynamo", exported.warning
+    assert exported.warning is None
     assert Path(exported.path).is_file()
     result = parity(model, Path(exported.path), prefixes)
     assert result.agreement == 1.0

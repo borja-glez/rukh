@@ -286,3 +286,25 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Si está mal:** `legality(..., mode=...)` acepta las dos y el informe imprime lo que haya; si
   algún día el listón se redefine sobre el muestreo, solo cambia qué columna es el titular en
   `WebRow.legality`.
+
+### D-027 · El exportador moderno de ONNX perdía contra la consola de Windows
+- **Qué:** `torch.onnx.export(dynamo=True)` imprime marcas de verificación Unicode mientras
+  trabaja. Con la consola en cp1252 (el valor por defecto en Windows) eso lanzaba
+  `UnicodeEncodeError` **dentro** del exportador, `export_onnx` lo tomaba por un fallo del
+  exportador y caía al tracer antiguo de TorchScript. `src/rukh/export/onnx.py` reconfigura ahora
+  los flujos con `errors="replace"` mientras dura la exportación, y un test comprueba que el
+  exportador que corre es `dynamo` y que no hubo aviso.
+- **Por qué importa:** el grafo del tracer antiguo produce un `model-fp16.onnx` que onnxruntime
+  **rechaza** (`Type (tensor(float16)) … does not match expected type (tensor(float))`), y ese es
+  justo el fichero que carga la demo. Con el exportador moderno, fp16 e int8 cargan y eligen la
+  misma jugada que PyTorch; los ejes dinámicos se verifican a tres longitudes (8/16/64) con
+  paridad de 1e-7.
+- **Si está mal:** se quita el contexto `_utf8_console()` y se acepta el tracer antiguo, pero
+  entonces hay que exportar el fp16 de otra manera.
+
+### D-028 · `onnx`, `onnxscript`, `onnxruntime`, `onnxconverter-common` y `safetensors` son dependencias
+- **Qué:** estaban en el spec pero no en `pyproject.toml`, así que toda la ruta de exportación
+  nunca se había ejecutado (seis tests saltaban). Ahora son dependencias del proyecto y la suite
+  corre entera: 355 tests sin saltos.
+- **Si está mal:** `onnxscript` solo hace falta para el exportador moderno; sin él se vuelve al
+  caso de D-027.
