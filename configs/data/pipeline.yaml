@@ -10,4 +10,5 @@ tokenize:
   stats_games: data/uci/year=2025/month=01/games.parquet
   bpe_vocab_size: 4096
   bpe_train_games: 200000
+  stats_n_games: 20000
   max_len: 200

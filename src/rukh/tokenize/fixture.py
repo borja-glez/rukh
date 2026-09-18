@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import chess.pgn
 
+from rukh.tokenize.bpe import bpe_text
 from rukh.tokenize.uci_vocab import UciTokenizer
 
 if TYPE_CHECKING:
@@ -76,7 +77,7 @@ def build_fixture(
         if san_tokenizer is not None:
             entry["san_ids"] = san_tokenizer.encode(f"{entry['san']} {entry['result']}")
         if bpe is not None:
-            entry["bpe_ids"] = bpe.encode(str(entry["uci"])).ids
+            entry["bpe_ids"] = bpe.encode(bpe_text(str(entry["uci"]))).ids
     return entries
 
 

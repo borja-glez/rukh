@@ -124,8 +124,21 @@ def data_tokenize(
             help="Write artifacts/tokenizer/vocab.json and fixtures/games.json.",
         ),
     ] = False,
+    stats: Annotated[
+        bool,
+        typer.Option("--stats", help="Write artifacts/web/tokenizer-stats.json for all schemes."),
+    ] = False,
+    games: Annotated[
+        Path | None,
+        typer.Option(
+            "--games",
+            exists=True,
+            dir_okay=False,
+            help="UCI games parquet for BPE training and statistics (default from config).",
+        ),
+    ] = None,
 ) -> None:
-    """Build tokenizer artifacts and the Python/TypeScript parity fixture."""
+    """Build tokenizer artifacts, the Python/TypeScript parity fixture and statistics."""
     from rukh.data.pipeline import load_pipeline
     from rukh.tokenize.run import SCHEMES, run
 
@@ -133,7 +146,7 @@ def data_tokenize(
         typer.echo(f"error: --scheme must be one of {', '.join(SCHEMES)}", err=True)
         raise typer.Exit(code=2)
     cfg = load_pipeline(config).tokenize
-    report = run(cfg, scheme=scheme, export_fixture=export_fixture)
+    report = run(cfg, scheme=scheme, export_fixture=export_fixture, stats=stats, games=games)
     typer.echo(f"scheme:     {report.scheme}")
     typer.echo(f"vocab_size: {report.vocab_size}")
     _echo_written(report.written)

@@ -23,6 +23,7 @@ class TokenizeConfig(BaseConfig):
     stats_games: str = "data/uci/year=2025/month=01/games.parquet"
     bpe_vocab_size: int = Field(default=4096, ge=100)
     bpe_train_games: int = Field(default=200_000, ge=1)
+    stats_n_games: int = Field(default=20_000, ge=1)
     max_len: int = Field(default=200, ge=8)
 
 

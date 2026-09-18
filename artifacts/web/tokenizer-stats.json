@@ -1,0 +1,92 @@
+{
+  "source": {
+    "games": "games.parquet",
+    "n_games": 20,
+    "max_len": 200
+  },
+  "schemes": {
+    "uci": {
+      "vocab_size": 2030,
+      "mean": 87.25,
+      "p50": 82.5,
+      "p95": 182.1,
+      "pct_le_max_len": 95.0
+    },
+    "san": {
+      "vocab_size": 35,
+      "mean": 464.9,
+      "p50": 439.0,
+      "p95": 1007.25,
+      "pct_le_max_len": 20.0
+    },
+    "bpe": {
+      "vocab_size": 600,
+      "mean": 99.2,
+      "p50": 91.0,
+      "p95": 221.4,
+      "pct_le_max_len": 90.0
+    }
+  },
+  "bpe_longest_tokens": [
+    {
+      "token": "e2e4c7c6d2d4d7d5b1c3d5e4c3e4",
+      "id": 465,
+      "length": 28,
+      "moves": 7
+    },
+    {
+      "token": "e2e4c7c6d2d4d7d5",
+      "id": 441,
+      "length": 16,
+      "moves": 4
+    },
+    {
+      "token": "e2e4e7e5g1f3b8c6",
+      "id": 463,
+      "length": 16,
+      "moves": 4
+    },
+    {
+      "token": "e2e4e7e5g1f3",
+      "id": 294,
+      "length": 12,
+      "moves": 3
+    },
+    {
+      "token": "c7c6d2d4d7d5",
+      "id": 439,
+      "length": 12,
+      "moves": 3
+    },
+    {
+      "token": "b1c3d5e4c3e4",
+      "id": 464,
+      "length": 12,
+      "moves": 3
+    },
+    {
+      "token": "g1f3h7h6g5",
+      "id": 436,
+      "length": 10,
+      "moves": 2
+    },
+    {
+      "token": "b1c3d5e4c3",
+      "id": 437,
+      "length": 10,
+      "moves": 2
+    },
+    {
+      "token": "f3c7c6f4e5",
+      "id": 515,
+      "length": 10,
+      "moves": 2
+    },
+    {
+      "token": "d2d4d7d5",
+      "id": 153,
+      "length": 8,
+      "moves": 2
+    }
+  ]
+}
