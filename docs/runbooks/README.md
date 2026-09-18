@@ -16,8 +16,11 @@ Un fichero por procedimiento, `<verbo>-<objeto>.md` (por ejemplo `entrenar-small
 
 ## Índice
 
-Todavía no hay runbooks. Los primeros llegan con P1 (`fetch` y publicación de datasets) y P2
-(entrenamiento de `small` y exportación ONNX).
+- [`data-pipeline.md`](data-pipeline.md): el pipeline completo de P1 (`fetch → uci → tokenize →
+  positions → evals → puzzles → pairs → elite → elo-bins → publish`), tiempos, salidas y cómo
+  reanudar `evals`.
+
+Los siguientes llegan con P2 (entrenamiento de `small` y exportación ONNX).
 
 Mientras tanto, el arranque del entorno está en el `README.md` de la raíz (`uv sync`, `rukh info`,
 `scripts/get_stockfish.py`, `rukh engine check`, `rukh mlflow ui`).
