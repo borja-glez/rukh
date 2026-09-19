@@ -894,6 +894,30 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Si está mal:** el Elo se mide con partidas, no con la recta; la estimación de +105 solo sirve
   para decidir si merece la pena seguir, y se sustituye por la medición en cuanto haya CPU libre.
 
+### D-066 · La élite ensancha el eje de Elo; la cantidad de datos por sí sola, no
+- **Medido** al terminar las tres corridas, todas con 28 000 pasos salvo v1 (20 000), mismo
+  planificador, misma semilla y la misma validación congelada:
+
+  | Modelo | Par. | general | top-1 | fuerte 2200+ | top-1 |
+  |---|---|---|---|---|---|
+  | `small` v1 | 39 M | 1,5197 | 51,20 % | 1,5391 | 50,84 % |
+  | `medium` v1 | 115 M | 1,4782 | 52,31 % | 1,4880 | 52,06 % |
+  | `small` v2 | 39 M | **1,4703** | **52,49 %** | 1,4652 | 52,69 % |
+  | `small` v3 | 39 M | 1,4770 | 52,19 % | **1,4537** | **53,02 %** |
+
+- **El intercambio es el diseñado:** v3 cede 0,0067 nats en juego promedio y gana 0,0115 sobre
+  juego fuerte respecto a v2. Frente a v1 son **−0,0854 nats en juego fuerte**, ~+182 Elo por la
+  pendiente medida.
+- **El eje de condicionamiento se ensancha 2,4 veces.** KL de `<2800>` contra `<1800>`: 0,0472 en
+  v1, 0,0487 en v2, **0,1147 en v3**. La ganancia por condicionar sobre juego fuerte pasa de
+  +0,42 puntos de top-1 (v2, pico en `<2200>`) a **+0,88** (v3: 52,15 % con `<1800>` frente a
+  53,03 % con `<2200>`).
+- **La conclusión que importa:** v2 duplicó los datos y dejó el eje exactamente igual que v1
+  (KL 0,0487 frente a 0,0472). Lo que lo abre es la **composición**, no el volumen. Sin el corpus
+  de élite, el hito de "juega como 1500/2000/2400" de P4 no tenía de dónde salir.
+- **Si está mal:** la sonda mide distribuciones, no fuerza. Que el eje se ensanche no garantiza
+  Elo; eso se comprueba con partidas y es lo que decide qué cabecera sirve la demo.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
