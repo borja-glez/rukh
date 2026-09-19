@@ -6,8 +6,8 @@ import polars as pl
 import pytest
 import torch
 
-from rukh.train.dpo import DpoConfig, batches, dpo_loss, encode_pairs
 from rukh.tokenize.uci_vocab import UciTokenizer
+from rukh.train.dpo import DpoConfig, batches, dpo_loss, encode_pairs
 
 pytestmark = pytest.mark.unit
 

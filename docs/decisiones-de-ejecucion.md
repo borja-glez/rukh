@@ -978,6 +978,48 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Los puzles suben mucho más que el Elo**: 22,07 → 26,93 %, y por bandas +8,7 puntos en
   1000-1500 frente a +1,1 en 2000+.
 
+### D-070 · Cuatro de los ocho rivales del harness tenían el Elo inventado y estaba mal por ~500
+- **Qué estaba mal:** los escalones `skill-0..3` se metieron en la escalera para llegar *por
+  debajo* del suelo de 1320 de `UCI_Elo` y se etiquetaron 800/950/1100/1250 sobre esa suposición.
+  Es falsa. Ninguno de los cuatro está por debajo de 1320.
+- **Cómo se detectó:** por una contradicción interna, no buscando aprobar el criterio. `small` v2
+  puntuaba 0,725 contra `uci-1320` y perdía 20-0 contra `skill-3`, etiquetado 1250. Ninguna
+  medición del modelo puede resolver eso, porque el modelo es lo que se está midiendo; motor
+  contra motor sí.
+- **Medido** (40 partidas por pareja, 0,1 s por jugada, colores alternados, anclado en `uci-1320`):
+
+  | Escalón | Etiqueta vieja | Medido | Error |
+  |---|---|---|---|
+  | `skill-0` | 800 | **1381** | +581 |
+  | `skill-1` | 950 | **1467** | +517 |
+  | `skill-2` | 1100 | **1589** | +489 |
+  | `skill-3` | 1250 | **1678** | +428 |
+
+- **El método se valida con sus propios controles:** `uci-1500` midió **+179** Elo sobre
+  `uci-1320` frente a los +180 nominales. Si el procedimiento estuviera sesgado, ese control
+  habría fallado. `UCI_Elo` sí se comprime más arriba (`uci-1800` midió +215 sobre `uci-1500`, no
+  +300), lo que es una salvedad para los escalones altos y no para el rango donde jugamos.
+- **Consecuencia sobre todo lo publicado:**
+
+  | Etapa | Publicado | Corregido | IC 95 % |
+  |---|---|---|---|
+  | `small` v1 | 1007 | **1359** | 1293-1429 |
+  | `small` v2 | 1070 | **1407** | 1344-1462 |
+  | `small` v3 @1800 | 1095 | **1425** | 1367-1485 |
+  | `small` v3 @2600 | 1058 | 1397 | 1340-1450 |
+
+- **El listón de 1200 nunca se falló**: incluso `small` v1, ya publicado en Hugging Face con
+  «Elo bar not met», estaba en 1359. Las model cards y `docs/plans/*` dicen lo contrario y hay que
+  corregirlas.
+- **Lo relativo no cambia:** la corrección sube a los cuatro modelos por igual, así que todas las
+  comparaciones de D-065, D-066 y D-069 siguen en pie; el trabajo de datos de hoy vale +66 Elo
+  (1359 → 1425) en la escala corregida igual que valía +88 en la torcida.
+- **Lo que sigue sin resolverse:** el número absoluto depende de fiarse del `UCI_Elo` de Stockfish
+  a 0,1 s por jugada, un régimen para el que no está calibrado. Los controles lo respaldan entre
+  1320 y 1500 y lo desmienten por encima.
+- **Si está mal:** la escalera corregida ya no tiene ningún rival por debajo de 1320, así que un
+  modelo débil queda mal acotado por abajo. Para los actuales (~1400) la escalera los rodea.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

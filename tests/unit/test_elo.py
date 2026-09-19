@@ -254,15 +254,27 @@ def test_a_rung_needs_exactly_one_of_uci_elo_and_skill() -> None:
 
 
 @unit
-def test_the_default_rungs_go_below_the_engine_floor_and_up_to_2000() -> None:
+def test_the_default_rungs_are_ordered_and_none_reaches_below_the_engine_floor() -> None:
+    """The ladder is sorted by measured strength, and it has no rung under 1320.
+
+    The four ``Skill Level`` rungs were added to reach *below* the engine's ``UCI_Elo`` floor and
+    were labelled 800 to 1250 on that assumption. Playing them against ``uci-1320`` showed every
+    one of them is stronger than it, by 61 to 358 Elo (D-070), so the assumption was false and
+    the labels dragged every stage's fit down about 350 points. This test pins the corrected
+    ladder so the old guesses cannot come back unnoticed.
+    """
     assert [rung.elo for rung in DEFAULT_RUNGS] == sorted(rung.elo for rung in DEFAULT_RUNGS)
-    assert [rung.name for rung in DEFAULT_RUNGS if rung.skill is not None] == [
+    assert min(rung.elo for rung in DEFAULT_RUNGS) == 1320
+    assert {rung.name for rung in DEFAULT_RUNGS if rung.skill is not None} == {
         "skill-0",
         "skill-1",
         "skill-2",
         "skill-3",
-    ]
-    assert [rung.uci_elo for rung in DEFAULT_RUNGS if rung.uci_elo] == [1320, 1500, 1800, 2000]
+    }
+    uci = sorted(rung.uci_elo for rung in DEFAULT_RUNGS if rung.uci_elo)
+    assert uci == [1320, 1500, 1800, 2000]
+    skill = [rung.elo for rung in DEFAULT_RUNGS if rung.skill is not None]
+    assert skill == [1381, 1467, 1589, 1678]
 
 
 @pytest.mark.engine

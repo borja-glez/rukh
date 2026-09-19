@@ -66,15 +66,26 @@ class EloRung(BaseConfig):
         return self
 
 
-# ``Skill Level`` ratings are nominal anchors for the rungs below the engine's 1320 floor: they
-# are not measured strengths, so a model whose fit leans on them is reported with that caveat.
+# The four ``Skill Level`` rungs carry **measured** ratings, not the nominal 800/950/1100/1250 they
+# were given when the harness was written. Those guesses were wrong by 430 to 580 Elo and dragged
+# every stage's fit down by about 350 points: the contradiction that exposed them was a model
+# scoring 0.725 against a 1320-rated engine while losing 20-0 to one labelled 1250.
+#
+# The numbers below come from playing the ladder against itself at the suite's own 0.1 s per move,
+# 40 games per pair with colours alternated, anchored on ``uci-1320`` (D-070). The method validates
+# on its own control: ``uci-1500`` measured +179 Elo over ``uci-1320`` against a nominal +180.
+# ``UCI_Elo`` does compress higher up -- ``uci-1800`` measured +215 over ``uci-1500``, not +300 --
+# which is a caveat for the top rungs and not for the range these models play in.
+# Ordered by measured strength. Note what that ordering shows: **no rung is below 1320**. The
+# four ``skill-*`` opponents were put in the ladder to reach under the engine's ``UCI_Elo`` floor
+# and they never did, which is why every stage measured lower than it plays.
 DEFAULT_RUNGS: list[EloRung] = [
-    EloRung(name="skill-0", elo=800, skill=0),
-    EloRung(name="skill-1", elo=950, skill=1),
-    EloRung(name="skill-2", elo=1100, skill=2),
-    EloRung(name="skill-3", elo=1250, skill=3),
     EloRung(name="uci-1320", elo=1320, uci_elo=1320),
+    EloRung(name="skill-0", elo=1381, skill=0),
+    EloRung(name="skill-1", elo=1467, skill=1),
     EloRung(name="uci-1500", elo=1500, uci_elo=1500),
+    EloRung(name="skill-2", elo=1589, skill=2),
+    EloRung(name="skill-3", elo=1678, skill=3),
     EloRung(name="uci-1800", elo=1800, uci_elo=1800),
     EloRung(name="uci-2000", elo=2000, uci_elo=2000),
 ]
