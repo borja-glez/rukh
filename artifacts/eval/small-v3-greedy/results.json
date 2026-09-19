@@ -1,0 +1,272 @@
+{
+  "stage": "small-v3-greedy",
+  "suite": "full",
+  "checkpoint": "checkpoints/small-v3-20260919-160710/best.pt",
+  "model_sha": "3104796b3e7fa43383d8c43924f06d32db7b9e6cd2352d2ee6c8b62cfaf36247",
+  "params": 38971392,
+  "date": "2026-09-19",
+  "device": "cuda",
+  "run_id": null,
+  "legality_argmax": {
+    "positions": 1000,
+    "legal": 991,
+    "rate": 0.991,
+    "mode": "argmax",
+    "temperature": null,
+    "top_k": null
+  },
+  "legality_sampled": {
+    "positions": 1000,
+    "legal": 991,
+    "rate": 0.991,
+    "mode": "sampled",
+    "temperature": 0.05,
+    "top_k": 1
+  },
+  "accuracy": {
+    "positions": 1000,
+    "top1": 0.524,
+    "top3": 0.805,
+    "bands": [
+      {
+        "band": "1800-2000",
+        "positions": 543,
+        "top1": 0.5248618784530387,
+        "top3": 0.7974217311233885
+      },
+      {
+        "band": "2000-2200",
+        "positions": 328,
+        "top1": 0.5060975609756098,
+        "top3": 0.8201219512195121
+      },
+      {
+        "band": "2200-2400",
+        "positions": 97,
+        "top1": 0.5979381443298969,
+        "top3": 0.8041237113402062
+      },
+      {
+        "band": "2400-2600",
+        "positions": 28,
+        "top1": 0.42857142857142855,
+        "top3": 0.75
+      },
+      {
+        "band": "2600+",
+        "positions": 4,
+        "top1": 0.75,
+        "top3": 1.0
+      }
+    ]
+  },
+  "puzzles": {
+    "attempted": 6000,
+    "solved": 1604,
+    "rate": 0.2673333333333333,
+    "bands": [
+      {
+        "band": "1000-1500",
+        "attempted": 2000,
+        "solved": 820,
+        "rate": 0.41
+      },
+      {
+        "band": "1500-2000",
+        "attempted": 2000,
+        "solved": 540,
+        "rate": 0.27
+      },
+      {
+        "band": "2000+",
+        "attempted": 2000,
+        "solved": 244,
+        "rate": 0.122
+      }
+    ],
+    "prompt_style": "game-prefix"
+  },
+  "elo": {
+    "elo": 1094.668681251117,
+    "ci_low": 1005.7110002834158,
+    "ci_high": 1188.2702612193873,
+    "games": 160,
+    "score": 0.33125,
+    "rungs": [
+      {
+        "name": "skill-0",
+        "opponent_elo": 800,
+        "games": 20,
+        "wins": 13,
+        "draws": 2,
+        "losses": 5,
+        "score": 0.7,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "skill-1",
+        "opponent_elo": 950,
+        "games": 20,
+        "wins": 5,
+        "draws": 4,
+        "losses": 11,
+        "score": 0.35,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "skill-2",
+        "opponent_elo": 1100,
+        "games": 20,
+        "wins": 6,
+        "draws": 1,
+        "losses": 13,
+        "score": 0.325,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "skill-3",
+        "opponent_elo": 1250,
+        "games": 20,
+        "wins": 1,
+        "draws": 2,
+        "losses": 17,
+        "score": 0.1,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "uci-1320",
+        "opponent_elo": 1320,
+        "games": 20,
+        "wins": 12,
+        "draws": 4,
+        "losses": 4,
+        "score": 0.7,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "uci-1500",
+        "opponent_elo": 1500,
+        "games": 20,
+        "wins": 6,
+        "draws": 0,
+        "losses": 14,
+        "score": 0.3,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "uci-1800",
+        "opponent_elo": 1800,
+        "games": 20,
+        "wins": 3,
+        "draws": 0,
+        "losses": 17,
+        "score": 0.15,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "uci-2000",
+        "opponent_elo": 2000,
+        "games": 20,
+        "wins": 0,
+        "draws": 1,
+        "losses": 19,
+        "score": 0.025,
+        "cut": 1,
+        "adjudicated": 1
+      }
+    ],
+    "cut": 1,
+    "adjudicated": 1,
+    "separated": false,
+    "elo_lower": null,
+    "elo_upper": null
+  },
+  "delta_cp": null,
+  "diversity": null,
+  "notes": [
+    "legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.",
+    "the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for",
+    "1 of 160 games hit the context limit and were adjudicated (1 of them) instead of being scored as draws"
+  ],
+  "config": {
+    "stage": "small-v3-greedy",
+    "games": "data/uci/year=2025/month=02/games.parquet",
+    "puzzles": "data/puzzles/puzzles.parquet",
+    "puzzle_split": "test",
+    "legality_positions": 1000,
+    "accuracy_positions": 1000,
+    "position_pool": 20000,
+    "puzzles_per_band": 2000,
+    "header_elo": 1800,
+    "elo_games": 20,
+    "elo_rungs": [
+      {
+        "name": "skill-0",
+        "elo": 800,
+        "uci_elo": null,
+        "skill": 0
+      },
+      {
+        "name": "skill-1",
+        "elo": 950,
+        "uci_elo": null,
+        "skill": 1
+      },
+      {
+        "name": "skill-2",
+        "elo": 1100,
+        "uci_elo": null,
+        "skill": 2
+      },
+      {
+        "name": "skill-3",
+        "elo": 1250,
+        "uci_elo": null,
+        "skill": 3
+      },
+      {
+        "name": "uci-1320",
+        "elo": 1320,
+        "uci_elo": 1320,
+        "skill": null
+      },
+      {
+        "name": "uci-1500",
+        "elo": 1500,
+        "uci_elo": 1500,
+        "skill": null
+      },
+      {
+        "name": "uci-1800",
+        "elo": 1800,
+        "uci_elo": 1800,
+        "skill": null
+      },
+      {
+        "name": "uci-2000",
+        "elo": 2000,
+        "uci_elo": 2000,
+        "skill": null
+      }
+    ],
+    "elo_move_time": 0.1,
+    "elo_max_plies": null,
+    "bootstrap": 500,
+    "temperature": 0.05,
+    "top_k": 1,
+    "block": 200,
+    "seed": 42,
+    "out_dir": "artifacts/eval",
+    "web_results": null,
+    "cache_db": "artifacts/eval/cache-greedy.sqlite",
+    "device": null,
+    "track": false
+  }
+}
