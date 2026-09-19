@@ -604,3 +604,24 @@ Evidencia obtenida por el controlador, no por subagentes:
   Hasta decidirlo, la demo no se publica con int8 por defecto.
 - **Si está mal:** cuantización por canal o dejar en fp32 las capas sensibles subiría la paridad a
   costa de tamaño.
+
+### D-050 · Los laboratorios fijan la salida a UTF-8 antes de imprimir
+- **Qué:** `labs/m1/explore.py`, `labs/m1/bpe_merges.py`, `labs/m2/{params,causal_mask}.py` y
+  `labs/m3/bidirectional.py` llaman a `sys.stdout.reconfigure(encoding="utf-8")` tras los imports.
+- **Por qué:** la consola de Windows es cp1252 y DuckDB dibuja sus tablas con caracteres de marco,
+  así que el primer `print` de un resultado moría con `UnicodeEncodeError`. Le pasa a cualquiera
+  que siga la lección en Windows, no solo a nosotros. Es el mismo fallo que D-027, en otro sitio.
+- **Si está mal:** en una terminal que ya habla UTF-8 la llamada no hace nada.
+
+### D-051 · Los tests entrenan su propio BPE en vez de leer el del repo
+- **Qué:** `tests/unit/test_pack.py` entrena un BPE de 600 tokens en `tmp_path` en lugar de cargar
+  `artifacts/tokenizer/bpe.json`.
+- **Por qué:** `rukh data tokenize --scheme bpe` reescribe ese artefacto con el vocabulario real de
+  4 096, y la batería se puso en rojo la primera vez que el pipeline corrió de verdad. Un test no
+  puede depender de un fichero que el pipeline regenera legítimamente.
+- **Si está mal:** el coste es un segundo de entrenamiento por test.
+
+### D-052 · Las cachés de evaluación salen de git
+- **Qué:** `/artifacts/eval/**/*.sqlite` pasa a `.gitignore` y las dos que se habían colado se
+  quitan del índice. Los informes y los `results.json` sí se quedan: son el registro.
+- **Por qué:** una caché es una aceleración local, no un resultado, y crece con cada tirada.

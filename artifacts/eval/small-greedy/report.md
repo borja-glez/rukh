@@ -16,7 +16,7 @@
 | Legality without the mask, sampled (T=0.05, top-k 1) | 99.4 % |
 | Top-1 next move | 51.1 % |
 | Top-3 next move | 79.4 % |
-| Puzzles solved | n/a |
+| Puzzles solved | 1.1 % |
 | Estimated Elo | 1007 (95 % CI 920-1101) |
 | Mean centipawn loss | n/a |
 | Opening diversity | n/a |
@@ -40,6 +40,14 @@ Two rates, because they answer different questions. **argmax** is the share of v
 | 2400-2600 | 28 | 50.0 % | 78.6 % |
 | 2600+ | 4 | 50.0 % | 100.0 % |
 
+## Puzzles by difficulty band
+
+| Band | Attempted | Solved | Rate |
+|---|---:|---:|---:|
+| 1000-1500 | 2000 | 22 | 1.1 % |
+| 1500-2000 | 2000 | 27 | 1.4 % |
+| 2000+ | 2000 | 15 | 0.8 % |
+
 ## Games against Stockfish
 
 | Rung | Opponent Elo | Games | W | D | L | Score | Cut | Adjudicated |
@@ -58,6 +66,5 @@ Two rates, because they answer different questions. **argmax** is the share of v
 ## Notes
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
-- puzzles not found at E:\work\ai\chess-lm\rukh\data\puzzles\puzzles.parquet: puzzle suite skipped
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
 - 4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws

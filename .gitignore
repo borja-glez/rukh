@@ -34,3 +34,8 @@ duckdb-tmp/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Evaluation caches: they are a local speed-up, not a result. The reports and results.json next
+# to them are the record and do belong in git.
+/artifacts/eval/**/*.sqlite
+/artifacts/eval/*.sqlite

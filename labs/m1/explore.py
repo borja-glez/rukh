@@ -1,4 +1,13 @@
+import sys
+
 import duckdb
+
+# The Windows console is cp1252 by default and DuckDB draws its tables with box characters, so a
+# plain `print` of a result set dies with UnicodeEncodeError. Ask for UTF-8 before printing
+# anything; on a terminal that already speaks UTF-8 this is a no-op.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 
 GAMES = "data/uci/year=2025/month=01/games.parquet"
 con = duckdb.connect()

@@ -60,7 +60,31 @@
       }
     ]
   },
-  "puzzles": null,
+  "puzzles": {
+    "attempted": 6000,
+    "solved": 64,
+    "rate": 0.010666666666666666,
+    "bands": [
+      {
+        "band": "1000-1500",
+        "attempted": 2000,
+        "solved": 22,
+        "rate": 0.011
+      },
+      {
+        "band": "1500-2000",
+        "attempted": 2000,
+        "solved": 27,
+        "rate": 0.0135
+      },
+      {
+        "band": "2000+",
+        "attempted": 2000,
+        "solved": 15,
+        "rate": 0.0075
+      }
+    ]
+  },
   "elo": {
     "elo": 1006.8041469006662,
     "ci_low": 919.6923732050417,
@@ -167,7 +191,6 @@
   "diversity": null,
   "notes": [
     "legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.",
-    "puzzles not found at E:\\work\\ai\\chess-lm\\rukh\\data\\puzzles\\puzzles.parquet: puzzle suite skipped",
     "the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for",
     "4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws"
   ],

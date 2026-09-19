@@ -8,8 +8,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from tokenizers import Tokenizer
 
-from rukh.tokenize.bpe import load_bpe
+from rukh.tokenize.bpe import train_bpe_from_parquet
 from rukh.tokenize.pack import (
     STARTS_FILE,
     TOKENS_FILE,
@@ -22,12 +23,27 @@ from rukh.tokenize.pack import (
 )
 from rukh.tokenize.uci_vocab import UciTokenizer
 
+TEST_BPE_VOCAB = 600
+"""Small enough to train in a second, large enough to produce multi-move merges."""
+
 pytestmark = pytest.mark.unit
 
 
 @pytest.fixture
 def games_parquet(repo_root: Path) -> Path:
     return repo_root / "tests" / "fixtures" / "games.parquet"
+
+
+@pytest.fixture
+def test_bpe(tmp_path: Path, games_parquet: Path) -> Tokenizer:
+    """A BPE trained for the tests, never the one in ``artifacts/``.
+
+    ``rukh data tokenize --scheme bpe`` legitimately rewrites ``artifacts/tokenizer/bpe.json``
+    with the real 4 096-token vocabulary, and a test that pinned the committed file turned red
+    the first time the pipeline ran for real. A test owns its fixtures.
+    """
+    out = tmp_path / "test-bpe.json"
+    return train_bpe_from_parquet(games_parquet, out, vocab_size=TEST_BPE_VOCAB, n_games=20)
 
 
 def test_pack_month_layout(tmp_path: Path, games_parquet: Path) -> None:
@@ -53,7 +69,9 @@ def test_pack_month_layout(tmp_path: Path, games_parquet: Path) -> None:
     assert read_pack_info(tmp_path / "pack") == info
 
 
-def test_pack_month_bytes_are_stable(tmp_path: Path, games_parquet: Path, repo_root: Path) -> None:
+def test_pack_month_bytes_are_stable(
+    tmp_path: Path, games_parquet: Path, test_bpe: Tokenizer
+) -> None:
     """The packed bytes are a published contract: streaming must not change them."""
     expected = {
         "uci": (
@@ -67,7 +85,7 @@ def test_pack_month_bytes_are_stable(tmp_path: Path, games_parquet: Path, repo_r
     }
     encoders = {
         "uci": UciGameEncoder(),
-        "bpe": BpeGameEncoder(load_bpe(repo_root / "artifacts" / "tokenizer" / "bpe.json")),
+        "bpe": BpeGameEncoder(test_bpe),
     }
     for scheme, encoder in encoders.items():
         out = tmp_path / scheme
@@ -79,7 +97,7 @@ def test_pack_month_bytes_are_stable(tmp_path: Path, games_parquet: Path, repo_r
         assert digests == expected[scheme], scheme
 
 
-def test_san_and_bpe_encoders(tmp_path: Path, games_parquet: Path, repo_root: Path) -> None:
+def test_san_and_bpe_encoders(tmp_path: Path, games_parquet: Path, test_bpe: Tokenizer) -> None:
     san = SanGameEncoder()
     ids = san.encode_game("e2e4 e7e5", 1800, 1800, "1-0", max_len=1000)
     assert ids[0] == 1 and ids[-1] == 2
@@ -87,11 +105,11 @@ def test_san_and_bpe_encoders(tmp_path: Path, games_parquet: Path, repo_root: Pa
     info = pack_month(games_parquet, san, tmp_path / "san")
     assert info.scheme == "san" and info.vocab_size == 35
 
-    bpe = BpeGameEncoder(load_bpe(repo_root / "artifacts" / "tokenizer" / "bpe.json"))
+    bpe = BpeGameEncoder(test_bpe)
     ids = bpe.encode_game("e2e4 e7e5", 1800, 1800, "0-1", max_len=1000)
     assert ids[0] == 1 and ids[-2] == 6 and ids[-1] == 2
     info = pack_month(games_parquet, bpe, tmp_path / "bpe")
-    assert info.scheme == "bpe" and info.vocab_size == 600
+    assert info.scheme == "bpe" and info.vocab_size == TEST_BPE_VOCAB
     tokens = np.load(tmp_path / "bpe" / "tokens.npy")
     assert tokens[-1] == 2 and tokens[0] == 1
 

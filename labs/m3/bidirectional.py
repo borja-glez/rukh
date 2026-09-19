@@ -1,10 +1,19 @@
 """Show that the encoder is not causal, and that the masking recipe does what it claims."""
 
+import sys
+
 import torch
 
 from rukh.models import EncoderConfig, PositionEncoder
 from rukh.models.encoder import MMM_IGNORE_INDEX
 from rukh.train.mmm import MaskingConfig, apply_masking, control_ids, mask_id, masking_generator
+
+# The Windows console is cp1252 by default and DuckDB draws its tables with box characters, so a
+# plain `print` of a result set dies with UnicodeEncodeError. Ask for UTF-8 before printing
+# anything; on a terminal that already speaks UTF-8 this is a no-op.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 
 torch.manual_seed(0)
 cfg = EncoderConfig(n_layer=2, n_head=2, d_model=64, block=16)
