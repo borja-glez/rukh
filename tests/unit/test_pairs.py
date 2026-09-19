@@ -10,7 +10,7 @@ import pytest
 
 from rukh.data import evals as evals_module
 from rukh.data.evals import EvalsConfig
-from rukh.data.pairs import PairsConfig, balance, make_pair, run, score_mover
+from rukh.data.pairs import PairsConfig, balance, build_pairs, make_pair, run, score_mover
 
 pytestmark = pytest.mark.unit
 
@@ -86,7 +86,7 @@ def test_balance_uses_smallest_phase() -> None:
 
 def _evals_parquet(path: Path) -> None:
     board = chess.Board()
-    fens, phases, pvs = [], [], []
+    fens, phases, pvs, game_ids, plies = [], [], [], [], []
     moves = "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7 f1e1 b7b5 a4b3 d7d6 c2c3 e8g8"
     for ply, move in enumerate(moves.split(), start=1):
         board.push_uci(move)
@@ -95,7 +95,11 @@ def _evals_parquet(path: Path) -> None:
         fens.append(" ".join(board.fen().split()[:4]))
         phases.append("opening" if ply <= 10 else "middlegame" if ply <= 13 else "endgame")
         pvs.append([_pv(legal[0], sign * 60), _pv(legal[1], sign * 20), _pv(legal[2], -sign * 90)])
-    pl.DataFrame({"fen": fens, "phase": phases, "pvs": pvs}).write_parquet(path.as_posix())
+        game_ids.append("game-1")
+        plies.append(ply)
+    pl.DataFrame(
+        {"fen": fens, "phase": phases, "pvs": pvs, "game_id": game_ids, "ply": plies}
+    ).write_parquet(path.as_posix())
 
 
 def test_run_writes_balanced_pairs(rukh_home: Path) -> None:
@@ -104,12 +108,21 @@ def test_run_writes_balanced_pairs(rukh_home: Path) -> None:
     _evals_parquet(evals)
     manifest = run(PairsConfig(max_per_phase=2))
     frame = pl.read_parquet((rukh_home / "data" / "pairs" / "pairs.parquet").as_posix())
-    assert frame.columns == ["fen", "chosen", "rejected", "cp_chosen", "cp_rejected", "phase"]
+    assert frame.columns == [
+        "fen",
+        "chosen",
+        "rejected",
+        "cp_chosen",
+        "cp_rejected",
+        "phase",
+        "game_id",
+        "ply",
+    ]
     assert manifest.counts["candidates"] == 16
     assert manifest.counts["opening"] == 2
     assert manifest.counts["middlegame"] == 2 and manifest.counts["endgame"] == 2
     assert frame.height == 6
-    for fen, chosen, rejected, cp_c, cp_r, _ in frame.iter_rows():
+    for fen, chosen, rejected, cp_c, cp_r, _phase, _game, _ply in frame.iter_rows():
         board = chess.Board(fen + " 0 1")
         legal = {m.uci() for m in board.legal_moves}
         assert chosen in legal and rejected in legal and chosen != rejected
@@ -178,3 +191,19 @@ def test_chosen_is_the_consolidated_best_move(
         assert pair["chosen"] == row["best_move"]
     best_by_fen = {r["fen"]: r["best_move"] for r in consolidated.to_dicts()}
     assert best_by_fen[mate_fen] == "d8h4"
+
+
+def test_pairs_carry_the_game_they_came_from(tmp_path: Path) -> None:
+    """Every pair keeps ``game_id`` and ``ply``.
+
+    The decoder reads a move sequence, not a board, so a pair identified only by its FEN cannot
+    be turned into a prompt for it. These two columns are what join a pair back to its game and
+    recover the prefix that led to the position (D-070).
+    """
+    evals = tmp_path / "positions-eval.parquet"
+    _evals_parquet(evals)
+    frame = build_pairs(evals, min_delta_cp=50)
+    assert frame.height > 0
+    assert {"game_id", "ply"} <= set(frame.columns)
+    assert frame["game_id"].to_list() == ["game-1"] * frame.height
+    assert all(p >= 1 for p in frame["ply"].to_list())

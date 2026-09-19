@@ -96,17 +96,25 @@ def build_pairs(evals: Path, min_delta_cp: int) -> pl.DataFrame:
     """One pair per FEN, reading the evaluations parquet batch by batch."""
     reader = pq.ParquetFile(evals)
     rows: list[dict[str, object]] = []
-    for batch in reader.iter_batches(batch_size=BATCH_ROWS, columns=["fen", "phase", "pvs"]):
+    columns = ["fen", "phase", "pvs", "game_id", "ply"]
+    for batch in reader.iter_batches(batch_size=BATCH_ROWS, columns=columns):
         records = zip(
             batch.column("fen").to_pylist(),
             batch.column("phase").to_pylist(),
             batch.column("pvs").to_pylist(),
+            batch.column("game_id").to_pylist(),
+            batch.column("ply").to_pylist(),
             strict=True,
         )
-        for fen, ph, pvs in records:
+        for fen, ph, pvs, game_id, ply in records:
             pair = make_pair(fen, pvs, min_delta_cp)
             if pair is not None:
                 pair["phase"] = ph
+                # Provenance, and the only way the decoder can use a pair at all: it reads a move
+                # sequence, not a board, so a pair is useless to it without the prefix that led
+                # there. ``game_id`` and ``ply`` are what join a pair back to its game (D-070).
+                pair["game_id"] = game_id
+                pair["ply"] = ply
                 rows.append(pair)
     schema = {
         "fen": pl.String,
@@ -115,6 +123,8 @@ def build_pairs(evals: Path, min_delta_cp: int) -> pl.DataFrame:
         "cp_chosen": pl.Int32,
         "cp_rejected": pl.Int32,
         "phase": pl.String,
+        "game_id": pl.String,
+        "ply": pl.Int32,
     }
     return pl.DataFrame(rows, schema=schema)
 
