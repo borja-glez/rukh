@@ -5,6 +5,7 @@ from __future__ import annotations
 import chess
 import pytest
 import torch
+from conftest import cli_options
 
 from rukh.infer import (
     GameResult,
@@ -310,8 +311,7 @@ def test_cli_play_is_registered() -> None:
 
     result = CliRunner().invoke(app, ["play", "--help"])
     assert result.exit_code == 0, result.output
-    for option in ("--ckpt", "--games", "--opponent", "--no-mask"):
-        assert option in result.output
+    assert {"--ckpt", "--games", "--opponent", "--no-mask"} <= cli_options("play")
 
 
 @pytest.mark.engine

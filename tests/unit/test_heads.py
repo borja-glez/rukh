@@ -7,6 +7,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 import torch
+from conftest import cli_options
 
 from rukh.models import EncoderConfig, MultiHead, PositionEncoder
 from rukh.models.heads import HEADS, BlunderHead, HeadWeights, ResultHead, ValueHead
@@ -300,8 +301,7 @@ def test_cli_train_heads_reads_the_shipped_config(repo_root: Path) -> None:
     assert cfg.labels.blunder_cp == 100 and cfg.labels.value_scale == 400.0
     result = CliRunner().invoke(app, ["train", "heads", "--help"])
     assert result.exit_code == 0, result.output
-    for option in ("--config", "--mode", "--fraction", "--curve"):
-        assert option in result.output
+    assert {"--config", "--mode", "--fraction", "--curve"} <= cli_options("train", "heads")
 
 
 # --- the `moves` scheme: the line that reached the position ------------------------------------

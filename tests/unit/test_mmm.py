@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+from conftest import cli_options
 
 from rukh.models import EncoderConfig, PositionEncoder
 from rukh.models.encoder import MMM_IGNORE_INDEX
@@ -284,9 +285,8 @@ def test_cli_train_encoder_reads_the_shipped_config(repo_root: Path) -> None:
     assert cfg.masking.mask_ratio == 0.8
     result = CliRunner().invoke(app, ["train", "encoder", "--help"])
     assert result.exit_code == 0, result.output
-    for option in ("--config", "--resume", "--max-steps"):
-        assert option in result.output
+    assert {"--config", "--resume", "--max-steps"} <= cli_options("train", "encoder")
     # The decoder keeps the old spelling: `rukh train --config ...`, no subcommand.
-    plain = CliRunner().invoke(app, ["train", "--help"])
-    assert plain.exit_code == 0 and "--preset" in plain.output
+    assert CliRunner().invoke(app, ["train", "--help"]).exit_code == 0
+    assert "--preset" in cli_options("train")
     assert CliRunner().invoke(app, ["train"]).exit_code == 2

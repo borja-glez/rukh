@@ -9,6 +9,7 @@ from pathlib import Path
 
 import mlflow
 import pytest
+from conftest import cli_options
 
 from rukh import __version__
 from rukh.tracking import flatten, git_sha, start_run, tracking_uri, ui_command
@@ -75,4 +76,4 @@ def test_cli_has_mlflow_ui_command() -> None:
 
     result = CliRunner().invoke(app, ["mlflow", "ui", "--help"])
     assert result.exit_code == 0, result.output
-    assert "--port" in result.output
+    assert {"--host", "--port"} <= cli_options("mlflow", "ui")

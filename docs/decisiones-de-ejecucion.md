@@ -744,3 +744,14 @@ Evidencia obtenida por el controlador, no por subagentes:
   que el orden es sugerente, no establecido; haría falta repetir con varias semillas. La única
   diferencia que supera claramente ese ruido es el acierto de error al 10 % (95,59 % frente a 96,78 %).
 - **Si está mal:** repetir con tres semillas por punto separaría señal de ruido.
+
+### D-058 · Las opciones del CLI se comprueban en el parser, no en el `--help`
+- **Qué:** `tests/conftest.py` expone `cli_options("train", "heads")`, que devuelve las banderas que
+  declara el comando de Click. Cinco tests que hacían `assert "--config" in result.output` ahora
+  preguntan al parser.
+- **Por qué:** Typer dibuja la ayuda con Rich y, cuando hay color (el runner de GitHub lo activa;
+  una consola de Windows no), los códigos de escape caen **dentro** del nombre de la opción, así
+  que la subcadena no aparece aunque la ayuda muestre la bandera. Los cinco tests pasaban en local
+  y tumbaron la primera CI de `main`. Reproducido con `FORCE_COLOR=1`.
+- **Si está mal:** para comprobar el texto renderizado hay `plain()` en el mismo `conftest`, que
+  quita los escapes.
