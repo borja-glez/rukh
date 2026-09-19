@@ -703,3 +703,26 @@ Evidencia obtenida por el controlador, no por subagentes:
   y volver a un umbral fijo de 0,5 con sentido, o cambiar el criterio de GOAL.md a la precisión
   media, que no depende de ningún umbral. Las dos son más honestas que un 0,5 sin calibrar;
   ninguna de las dos se decide con una sola tirada.
+
+### D-056 · Resultados reales del encoder: un criterio cumplido y otro no
+- **Qué:** con 438 093 posiciones etiquetadas (10 % de validación, split por partida) y el encoder
+  preentrenado con MMM (75,2 % de acierto en las jugadas ocultas, 16 minutos en la 5090):
+
+  | Esquema | F1 de error (ajustado) | Margen sobre la heurística | ROC AUC | Spearman valor↔cp | Pearson |
+  |---|---|---|---|---|---|
+  | `moves` (preentrenado con MMM) | 0,179 | **+9,0** | 0,738 | 0,407 | 0,442 |
+  | `squares` (desde cero) | 0,146 | **+5,7** | 0,696 | 0,422 | **0,688** |
+
+  Los dos **cumplen** el listón de error (≥ heurística + 5 puntos). **Ninguno** llega al 0,80 de
+  correlación de valor que pide GOAL: el mejor Spearman es 0,42.
+- **Qué dice la comparación de representaciones** (la pregunta de `docs/spec/02`, Componente 2):
+  la línea de jugadas detecta mejor los errores (el preentrenamiento ayuda a saber qué acaba de
+  pasar), y el tablero correlaciona mucho mejor el valor en Pearson (0,69 frente a 0,44): ver las
+  piezas es mejor para "cuánto vale esto", ver la línea es mejor para "qué se acaba de tirar".
+- **Por qué falla el valor:** 4 000 pasos de afinado, 488 159 posiciones con etiqueta de las 5 M
+  muestreadas (9,8 % de cobertura del cruce), y un `tanh(cp/400)` que comprime justo donde hay más
+  densidad. Es el mismo diagnóstico que D-054: faltan datos etiquetados, no capacidad.
+- **Decisión:** se publican las dos filas tal cual. El criterio de valor queda **no cumplido** y
+  documentado, como manda GOAL.
+- **Si está mal:** más pasos de afinado, más ficheros del dataset de evaluaciones (hay 20 y el
+  cruce solo recuperó el 9,8 %) o una escala de valor menos comprimida.
