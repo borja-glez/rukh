@@ -322,6 +322,20 @@ def test_the_file_carries_the_context_length_in_its_metadata(exported: Any) -> N
 
 
 @requires_onnx
+def test_the_exported_file_is_self_contained(exported: Any) -> None:
+    """No `<name>.onnx.data` sidecar: the browser and the Hub get one file, not two.
+
+    The dynamo exporter writes the weights beside the graph and `set_metadata` then saves them
+    back inline, so the sidecar it leaves behind is dead weight that used to ship with every
+    export.
+    """
+    path = Path(exported.path)
+    assert path.is_file()
+    assert not path.with_suffix(path.suffix + ".data").exists()
+    assert sorted(p.name for p in path.parent.iterdir()) == [path.name]
+
+
+@requires_onnx
 def test_the_int8_file_is_smaller_than_the_fp32_one(exported: Any) -> None:
     quantized = quantize_int8(Path(exported.path))
     assert Path(quantized.path).is_file()

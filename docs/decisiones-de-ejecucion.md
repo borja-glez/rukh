@@ -366,3 +366,13 @@ Evidencia obtenida por el controlador, no por subagentes:
   (`pkg.torch.onnx.stack_trace`), que en un modelo tan pequeño son unos 1,3 KB por nodo y pesan más
   que los pesos; con dos capas el fichero se iba a 224 KB. Quedan 154 KB, menos que los 173 KB del
   fichero anterior, que además lo había escrito el tracer antiguo (D-027).
+
+### D-032 · La exportación borra el fichero de datos externos que deja el exportador
+- **Qué:** el exportador dynamo escribe los pesos en `<nombre>.onnx.data` y apunta los
+  inicializadores allí; al escribir los metadatos, `onnx.save` los vuelve a meter dentro del
+  `.onnx`, así que el sidecar queda muerto. `set_metadata` lo borra ahora, y solo cuando ha
+  comprobado que ningún inicializador sigue siendo externo. Un test verifica que la carpeta de
+  salida contiene exactamente un fichero.
+- **Por qué:** ese sidecar pesa lo mismo que el modelo y se habría subido al Hub y servido al
+  navegador sin que nadie lo leyera nunca.
+- **Si está mal:** se quita el borrado y hay que publicar los dos ficheros juntos.

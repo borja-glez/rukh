@@ -259,6 +259,17 @@ def set_metadata(path: Path, entries: dict[str, str]) -> dict[str, str]:
     model = onnx.load(str(path))
     onnx.helper.set_model_props(model, entries)
     onnx.save(model, str(path))
+    # The dynamo exporter writes the weights next to the graph as `<name>.onnx.data` and points
+    # the initializers at it. `onnx.load` above pulled them into memory and `onnx.save` wrote
+    # them back inline, so the sidecar is now dead weight that would ship to the browser (or be
+    # published to the Hub) without ever being read. Drop it, but only once the file really is
+    # self-contained.
+    sidecar = path.with_suffix(path.suffix + ".data")
+    if sidecar.is_file() and not any(
+        tensor.data_location == onnx.TensorProto.EXTERNAL for tensor in model.graph.initializer
+    ):
+        sidecar.unlink()
+        log.debug("removed the external-data sidecar %s", sidecar.name)
     return entries
 
 

@@ -1,4 +1,6 @@
-# `small` (12 layers, d=512, ~39M parameters): the course model, 4-8 hours on a 5090.
+# `small` (12 layers, d=512, 38,971,392 parameters): the course model. Measured at 440k tokens/s
+# eager on a 5090 (D-024), so the 20,000 steps below are about 40 minutes, not the 4-8 hours the
+# spec estimated before anyone timed it.
 preset: small
 tokens_dir: data/tokens/uci
 block: 200
