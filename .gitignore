@@ -43,3 +43,4 @@ Thumbs.db
 # Generated embeddings: 715 MB of vectors that `rukh encoder embed` rebuilds from a checkpoint.
 # They feed phase 2's position retrieval and belong on the Hub, never in git.
 /artifacts/embeddings/
+.fetch-current.yaml

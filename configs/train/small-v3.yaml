@@ -1,0 +1,28 @@
+# `small` on the mixed corpus plus 24 months of the Lichess Elite Database (D-064). Validation is
+# deliberately unchanged -- the same 100,000 games of 2025-02 -- so val/loss stays comparable with
+# every earlier run. Read it with care all the same: the loss->Elo line was fitted on models
+# trained on the validation distribution, and this one is not, so Elo here has to be measured and
+# not inferred.
+preset: small
+tokens_dir: data/tokens-v3/uci
+block: 200
+batch_size: 64
+grad_accum: 4 # 256 effective sequences of 200 tokens
+lr: 6.0e-4
+min_lr_ratio: 0.1
+warmup: 1000
+max_steps: 28000
+weight_decay: 0.1
+betas: [0.9, 0.95]
+grad_clip: 1.0
+precision: bf16
+compile: true
+eval_every: 500
+eval_batches: 50
+ckpt_every: 1000
+out_dir: checkpoints
+seed: 42
+run_name: small-v3
+unique_run_name: true
+workers: 4
+log_every: 10

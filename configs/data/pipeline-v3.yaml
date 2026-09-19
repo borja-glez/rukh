@@ -10,13 +10,16 @@ uci:
   workers: 0          # 0 = cpu_count() - 1
 tokenize:
   uci_dir: data/uci
-  out_dir: data/tokens
+  out_dir: data/tokens-v3
   artifacts_dir: artifacts/tokenizer
   web_artifacts_dir: artifacts/web
   fixture_pgn: tests/fixtures/games.pgn
   train_months: ["2025-01"]
   val_month: "2025-02"
   val_games: 100000   # held out; the other ~2.85 M games of the month train (D-062)
+  # 24 months of the Lichess Elite Database (2200+). The 1800+ corpus is 3.4 % games at
+  # 2400+ and elite is 93.3 %, so this is what gives the Elo axis something to condition on.
+  extra_train_parquets: ["data/elite/games.parquet"]
   stats_games: data/uci/year=2025/month=01/games.parquet
   bpe_vocab_size: 4096
   bpe_train_games: 200000

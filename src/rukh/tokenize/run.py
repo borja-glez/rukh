@@ -127,8 +127,8 @@ def run(
 
     ``--scheme bpe`` (re)trains ``bpe.json`` from ``games``; ``--stats`` needs a BPE, so it
     trains one from ``games`` when none exists. ``--export-fixture`` adds ``bpe_ids`` to the
-    fixture whenever ``bpe.json`` is available. ``--pack`` writes ``train_month`` and
-    ``val_month`` as memmap token streams under ``out_dir/<scheme>/``.
+    fixture whenever ``bpe.json`` is available. ``--pack`` writes the ``train`` and
+    ``val`` splits as memmap token streams under ``out_dir/<scheme>/``.
     """
     if scheme not in SCHEMES:
         raise ValueError(f"scheme must be one of {SCHEMES}, got {scheme!r}")

@@ -810,6 +810,41 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Si está mal:** el criterio de correlación sigue sin cumplirse (0,52 frente a 0,80), y la card
   lo dice.
 
+### D-062 · La validación se queda en 100 000 partidas y el resto del mes entrena
+- **Qué:** `TokenizeConfig` gana `train_months` (lista) y `val_games`. Con `val_games: 100000`, la
+  validación son las primeras 100 000 partidas de `val_month` y las otras ~2,85 M se unen al
+  entrenamiento. `pack_month` pasa a ser un caso de `pack_games(sources)`, que concatena trozos
+  `GameSlice(path, skip, take)` en un solo flujo.
+- **Por qué:** P1 dedicó el mes 02 entero a validación: 238 657 571 tokens parados para un bucle
+  que lee 50 lotes (640 000 tokens) por evaluación. El decoder entrenó con 240 M tokens únicos,
+  6,2 por parámetro frente a los ~20 razonables, y repitió el corpus 4,3 veces (1,024 B tokens
+  vistos). La huella está en las curvas: el hueco train/val pasa de 0,021 en el paso 10 000 a
+  0,060 en el 20 000 mientras el top-1 solo sube 0,75 puntos en los últimos 5 000 pasos. El cuello
+  era repetición de datos, no capacidad — lo que ya sugería D-054.
+- **Medido:** el corpus recuperado da 5 796 388 partidas y **470 650 377 tokens** de entrenamiento
+  (12,1 por parámetro) contra 100 000 partidas y 8 076 148 tokens de validación; las dos cifras
+  suman exactamente las 5 896 388 del corpus, así que ninguna partida se pierde ni se duplica.
+- **Comparabilidad:** los mismos pesos (`small` paso 20 000) miden **1,5197 de pérdida y 0,5120 de
+  top-1 en las dos validaciones**, la vieja y la nueva, hasta el cuarto decimal. El objetivo de
+  val/loss ≤ 1,42 se traslada sin recalibrar.
+- **Si está mal:** entrenamiento y validación salen ahora del mismo mes, con partidas distintas.
+  Se pierde la propiedad "un mes que el modelo no ha visto" y con ella la prueba de deriva
+  temporal, que vuelve en cuanto haya un mes nuevo descargado.
+
+### D-063 · La precisión que sirve la demo la decide el backend, no el tamaño de pantalla
+- **Qué:** `defaultStageId` deja de mirar `mobile`. Sirve `small-fp16` allá donde haya WebGPU,
+  teléfono incluido, y reserva `small-int8` para el respaldo WASM y para `saveData`. El encoder
+  mantiene int8 en móvil.
+- **Por qué:** int8 cambia la jugada en el 4,6 % de las posiciones (D-049), así que la regla
+  anterior servía a los móviles un modelo que no es aquel cuyo Elo publican las cards, y lo hacía
+  en hardware que sí puede con fp16 — los teléfonos llevan tiempo con WebGPU. fp16 diverge en el
+  0,2 %. El tamaño de pantalla no dice nada sobre la aritmética disponible.
+- **La asimetría del encoder es medida, no preferencia:** su int8 coincide con el checkpoint en el
+  100 % de las posiciones de paridad, en las tres precisiones, así que ahí los 15 MB salen gratis.
+- **Si está mal:** un móvil sin WebGPU y sin `saveData` baja 78,8 MB en vez de 43,5 MB, una sola
+  vez y cacheado. `navigator.gpu` se consulta de forma síncrona porque `parseQuery` lo es; si
+  existe pero no da adaptador, el worker cae a WASM por su cuenta y reporta el backend real.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

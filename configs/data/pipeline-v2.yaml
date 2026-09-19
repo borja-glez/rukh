@@ -10,7 +10,7 @@ uci:
   workers: 0          # 0 = cpu_count() - 1
 tokenize:
   uci_dir: data/uci
-  out_dir: data/tokens
+  out_dir: data/tokens-v2
   artifacts_dir: artifacts/tokenizer
   web_artifacts_dir: artifacts/web
   fixture_pgn: tests/fixtures/games.pgn

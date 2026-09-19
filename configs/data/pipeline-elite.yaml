@@ -54,11 +54,11 @@ pairs:
   seed: 42
 elite:
   base_url: https://database.nikonoel.fr
-  months: ["2025-01", "2025-02"]
+  months: ['2023-09', '2023-10', '2023-11', '2023-12', '2024-01', '2024-02', '2024-03', '2024-04', '2024-05', '2024-06', '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06', '2025-07', '2025-08']
   out_dir: data/elite
   min_plies: 20
   max_plies: 300
-  workers: 0
+  workers: 6   # the GPU is training; leave cores for its dataloader
 elo_bins:
   uci_dir: data/uci
   out_dir: data/elo-bins
