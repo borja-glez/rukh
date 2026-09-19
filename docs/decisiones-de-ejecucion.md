@@ -297,8 +297,10 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Por qué importa:** el grafo del tracer antiguo produce un `model-fp16.onnx` que onnxruntime
   **rechaza** (`Type (tensor(float16)) … does not match expected type (tensor(float))`), y ese es
   justo el fichero que carga la demo. Con el exportador moderno, fp16 e int8 cargan y eligen la
-  misma jugada que PyTorch; los ejes dinámicos se verifican a tres longitudes (8/16/64) con
-  paridad de 1e-7.
+  misma jugada que PyTorch. El eje dinámico de secuencia lo comprueba `verify_dynamic_seq`
+  ejecutando el fichero a **dos** longitudes (`sequence_lengths` devuelve la longitud trazada y
+  una vecina legal), no a tres: la comprobación manual a 8/16/64 con paridad de 1e-7 la hizo el
+  controlador aparte y no está en el código.
 - **Si está mal:** se quita el contexto `_utf8_console()` y se acepta el tracer antiguo, pero
   entonces hay que exportar el fp16 de otra manera.
 
@@ -308,3 +310,59 @@ Evidencia obtenida por el controlador, no por subagentes:
   corre entera: 355 tests sin saltos.
 - **Si está mal:** `onnxscript` solo hace falta para el exportador moderno; sin él se vuelve al
   caso de D-027.
+
+### D-029 · nginx sirve `.mjs` como `text/javascript` por una regla propia
+- **Qué:** una `location ~* \.mjs$` con `default_type text/javascript` en `nginx/default.conf`, y
+  `e2e/fixtures/coi-server.mjs` (el servidor del proyecto E2E `isolated`) lee esas declaraciones
+  para que la prueba se caiga si la regla desaparece.
+- **Por qué:** el `mime.types` que trae nginx (revisado en 1.29) tiene entrada para `js` y ninguna
+  para `mjs`, así que el cargador de ONNX Runtime que vive junto al `.wasm`
+  (`ort-wasm-simd-threaded.asyncify.mjs`) salía como `application/octet-stream`. Con
+  `X-Content-Type-Options: nosniff` —que está en `security-headers.conf` y no se va a quitar— el
+  navegador se niega a evaluarlo, el `import()` dinámico que hace el worker falla y la sesión no
+  llega a crearse nunca. Es un fallo que solo aparece en producción: en `astro dev` y en `vite
+  preview` el tipo lo pone la herramienta, no nginx.
+- **Si está mal:** la alternativa es añadir `mjs` al `mime.types` de la imagen, pero eso es editar
+  un fichero de nginx dentro del Dockerfile; la `location` está a la vista y se prueba.
+
+### D-030 · ONNX Runtime se publica de un solo hilo y con dos artefactos
+- **Qué:** el worker fija `ort.env.wasm.numThreads = 1` y `ort.env.wasm.proxy = false`, y
+  `scripts/copy-assets.mjs` copia a `public/ort/<versión>/` **solo** el par asyncify
+  (`ort-wasm-simd-threaded.asyncify.mjs` y `.wasm`, 27 MB) más un `.wasm.gz` precomprimido que
+  nginx sirve con `gzip_static` (6,6 MB por la red). `postbuild` (`copy-assets.mjs --verify`) lee
+  del bundle construido todos los `ort-wasm*.{mjs,wasm}` que el runtime puede pedir y rompe la
+  build si alguno no está publicado.
+- **Por qué:** `onnxruntime-web/webgpu` usa esa misma build asyncify para WebGPU y para el respaldo
+  en WASM, así que las otras tres variantes (`threaded`, `jsep`, `jspi`) serían 60 MB de más en la
+  imagen. Pedir más hilos bajo aislamiento de origen cruzado (COOP/COEP están puestos para el WASM
+  multihilo) hace que ORT vaya a buscar justo esos artefactos que no publicamos, y el worker de
+  proxy sería un cuarto fichero para mover el trabajo fuera del hilo principal, que es donde este
+  código ya está. Un hilo es además suficiente: WebGPU es el camino rápido y el respaldo en WASM
+  se acepta lento a propósito. El `.wasm` no entra en `gzip_types` (comprimir 27 MB en cada
+  petición sería peor que servirlos), de ahí el `.gz` escrito en tiempo de build.
+- **Si está mal:** subir `numThreads` obliga a copiar la variante `threaded` y a mantener el
+  aislamiento de origen cruzado en todas las rutas; `ORT_ASSETS` en `scripts/copy-assets.mjs` es la
+  única lista que hay que tocar, y `--verify` avisa en la build siguiente.
+
+### D-031 · Tamaños provisionales de las etapas y un `.onnx` de juguete versionado
+- **Qué:** `STAGE_SIZE_MB` en `src/lib/registry.ts` declara 6 / 80 / 40 MB para `tiny-int8`,
+  `small-fp16` y `small-int8`: son las estimaciones del plan, no medidas, y el controlador las
+  actualiza en ese único sitio cuando `rukh export --fp16 --int8` diga los tamaños reales. Solo
+  alimentan el texto del consentimiento y el respaldo de la barra de progreso cuando la respuesta
+  no trae `content-length`, nunca la descarga. Aparte, `public/test/toy-decoder.onnx` (un decoder de
+  `n_layer=1, n_head=2, d_model=8` con el vocabulario real de 2 030 y `block` 200) está versionado
+  en el repo web para que el E2E recorra el camino real del worker sin bajarse 40 MB del Hub; se
+  llega a él solo con `?stage=test` y no aparece en el selector.
+- **Por qué:** el consentimiento tiene que decir un tamaño antes de que exista el modelo, y mentir
+  con un `0 MB` sería peor que una estimación etiquetada como tal. El juguete se versiona porque un
+  E2E que dependa de la red (o de un entrenamiento previo) no es un E2E: con él, la prueba del
+  contrato del modelo, el fallback a WASM y la cascada de latencia se ejecutan en CI en segundos.
+  Se regenera con `rukh.export.export_onnx`, la misma función que produce los modelos reales, para
+  que lleve los mismos metadatos `rukh_*` y salga del mismo exportador (dynamo).
+- **Si está mal:** los tamaños viven en una constante con un test que comprueba que cada etapa la
+  usa; cambiarlos es una línea. Si el juguete se queda desfasado respecto al contrato real, se
+  vuelve a exportar con `export_onnx` sobre un `MoveDecoder` de juguete y se recomprueba que pese
+  menos de 200 KB. Una capa y no dos: el exportador dynamo cuelga de cada nodo su traza de pila
+  (`pkg.torch.onnx.stack_trace`), que en un modelo tan pequeño son unos 1,3 KB por nodo y pesan más
+  que los pesos; con dos capas el fichero se iba a 224 KB. Quedan 154 KB, menos que los 173 KB del
+  fichero anterior, que además lo había escrito el tracer antiguo (D-027).

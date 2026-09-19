@@ -1,10 +1,18 @@
 """Export the training curve of a run to ``artifacts/web/training-replay.json``.
 
-Lab 3 of module M2. Reads the metrics MLflow stored during ``rukh train`` and writes one
-entry per logged step so the ``TrainingReplay`` island in the course can scrub through the
-run. Optionally enriches the entries with the legality and Elo of each checkpoint, which is
-what makes the "watch the game emerge" slider interesting; that part costs one quick
-evaluation per checkpoint, so it is opt-in.
+Lab 3 of module M2. Reads the metrics MLflow stored during ``rukh train`` and writes **one
+entry per checkpoint**: the slider of the ``TrainingReplay`` island walks the ``step-*.pt`` files
+the run left behind, not the (much denser) MLflow logging steps, because every other number the
+island can show — legality, Elo — only exists for a step whose weights are still on disk.
+
+Only ``step`` is guaranteed in an entry. ``train_loss``, ``val_loss`` and ``val_top1`` are copied
+from MLflow when that exact step was logged (with the shipped configs it always is: ``log_every``
+and ``eval_every`` both divide ``ckpt_every``), ``legality`` needs ``--with-legality`` and ``elo``
+needs ``--with-elo``.
+
+``legality`` is the argmax rate of ``docs/spec/02`` (D-026): the single most likely token, no
+temperature, no top-k and no mask. It is the bar ``GOAL.md`` sets at 99 %, and the one that means
+something when it is plotted against the training step.
 
 Usage (from the repository root):
 
@@ -16,15 +24,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import mlflow
 
 from rukh import paths
 from rukh.tracking import tracking_uri
 
+log = logging.getLogger("replay_export")
+
 SCHEMA = "rukh-training-replay/1"
+CKPT_GLOB = "step-*.pt"
+"""What ``rukh train`` writes every ``ckpt_every`` steps (plus the last one)."""
+
+METRICS = {"train_loss": "train/loss", "val_loss": "val/loss", "val_top1": "val/top1"}
+ELO_GAMES = 10
+"""Games per rung when ``--with-elo`` is given: enough for a shape, far too few for a number."""
 
 
 def find_run(run_name: str | None, run_id: str | None) -> mlflow.entities.Run:
@@ -55,10 +74,118 @@ def history(client: mlflow.tracking.MlflowClient, run_id: str, key: str) -> dict
         return {}
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+def run_checkpoints(directory: Path) -> dict[int, Path]:
+    """``{step: path}`` of every ``step-*.pt`` in ``directory``, ordered by step."""
+    found: dict[int, Path] = {}
+    for path in Path(directory).glob(CKPT_GLOB):
+        try:
+            step = int(path.stem.split("-", 1)[1])
+        except (IndexError, ValueError):
+            log.debug("ignoring %s: not a step checkpoint", path)
+            continue
+        found[step] = path
+    return dict(sorted(found.items()))
+
+
+def replay_steps(metric_steps: Sequence[int], checkpoints: dict[int, Path]) -> list[int]:
+    """The steps the island scrubs through: the logged steps that kept a checkpoint.
+
+    The last logged step is always kept even when its checkpoint is gone (a run that was still
+    training when this ran, or whose weights were pruned after publication): it is the model the
+    rest of the table talks about, so leaving it out would be worse than leaving it thin.
+    """
+    chosen = {step for step in metric_steps if step in checkpoints}
+    if metric_steps:
+        chosen.add(max(metric_steps))
+    return sorted(chosen)
+
+
+def checkpoint_dir(run: mlflow.entities.Run, override: str | None) -> Path:
+    """Where the run wrote its checkpoints: ``--checkpoints``, or ``out_dir/<run name>``."""
+    if override:
+        return Path(override)
+    out_dir = str(run.data.params.get("out_dir", "checkpoints"))
+    return paths.resolve(out_dir) / str(run.info.run_name)
+
+
+def elo_of(model: Any, tok: Any, cfg: Any, games: int) -> float | None:
+    """Estimated Elo from a handful of games per rung, or None when Stockfish is not around."""
+    from rukh.engine import EngineNotFound
+    from rukh.eval.elo import estimate, play_rungs
+
+    try:
+        records = play_rungs(
+            model,
+            tok,
+            cfg.elo_rungs,
+            games,
+            cfg.sampling(),
+            move_time=cfg.elo_move_time,
+            max_plies=cfg.elo_max_plies,
+        )
+    except EngineNotFound as exc:
+        log.warning("Elo skipped: %s", exc)
+        return None
+    if not records:
+        return None
+    return estimate(records, samples=cfg.bootstrap, seed=cfg.seed).elo
+
+
+def evaluate_checkpoints(
+    steps: Sequence[int],
+    checkpoints: dict[int, Path],
+    positions: int,
+    with_elo: bool,
+    elo_games: int,
+) -> dict[int, dict[str, float]]:
+    """Measure the legality (and optionally the Elo) of every checkpoint in ``steps``."""
+    from rukh.eval.legality import legality, sample_positions
+    from rukh.eval.suite import EvalConfig
+    from rukh.tokenize.uci_vocab import UciTokenizer
+    from rukh.train import load_model, pick_device
+
+    cfg = EvalConfig(legality_positions=positions, elo_games=elo_games)
+    games = paths.resolve(cfg.games)
+    if not games.is_file():
+        raise SystemExit(f"validation games not found at {games}: --with-legality needs the P1 cut")
+    tok = UciTokenizer()
+    prefixes = sample_positions(
+        games, positions, tok, seed=cfg.seed, pool=cfg.position_pool, block=cfg.block
+    )
+    where = cfg.device or pick_device()
+    measured: dict[int, dict[str, float]] = {}
+    for step in steps:
+        ckpt = checkpoints.get(step)
+        if ckpt is None:
+            log.warning("step %d has no checkpoint: it keeps its MLflow metrics only", step)
+            continue
+        model, _payload = load_model(ckpt, map_location=where)
+        model = model.to(where).eval()
+        # `mode="argmax"` on purpose: that is the definition the 99 % bar is written against.
+        result = legality(model, tok, prefixes, cfg.sampling(), mode="argmax")
+        values: dict[str, float] = {"legality": round(result.rate, 4)}
+        line = f"  step {step:>6}  legality {result.rate:.3f}"
+        if with_elo:
+            elo = elo_of(model, tok, cfg, elo_games)
+            if elo is not None:
+                values["elo"] = round(elo, 1)
+                line += f"  elo {elo:.0f}"
+        measured[step] = values
+        print(line)
+    return measured
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--run-name", default=None, help="MLflow run name (default: latest run)")
     parser.add_argument("--run-id", default=None, help="MLflow run id, wins over --run-name")
+    parser.add_argument(
+        "--checkpoints",
+        default=None,
+        help="directory holding the step-*.pt files (default: <out_dir>/<run name>)",
+    )
     parser.add_argument(
         "--out",
         default=None,
@@ -67,47 +194,62 @@ def main() -> None:
     parser.add_argument(
         "--with-legality",
         action="store_true",
-        help="evaluate every checkpoint of the run (slow: one quick suite per checkpoint)",
+        help="measure the unmasked argmax legality of every checkpoint (slow: one forward pass "
+        "per sampled position per checkpoint)",
+    )
+    parser.add_argument(
+        "--with-elo",
+        action="store_true",
+        help="also estimate the Elo of every checkpoint against Stockfish with --elo-games games "
+        "per rung. VERY SLOW (eight rungs of real games per checkpoint) and, with so few games, "
+        "only good for the shape of the curve: the published number comes from `rukh eval`. "
+        "Implies --with-legality.",
+    )
+    parser.add_argument(
+        "--elo-games",
+        type=int,
+        default=ELO_GAMES,
+        help=f"games per Stockfish rung when --with-elo is given (default: {ELO_GAMES})",
     )
     parser.add_argument("--positions", type=int, default=500, help="positions per legality check")
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    args = parse_args()
 
     client = mlflow.tracking.MlflowClient(tracking_uri=tracking_uri(create=False))
     run = find_run(args.run_name, args.run_id)
     run_id = run.info.run_id
 
-    train_loss = history(client, run_id, "train/loss")
-    val_loss = history(client, run_id, "val/loss")
-    val_top1 = history(client, run_id, "val/top1")
-    steps = sorted(set(train_loss) | set(val_loss) | set(val_top1))
-    if not steps:
+    logged = {name: history(client, run_id, key) for name, key in METRICS.items()}
+    metric_steps = sorted(set().union(*(series.keys() for series in logged.values())))
+    if not metric_steps:
         raise SystemExit(f"run {run_id} has no train/val metrics")
 
-    extra: dict[int, dict[str, float]] = {}
-    if args.with_legality:
-        from rukh.eval.legality import legality
-        from rukh.eval.suite import EvalConfig
-        from rukh.train.checkpoint import load_model
+    ckpt_dir = checkpoint_dir(run, args.checkpoints)
+    checkpoints = run_checkpoints(ckpt_dir)
+    steps = replay_steps(metric_steps, checkpoints)
+    if not checkpoints:
+        raise SystemExit(
+            f"no {CKPT_GLOB} under {ckpt_dir}: the replay is one entry per checkpoint, so point "
+            "--checkpoints at the directory the run wrote"
+        )
 
-        ckpt_dir = Path(str(run.data.params.get("out_dir", "checkpoints"))) / str(run.info.run_name)
-        cfg = EvalConfig(legality_positions=args.positions)
-        for ckpt in sorted(ckpt_dir.glob("step-*.pt"), key=lambda p: int(p.stem.split("-")[1])):
-            step = int(ckpt.stem.split("-")[1])
-            model = load_model(ckpt, device=cfg.device)
-            result = legality(model, cfg, mode="argmax")
-            extra[step] = {"legality": result.rate}
-            print(f"  step {step:>6}  legality {result.rate:.3f}")
+    measured: dict[int, dict[str, float]] = {}
+    if args.with_legality or args.with_elo:
+        measured = evaluate_checkpoints(
+            steps, checkpoints, args.positions, args.with_elo, args.elo_games
+        )
 
-    entries = []
+    entries: list[dict[str, float | int]] = []
     for step in steps:
         entry: dict[str, float | int] = {"step": int(step)}
-        if step in train_loss:
-            entry["train_loss"] = round(train_loss[step], 4)
-        if step in val_loss:
-            entry["val_loss"] = round(val_loss[step], 4)
-        if step in val_top1:
-            entry["val_top1"] = round(val_top1[step], 4)
-        entry.update(extra.get(step, {}))
+        for name, series in logged.items():
+            if step in series:
+                entry[name] = round(series[step], 4)
+        entry.update(measured.get(step, {}))
         entries.append(entry)
 
     default_out = paths.root() / "artifacts" / "web" / "training-replay.json"
@@ -121,11 +263,12 @@ def main() -> None:
             "run_id": run_id,
             "preset": run.data.params.get("preset"),
             "max_steps": run.data.params.get("max_steps"),
+            "checkpoints": ckpt_dir.as_posix(),
             "generated": datetime.now(UTC).isoformat(timespec="seconds"),
         },
     }
     out.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
-    print(f"{len(entries)} steps -> {out}")
+    print(f"{len(entries)} checkpoints -> {out}")
 
 
 if __name__ == "__main__":
