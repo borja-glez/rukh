@@ -14,6 +14,7 @@ import torch
 import yaml
 from typer.testing import CliRunner
 
+from helpers_labels import source_frame
 from rukh.cli import app
 from rukh.eval.encoder import (
     EncoderEvalConfig,
@@ -36,39 +37,6 @@ from rukh.train import save_checkpoint
 pytestmark = pytest.mark.unit
 
 TOY = EncoderConfig(input="squares", n_layer=1, n_head=2, d_model=16, dropout=0.0)
-GAME = ("e4", "e5", "Qh5", "Nc6", "Qxf7+", "Kxf7", "Nf3", "Nf6")
-"""1.e4 e5 2.Qh5 Nc6 3.Qxf7+?? Kxf7: a real queen blunder inside a real game."""
-
-
-def game_rows(game_id: int, sans: tuple[str, ...], scores: list[int]) -> list[dict[str, Any]]:
-    """One row of ``positions-eval.parquet`` per ply of a game actually played on a board."""
-    board = chess.Board()
-    rows: list[dict[str, Any]] = []
-    for ply, san in enumerate(sans, start=1):
-        move = board.parse_san(san)
-        board.push(move)
-        rows.append(
-            {
-                "fen": " ".join(board.fen().split(" ")[:4]),
-                "game_id": game_id,
-                "ply": ply,
-                "last_move": move.uci(),
-                "result": "0-1",
-                "phase": "opening",
-                "cp": scores[ply - 1],
-                "mate": None,
-                "n_seen": 1,
-                "best_move": move.uci(),
-                "depth": 20,
-            }
-        )
-    return rows
-
-
-def source_frame() -> pl.DataFrame:
-    """Two copies of the same game, so both sides of the by-game split have rows."""
-    scores = [20, 10, 30, 15, -850, -900, -880, -870]
-    return pl.DataFrame(game_rows(1, GAME, scores) + game_rows(2, GAME, scores))
 
 
 def config(tmp_path: Path, **overrides: Any) -> EncoderEvalConfig:

@@ -184,8 +184,8 @@ def test_export_all_writes_the_three_files_and_keeps_the_metadata(
 def test_export_all_measures_parity_on_the_held_out_labels(
     model: MultiHead, tmp_path: Path
 ) -> None:
+    from helpers_labels import source_frame
     from rukh.data.labels import LabelsConfig
-    from tests.unit.test_eval_encoder import source_frame
 
     source = tmp_path / "positions-eval.parquet"
     source_frame().write_parquet(source)
@@ -261,8 +261,8 @@ def test_the_encoder_parity_refuses_to_invent_positions(tmp_path: Path, rukh_hom
 
 
 def test_the_encoder_parity_reads_the_held_out_labels(tmp_path: Path) -> None:
+    from helpers_labels import source_frame
     from rukh.data.labels import LabelsConfig
-    from tests.unit.test_eval_encoder import source_frame
 
     source = tmp_path / "positions-eval.parquet"
     source_frame().write_parquet(source)
