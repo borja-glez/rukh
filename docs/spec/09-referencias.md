@@ -8,7 +8,7 @@
   - https://huggingface.co/datasets/Lichess/chess-puzzles — 6 100 960 puzles (877 MB), actualizado 2026-09-07.
   - https://huggingface.co/datasets/Lichess/chess-position-evaluations — 394 669 566 posiciones con `fen, line, depth, knodes, cp, mate`; 20 parquet ≈ 42 GB; actualizado 2026-07-08.
   - https://huggingface.co/datasets/Lichess/chess-openings — 3 704 aperturas ECO con `pgn`, `uci`, `epd`.
-  - https://huggingface.co/datasets/Lichess/chess-puzzles-with-games, https://huggingface.co/datasets/Lichess/fishnet-evals (10-100 B filas; no se usa).
+  - https://huggingface.co/datasets/Lichess/chess-puzzles-with-games — los mismos puzles con la partida de la que salen (`movetext`); es la fuente de `rukh data puzzles` desde D-053. https://huggingface.co/datasets/Lichess/fishnet-evals (10-100 B filas; no se usa).
 - Lichess Elite Database (nikonoel): https://database.nikonoel.fr/ — 2500+ contra 2300+ (desde 2021-12), sin bullet, zip mensuales de 60-100 MB.
 - Lichess openings (repo fuente): https://github.com/lichess-org/chess-openings
 - Project Gutenberg: Capablanca, *Chess Fundamentals* https://www.gutenberg.org/ebooks/33870 · Edward Lasker, *Chess Strategy* https://www.gutenberg.org/ebooks/5614 · tema "Chess": https://www.gutenberg.org/ebooks/subject/1677

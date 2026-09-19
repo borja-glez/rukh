@@ -625,3 +625,30 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Qué:** `/artifacts/eval/**/*.sqlite` pasa a `.gitignore` y las dos que se habían colado se
   quitan del índice. Los informes y los `results.json` sí se quedan: son el registro.
 - **Por qué:** una caché es una aceleración local, no un resultado, y crece con cada tirada.
+
+### D-053 · Los puzles se puntúan desde la partida real, no desde su propia solución
+- **Qué:** `rukh data puzzles` pasa a leer `Lichess/chess-puzzles-with-games` (`with_games: true`,
+  el valor por defecto en `configs/data/pipeline.yaml`; `with_games: false` vuelve a
+  `Lichess/chess-puzzles`). El `movetext` de la partida se convierte a UCI con
+  `rukh.data.uci.san_tokens` y se reproduce hasta que el FEN de cuatro campos del tablero
+  (`rukh.data.positions.fen4`) coincide con el del puzle: esas jugadas se guardan en `prefix_uci`,
+  junto a `prefix_plies`, `white_elo` y `black_elo`. `rukh.eval.puzzles` arma el prompt como
+  `<bos> <wXXXX> <bXXXX>` más esas jugadas, igual que `rukh.infer.sampler.prompt_ids`.
+- **Por qué:** `rukh eval --suite quick` daba `puzzles: 0.0107 solved` con un modelo que juega
+  legal el 99,4 % de las veces y acierta la jugada humana el 51,1 %. El prompt era `<bos>` más la
+  propia línea de solución del puzle: una secuencia que no es una partida y que ni siquiera
+  empieza en la posición inicial. Un decoder entrenado con prefijos de partidas no puede
+  responder a eso, así que el 1,07 % medía el prompt, no la táctica. GOAL.md pide "puzles por
+  tramo" como criterio de aceptación de P2/P6, y un número pegado al suelo por construcción no
+  sirve de criterio.
+- **Detalles:** los puzles cuyo prefijo no se puede reconstruir (la posición no aparece,
+  `movetext` ilegal o ausente) se descartan y se cuentan en el manifiesto
+  (`counts.dropped_no_prefix`, `filters.prefix.dropped`). En un sondeo de 3 000 puzles de dos de
+  los 14 ficheros del dataset, con los filtros de siempre, se reconstruyeron 3 000: la pérdida
+  esperada es < 0,1 %. Un parquet del camino antiguo (sin `prefix_uci`) se sigue evaluando con el
+  prompt de antes, el informe lo marca como `line-only` y añade una nota diciendo que ese número
+  no es comparable. La caché de evaluación guarda el estilo de prompt en cada intento y no reusa
+  uno del otro estilo, para que el 1,07 % no reaparezca disfrazado.
+- **Si está mal:** la alternativa es no medir puzles con el decoder (solo con el encoder, que sí
+  recibe la posición) y quitar el criterio del GOAL; volver a la fuente anterior es un `false` en
+  la configuración.
