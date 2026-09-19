@@ -652,3 +652,16 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Si está mal:** la alternativa es no medir puzles con el decoder (solo con el encoder, que sí
   recibe la posición) y quitar el criterio del GOAL; volver a la fuente anterior es un `false` en
   la configuración.
+
+### D-054 · El cuello de `small` son los datos, no la capacidad
+- **Qué:** `medium` (115 120 128 parámetros, misma receta y mismo presupuesto de tokens, 1 h 40 en
+  la 5090) mide **1091 Elo (IC 990-1194)**, 52,9 % de top-1, 23,9 % de puzles y 99,40 % de
+  legalidad, frente a los **1007 Elo (IC 920-1101)**, 51,1 % y 22,1 % de `small`. Triplicar los
+  parámetros compra 84 Elo, con intervalos que se solapan.
+- **Por qué importa:** responde la pregunta que abrió D-048. Con 5,9 M de partidas, el modelo de
+  39M ya está cerca de lo que ese corpus permite; Karvonen llegó a ~1300 Elo con 16 M de partidas
+  y 50M de parámetros. Para acercarse a 1200 hay que traer más meses, no más capas.
+- **Decisión:** las dos filas se publican. El modelo del curso sigue siendo `small` (entrena en 42
+  minutos y cabe en el navegador); `medium` queda documentado como la comprobación.
+- **Si está mal:** repetir con más meses de datos y el mismo `small` separaría las dos hipótesis
+  del todo.
