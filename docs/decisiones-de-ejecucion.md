@@ -398,3 +398,159 @@ Evidencia obtenida por el controlador, no por subagentes:
   plano mientras durase.
 - **Si está mal:** basta con volver a lanzar `rukh data fetch` para el mes que falte; el manifiesto
   se reescribe con los dos meses.
+
+## P3 · Encoder (2026-09-19)
+
+### D-035 · El esquema `squares` son 47 tokens y 69 posiciones, con el enroque en un solo token
+- **Qué:** `SQUARE_VOCAB` tiene **47** tokens (`<pad>`, `<mask>`, `<cls>`, `<empty>`, las 12
+  piezas, los 2 turnos, las 16 combinaciones de enroque, `ep:none` más los 8 ficheros, y 4 tramos
+  de reloj) y toda secuencia mide exactamente **69** posiciones: `<cls>`, las 64 casillas en orden
+  por columnas (a1…a8, b1…, h8), turno, enroque, al paso y reloj.
+- **Por qué:** la enumeración del plan (64 + turno + 4 enroques + al paso + reloj) suma 71 y el
+  número duro del plan era 69. Los cuatro derechos de enroque son cuatro bits de un mismo hecho,
+  así que viajan en **un** token de 16 valores; el hueco que eso libera se usa para un `<cls>`
+  propio, que le da a `pool("cls")` un ancla real en este esquema en vez de tomar prestada la
+  casilla a1. El orden de las casillas es el de `uci_vocab.squares()`, el mismo que usan los
+  extremos de las jugadas: una sola enumeración en todo el proyecto.
+- **Nota:** el token 68 (el reloj) es **constante** en todo el conjunto de datos. Un `fen4` no
+  lleva contadores y la tabla de P1 es toda `fen4`, así que siempre sale `clock:0`. Se mantiene en
+  el diseño porque una posición en vivo de la demo sí trae los contadores, y una representación
+  que cambia de forma entre entrenamiento y servicio sería peor que un hueco constante.
+- **Si está mal:** `vocab_hash()` fija la identidad del esquema; cambiar la enumeración invalida
+  todo encoder entrenado con ella, exactamente como el vocabulario UCI de P1.
+
+### D-036 · `ignore_index = -100` porque `0` es `<pad>` en los dos esquemas
+- **Qué:** la pérdida de MMM usa `MMM_IGNORE_INDEX = -100` para "aquí no se predice nada", no el
+  `0` del decoder.
+- **Por qué:** `0` es `<pad>` en los **dos** esquemas, así que no puede hacer además de "no
+  predicho" sin que la pérdida pierda la capacidad de distinguir los dos casos. La razón que se
+  escribió primero —"`0` es etiqueta válida en casillas y no en jugadas"— era falsa: `0` es
+  `<pad>` en los dos, y las secuencias de `squares` ni siquiera llevan relleno, porque miden 69
+  siempre. El decoder se lo puede permitir porque su objetivo es el token siguiente de un flujo
+  empaquetado y allí `<pad>` nunca es objetivo; aquí la distinción tiene que ser explícita, y
+  `-100` está fuera de todo vocabulario.
+- **Si está mal:** es una constante en `rukh.models.encoder` y el `ignore_index` de una sola
+  llamada a `cross_entropy`.
+
+### D-037 · El preentrenamiento MMM solo corre sobre `moves`
+- **Qué:** `MmmConfig.input` es `Literal["moves"]`: no hay preentrenamiento enmascarado del
+  esquema `squares`.
+- **Por qué:** MMM necesita un flujo de tokens empaquetado y P1 solo produce uno, el de jugadas
+  UCI (`data/tokens/uci`), que además es el mismo que entrena el decoder, de modo que los dos
+  modelos ven las mismas partidas. Las posiciones de P1 viven en un parquet de FENs, no en un
+  flujo; enmascarar casillas sueltas de un tablero sería otro objetivo (más cerca de un
+  autoencoder de posiciones) y otro hito.
+- **Consecuencia:** un encoder de `squares` empieza siempre desde pesos aleatorios, y esa es la
+  línea base honesta contra la que se compara el preentrenado.
+- **Si está mal:** hace falta empaquetar un flujo de tokens de casillas en P1 y quitar el
+  `Literal`.
+
+### D-038 · Las cabezas afinan los dos esquemas, y el prefijo de `moves` es *una* línea
+- **Qué:** `rukh.train.heads` acepta `input: moves` además de `squares`.
+  `rukh.data.labels.game_moves` vuelve a unir las partidas de P1
+  (`data/uci/year=*/month=*/games.parquet`, semi-join por `game_id`, **una fila por partida**) y
+  cada ítem es `[<bos>, elo(blancas), elo(negras)] + uci.split()[:ply]`, recortado por la
+  izquierda con `infer.sampler.prompt_ids` (que conserva las tres cabeceras) y rellenado por lote
+  con su `attention_mask`.
+- **Por qué:** sin esto el encoder preentrenado con MMM (`moves`) **no tenía dónde ir**: las
+  cabezas solo sabían leer `squares`, así que el preentrenamiento quedaba desconectado del resto
+  de P3 y la comparación entre las dos representaciones que pide el spec no existía. La
+  alternativa —preentrenar MMM sobre casillas— es D-037.
+- **Salvedad, documentada en el código, en la card y aquí:** la tabla supervisada está
+  deduplicada por `fen4`, así que el prefijo es **una** línea que llega a esa posición, no
+  necesariamente la de la partida etiquetada. La posición, el valor y el veredicto de error son
+  los mismos; la historia puede no serlo.
+- **`game_moves` queda fuera de `build_labels`** a propósito: el camino `squares` no debe pagar
+  una unión con dos meses de partidas que no usa.
+- **Si está mal:** `load_encoder_for` compara el esquema del checkpoint con el de la configuración
+  y se niega en vez de reinterpretar el vocabulario; volver atrás es restringir otra vez
+  `HeadsConfig.input`.
+
+### D-039 · La curva por número de etiquetas viaja dentro del checkpoint
+- **Qué:** `label_curve` escribe sus puntos (`label_curve=[...]`) en **todos** los checkpoints de
+  la última tirada (la de más etiquetas) con `train.checkpoint.attach_payload`, y
+  `rukh eval encoder` los lee de ahí.
+- **Por qué:** antes nadie escribía esa clave, así que `label_curve_points()` devolvía siempre
+  `[]`, la tabla "labels needed" no se dibujaba nunca y la curva —la lección del módulo y un
+  entregable de `GOAL.md`— era inalcanzable. Un número que solo existió en una línea de log es un
+  número que nadie puede poner en una tabla.
+- **Si está mal:** la clave es una sola (`CURVE_KEY`, con un test que ata al lector y al escritor)
+  y la alternativa era un `curve.json` al lado de la tirada, que se pierde al mover los pesos.
+
+### D-040 · Se comprueban los dos criterios de `GOAL.md`, y el valor va contra la puntuación acotada
+- **Qué:** `EncoderResult` lleva `meets_goal` (margen de F1 ≥ 5 puntos),
+  `value_correlation_meets_goal` (≥ 0,80) y `meets_all_goals`. La correlación se mide contra
+  `tanh(cp / value_scale)` —la puntuación acotada con la que se entrena la cabeza— y el titular es
+  **Spearman**, con Pearson al lado.
+- **Por qué:** `GOAL.md` tiene dos criterios numéricos y solo se comprobaba el F1. Y correlacionar
+  una salida acotada en `(-1, 1)` contra el `cp` crudo compara peras con manzanas: un mate vale
+  ±9 99x y un puñado de filas decidiría el Pearson de todo el conjunto. Spearman es además la
+  lectura honesta de "el modelo sabe qué posición es mejor", que es de lo que habla el listón.
+- **Si está mal:** son dos constantes (`GOAL_MARGIN`, `GOAL_VALUE_CORRELATION`) y el informe
+  imprime contra qué se correlacionó cada fila.
+
+### D-041 · La caché de la heurística se indexa por la posición, no por `game_id:ply`
+- **Qué:** la clave de un veredicto de la línea base es `fen|fen_before|last_move`, y
+  `heuristic_fields()` incluye ahora `labels`.
+- **Por qué:** con `f"{game_id}:{ply}"`, apuntar `positions_eval` a otro parquet reutilizaba en
+  silencio veredictos de posiciones distintas que caían en el mismo `(partida, ply)`. Con la clave
+  por posición ocurre lo contrario, que es lo deseable: dos tablas que comparten una posición
+  comparten la respuesta. `fen_before` entra en la clave porque `fen` más `last_move` no permite
+  recuperar la pieza capturada, y la diferencia de material entre las dos posiciones es
+  literalmente todo el juicio de la heurística.
+- **Efecto visible:** el fixture de dos copias de la misma partida pasó de 16 filas de caché a 8,
+  y hay un test que lo fija.
+- **Si está mal:** `HEURISTIC_KEY` sigue existiendo para invalidar todo de golpe.
+
+### D-042 · La exportación del encoder: `clear_value_info`, `_align_cast_outputs` y lote 2
+- **Qué:** tres detalles de `rukh.export` que solo aparecen con el encoder.
+  - `clear_value_info` borra las anotaciones de forma de los valores intermedios antes de
+    cuantizar. El exportador moderno anota la forma del ejemplo trazado, no la del grafo dinámico;
+    onnxruntime las ignora, pero `quantize_dynamic` vuelve a inferir formas en modo estricto y
+    rechaza el fichero, así que el int8 del encoder moría en una anotación opcional.
+  - `_align_cast_outputs` arregla los nodos `Cast` que `convert_float_to_float16` deja diciendo
+    `to=float32` mientras su salida ya está declarada float16. El encoder lo provoca porque el
+    *pooling* castea la máscara de relleno al tipo del estado oculto; sin el arreglo, onnxruntime
+    rechaza el fp16 con `Type (tensor(float16)) … does not match expected type`.
+  - el grafo se traza con un **lote de 2**, no de 1: `torch.export` especializa una dimensión cuyo
+    ejemplo vale 1 (la especialización 0/1), con lo que el eje del lote quedaba fijo y la segunda
+    posición de la demo fallaba dentro de un `reshape`. Con 2 el eje sigue siendo dinámico y el
+    fichero acepta igualmente un lote de 1. El ejemplo son ids reales, no ceros: `<pad>` en todas
+    las posiciones es una fila enteramente enmascarada, que el encoder rechaza a propósito.
+- **Si está mal:** los tres tienen su test; el de `squares` comprueba además que no hay eje de
+  secuencia que hacer dinámico (siempre 69 tokens).
+
+### D-043 · La guarda de la máscara se salta bajo `export` **y** bajo `compile`
+- **Qué:** `PositionEncoder._key_mask` rechaza una fila enteramente enmascarada (softmax daría
+  NaN), pero la comprobación se salta cuando `torch.compiler.is_exporting()` **o**
+  `torch.compiler.is_compiling()`.
+- **Por qué:** leer un tensor para decidir si lanzar es justo lo que una captura de grafo no puede
+  representar. Bajo `torch.export` mandaba el exportador al tracer antiguo (D-027); bajo
+  `torch.compile` era peor por silencioso: Dynamo no puede probar la condición y rompía el grafo
+  en **cada** paso del bucle de MMM, o sea una sincronización y dos medios grafos por paso a
+  cambio de una comprobación que ya había pasado. En modo *eager* no cambia nada y el test del
+  `ValueError` sigue igual.
+- **Si está mal:** es una función de una línea (`_tracing()`).
+
+### D-044 · El sondeo de compilación pasa la máscara que pasa el bucle
+- **Qué:** el `probe` de `train.mmm` llama a `masked_step(..., model.padding_mask(warm))`, y
+  `train.heads` compila con un lote real del propio dataset, máscara incluida.
+- **Por qué:** sondear con `attention_mask=None` compila un grafo que el bucle no ejecuta nunca y
+  se paga una recompilación en el paso 1, que es exactamente el coste que el sondeo existe para
+  adelantar.
+- **Además:** `train_heads` llama ahora a `maybe_compile`, así que el `compile: false` de
+  `configs/train/encoder-heads.yaml` describe un mando que existe; `tokens_dir`, la única clave
+  heredada que este bucle no usa, se excluye de los parámetros que van a MLflow y al checkpoint.
+- **Y:** bajo `last-n`, `set_training_mode` deja en `eval` el prefijo congelado y solo las últimas
+  `last_n` capas y la norma final conservan su dropout. Antes el prefijo congelado seguía en
+  `train()` y metía ruido que nadie podía aprender ni absorber.
+
+### D-045 · Los fixtures compartidos de los tests viven en `tests/unit/helpers_labels.py`
+- **Qué:** `GAME`, `game_rows` y `source_frame` se importan como `from helpers_labels import ...`.
+- **Por qué:** `tests/` no es un paquete (no hay `__init__.py`), así que
+  `from tests.unit.test_eval_encoder import ...` fallaba con `ModuleNotFoundError` y dejaba la
+  suite en rojo. pytest añade `tests/unit` al `sys.path`, de modo que el import desnudo funciona
+  sin convertir los tests en paquete, que habría cambiado la resolución de imports de los demás
+  ficheros. `ruff` necesita saberlo: `known-first-party` incluye `helpers_labels`.
+- **Si está mal:** la alternativa es añadir `__init__.py` a `tests/` y `tests/unit/` y volver al
+  import con puntos.

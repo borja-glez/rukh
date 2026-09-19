@@ -190,7 +190,7 @@ def encoder_parity_positions(
     if positions:
         return positions, "validation-labels", None
     warning = (
-        "no labelled validation positions (build them with `rukh data labels`): the encoder "
+        "no labelled validation positions (build them with `rukh data evals`): the encoder "
         "parity check was skipped rather than measured on positions nobody will evaluate"
     )
     log.warning("%s", warning)

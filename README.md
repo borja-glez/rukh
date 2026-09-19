@@ -53,6 +53,29 @@ uv run pytest -m unit -q               # fast tests; add `or engine` once Stockf
 output. Set `RUKH_HOME` to move `data/`, `mlruns/` and `tools/` elsewhere, and `RUKH_STOCKFISH` to
 point at a specific binary.
 
+### The encoder (M3)
+
+`PositionEncoder` is the bidirectional half of the project: it reads a position and says how good
+it is, whether the move that led to it threw the game away and how the game ends. It is pretrained
+with masked move modeling on the `moves` scheme (the same UCI stream the decoder trains on) and
+fine-tuned with three linear heads on the Stockfish labels of P1.
+
+```sh
+uv run rukh data evals                                         # the Stockfish scores the labels use
+uv run rukh train encoder --config configs/train/encoder-mmm.yaml          # masked move modeling
+uv run rukh train heads   --config configs/train/encoder-heads-moves.yaml  # heads on the MMM run
+uv run rukh train heads   --config configs/train/encoder-heads.yaml --curve  # squares + 10/25/50/100 %
+uv run rukh eval encoder  --model checkpoints/<run>/best.pt    # F1 vs the baseline, value, result
+uv run rukh export --ckpt checkpoints/<run>/best.pt --kind encoder --out artifacts/onnx/encoder   --fp16 --int8                                                # `value` and `blunder` for the demo
+uv run rukh encoder embed --positions data/labels/positions-labels.parquet --out embeddings.npy
+```
+
+The two schemes are the comparison of the module: `moves` feeds the encoder the line that reached
+the position, `squares` feeds it the 69 tokens of the board itself. Only `moves` can start from a
+masked-move checkpoint, and `rukh train heads` refuses a checkpoint trained on the other one
+rather than reinterpreting its vocabulary. `--curve` writes the label-count curve into the
+checkpoint, which is what fills the "labels needed" table of `rukh eval encoder`.
+
 ## Development
 
 - `uv run ruff check .` and `uv run ruff format .` must be clean; CI runs them plus
