@@ -1,0 +1,31 @@
+# A copy of `greedy.yaml` with its own cache, to replay games that are already measured
+# without overwriting them. Used once, to find out whether CPU load on the machine changes
+# what Stockfish plays at 0.1 s per move -- if it does, no Elo number taken under load is
+# comparable with a number taken on an idle machine.
+# The sampling the acceptance bar is read at: near-deterministic (D-047). Temperature is worth
+# more than 200 Elo on the same weights, so every comparison between stages has to fix it, and
+# this file is that fixture -- it reproduces exactly what `small-greedy` and `medium-greedy` were
+# measured with, so a new stage lands in the same table.
+#
+# `games` is the month whose first 20,000 rows the position pool reads (`.head(pool)`), and the
+# first 100,000 games of that month are the held-out validation split (D-062). The pool is
+# therefore inside the held-out part even now that the rest of the month trains.
+games: data/uci/year=2025/month=02/games.parquet
+puzzles: data/puzzles/puzzles.parquet
+puzzle_split: test
+legality_positions: 1000
+accuracy_positions: 1000
+position_pool: 20000
+puzzles_per_band: 2000
+elo_games: 20
+elo_move_time: 0.1
+bootstrap: 500
+temperature: 0.05
+top_k: 1
+block: 200
+seed: 42
+header_elo: 1800   # the header every published number was measured at; keep it pinned
+out_dir: artifacts/eval
+web_results: null
+cache_db: artifacts/eval/cache-loadtest.sqlite
+track: false
