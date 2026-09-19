@@ -665,3 +665,41 @@ Evidencia obtenida por el controlador, no por subagentes:
   minutos y cabe en el navegador); `medium` queda documentado como la comprobación.
 - **Si está mal:** repetir con más meses de datos y el mismo `small` separaría las dos hipótesis
   del todo.
+
+### D-055 · El F1 de error se mide en un punto de operación elegido aparte, no en 0,5
+- **Qué:** `rukh eval encoder` sobre el encoder afinado real
+  (`checkpoints/encoder-heads-moves-20260919-095307/best.pt`, 7 453 filas etiquetadas del
+  conjunto retenido) daba **F1 0,0000** (precisión 0, exhaustividad 0) frente a **0,0824** de la
+  heurística de material (P 0,0436, R 0,7653): "−8,2 puntos de F1, por debajo del listón". La
+  tasa base de error es **3,72 %** y las probabilidades de la cabeza van de **0,0039 a 0,2568**,
+  con media 0,0436: en el umbral fijo 0,5 la cabeza **no se dispara nunca**, así que ese F1 era
+  necesariamente cero. El mismo modelo, en las mismas filas, tiene **ROC AUC 0,7193** y en su
+  mejor umbral (0,118) llega a **F1 0,1826** (P 0,148, R 0,2383): más del doble de la heurística,
+  **+10 puntos**, muy por encima de los +5 que pide GOAL.md.
+- **Por qué importa:** el modelo no estaba roto; lo estaba el punto de operación. Con una clase
+  positiva del 3,7 %, un F1 en un umbral arbitrario mide la calibración de un sigmoide que nadie
+  calibró, no la calidad de la representación, y la exactitud no mide nada en absoluto (un
+  modelo que siempre dice "no hay error" saca 96,3 %). Publicar −8,2 puntos habría sido tan
+  falso como publicar +10 sin decir de dónde sale el umbral.
+- **Decisión:** las filas etiquetadas se parten en dos **por `game_id`** (nunca por posición: la
+  misma política que `rukh.data.labels`, y por la misma razón). La mitad `tune` elige el umbral
+  que maximiza F1 allí; la mitad `score` es donde se miden el F1, la precisión y la exhaustividad
+  que se publican y con los que se calcula la comparación de GOAL.md, contra la heurística medida
+  en esas mismas filas. Nunca se elige el umbral en las filas que luego se puntúan. El informe
+  lleva ahora los dos puntos de operación (el afinado, con su umbral, y el fijo 0,5), el tamaño
+  en filas y partidas de las dos mitades, precisión y exhaustividad en ambos, y **ROC AUC** y
+  **precisión media** (el área bajo la curva P-R, el resumen correcto para una clase rara),
+  implementadas a mano sobre rangos, sin `scipy` ni `scikit-learn`. La heurística es una regla de
+  sí/no sin umbral que afinar: el informe lo dice explícitamente, para que la comparación no sea
+  injusta en silencio en el otro sentido. El aviso de la tasa base (la exactitud no significa
+  nada, y el F1 en un umbral arbitrario casi tampoco) está en `report.md` y en la model card,
+  porque es la lección más transferible del módulo. Cuando la partición degenera (pocas partidas,
+  o todos los errores en una mitad) el umbral se elige y se mide en las mismas filas, el informe
+  lo marca como cota superior y no como número retenido.
+- **Detalles:** `value_correlation_meets_goal` no cambia y Spearman sigue siendo el titular del
+  criterio de valor. La fila de la web gana `blunder_threshold`, `blunder_f1_fixed`,
+  `blunder_roc_auc`, `blunder_average_precision` y `blunder_base_rate`; MLflow registra lo mismo.
+- **Si está mal:** la alternativa es calibrar la cabeza (Platt o isotónica sobre la mitad `tune`)
+  y volver a un umbral fijo de 0,5 con sentido, o cambiar el criterio de GOAL.md a la precisión
+  media, que no depende de ningún umbral. Las dos son más honestas que un 0,5 sin calibrar;
+  ninguna de las dos se decide con una sola tirada.
