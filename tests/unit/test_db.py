@@ -16,9 +16,14 @@ pytestmark = pytest.mark.unit
 def _settings(con: object) -> dict[str, object]:
     row = con.execute(  # type: ignore[attr-defined]
         "SELECT current_setting('temp_directory'), current_setting('memory_limit'), "
-        "current_setting('threads')"
+        "current_setting('threads'), current_setting('preserve_insertion_order')"
     ).fetchone()
-    return {"temp_directory": row[0], "memory_limit": row[1], "threads": row[2]}
+    return {
+        "temp_directory": row[0],
+        "memory_limit": row[1],
+        "threads": row[2],
+        "preserve_insertion_order": row[3],
+    }
 
 
 def test_connect_applies_the_settings(rukh_home: Path) -> None:
@@ -31,6 +36,8 @@ def test_connect_applies_the_settings(rukh_home: Path) -> None:
     assert settings["memory_limit"] == "1.8 GiB"  # DuckDB reports GiB
     assert settings["threads"] == 3
     assert (rukh_home / "data" / TMP_DIRNAME).is_dir()
+    # Off by default: keeping the input order makes COPY buffer the whole result (D-033).
+    assert settings["preserve_insertion_order"] is False
 
 
 def test_connect_defaults_to_32gb_and_every_core(rukh_home: Path) -> None:

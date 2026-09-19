@@ -376,3 +376,25 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Por qué:** ese sidecar pesa lo mismo que el modelo y se habría subido al Hub y servido al
   navegador sin que nadie lo leyera nunca.
 - **Si está mal:** se quita el borrado y hay que publicar los dos ficheros juntos.
+
+### D-033 · DuckDB escribe sin preservar el orden de inserción
+- **Qué:** `rukh.data.db.connect` fija `preserve_insertion_order = false` (configurable en
+  `pipeline.yaml`).
+- **Por qué:** con el valor por defecto, un `COPY` de un escaneo remoto grande retiene el
+  resultado entero en memoria para que las filas de salida conserven el orden de entrada. La
+  primera descarga real de un mes llegó a **20 GB de memoria residente** para un fichero de 2,5 GB
+  y el sistema empezó a matar procesos en segundo plano. Ningún paso posterior depende del orden
+  de las partidas (los splits son por mes y los muestreos llevan semilla), así que ese buffer no
+  compra nada.
+- **Si está mal:** si alguna vez hace falta un orden determinista en el parquet, se pone a `true`
+  en la configuración de ese paso y se paga la memoria.
+
+### D-034 · La descarga de P1 se dejó terminar con la configuración antigua
+- **Qué:** la descarga de los dos meses se lanzó antes de que existiera el helper de DuckDB, así
+  que corre sin límite de memoria y sin D-033. Se decidió **no** reiniciarla: enero (2,5 GB) ya
+  estaba escrito y febrero iba por la mitad.
+- **Por qué:** reiniciar costaba otras dos horas de descarga y el proceso seguía avanzando. Se
+  liberó memoria parando los contenedores de verificación y se dejó de lanzar trabajos en segundo
+  plano mientras durase.
+- **Si está mal:** basta con volver a lanzar `rukh data fetch` para el mes que falte; el manifiesto
+  se reescribe con los dos meses.

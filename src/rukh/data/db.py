@@ -5,6 +5,11 @@ DuckDB spills to the system temp directory (often a small system drive) and, wit
 limit, competes with the worker processes. ``connect`` sets ``temp_directory`` to
 ``<data>/duckdb-tmp`` (created on demand, gitignored), ``memory_limit`` and ``threads`` on
 every connection.
+
+It also turns off ``preserve_insertion_order``. With it on (the default) a ``COPY`` of a large
+streaming scan buffers the whole result so the output rows keep the input order; the first real
+fetch of a month grew to 20 GB of resident memory for a 2.5 GB file. Nothing downstream cares
+about the order of the games, so the buffering buys nothing and costs the machine.
 """
 
 from __future__ import annotations
@@ -30,6 +35,8 @@ class DuckDbConfig(BaseConfig):
     memory_limit: str = "32GB"
     threads: int = Field(default=0, ge=0)
     """``0`` = ``cpu_count()``."""
+    preserve_insertion_order: bool = False
+    """Keep the input order in the output. Off: it buffers the whole result of a ``COPY``."""
 
 
 def temp_directory() -> Path:
@@ -48,4 +55,5 @@ def connect(cfg: DuckDbConfig | None = None) -> duckdb.DuckDBPyConnection:
     con.execute("SET temp_directory = ?", [temp_directory().as_posix()])
     con.execute("SET memory_limit = ?", [settings.memory_limit])
     con.execute("SET threads = ?", [settings.threads or (os.cpu_count() or 4)])
+    con.execute("SET preserve_insertion_order = ?", [settings.preserve_insertion_order])
     return con
