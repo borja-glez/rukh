@@ -142,6 +142,13 @@ def fen_to_tokens(fen: str) -> list[int]:
 
     Raises ``ValueError`` on a malformed FEN: the encoder must never be fed a position that was
     silently repaired into a different one.
+
+    Token 68, the halfmove clock, is **constant** over every dataset this project builds. A
+    ``fen4`` has no counters, so it reads back as ``clock:0``, and P1's positions table is all
+    ``fen4``: the bucket carries exactly zero information there and the encoder learns a bias
+    term for it. It stays in the layout because a live position from the demo does have the
+    counters, and a representation that changes shape between training and serving would be
+    worse than one slot of constant.
     """
     fields = fen.split()
     if len(fields) < 4:

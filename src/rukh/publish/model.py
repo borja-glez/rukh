@@ -241,7 +241,15 @@ def write_config(
         "vocab_hash": payload.get("vocab_hash"),
         "data_manifest_sha": payload.get("data_manifest_sha"),
         "git_sha": payload.get("git_sha"),
-        **({"heads": list(ENCODER_HEADS), "pooling": _pooling(payload)} if encoder else {}),
+        **(
+            {
+                "heads": list(ENCODER_HEADS),
+                "pooling": _pooling(payload),
+                "pretrained_from": _pretrained_from(payload),
+            }
+            if encoder
+            else {}
+        ),
         **model_cfg,
     }
     (folder / CONFIG_NAME).write_text(
@@ -253,6 +261,17 @@ def write_config(
 def _pooling(payload: dict[str, Any]) -> str:
     """How the published encoder pools its tokens, as its fine-tuning run recorded it."""
     return str((payload.get("cfg") or {}).get("pooling") or "mean")
+
+
+def _pretrained_from(payload: dict[str, Any]) -> str | None:
+    """The masked-move checkpoint the heads were fine-tuned from, or ``None`` for from scratch.
+
+    ``encoder_ckpt`` is ``None`` in a perfectly legitimate run — training the encoder from
+    scratch is the baseline the pretraining has to beat — so the card cannot claim masked move
+    modeling unconditionally; this is the fact it gates that claim on.
+    """
+    found = (payload.get("cfg") or {}).get("encoder_ckpt")
+    return str(found) if found else None
 
 
 def write_vocab(folder: Path, kind: str, scheme: str) -> str:
@@ -434,6 +453,7 @@ def encoder_card_context(
         "config_json": json.dumps(config, indent=2, ensure_ascii=False),
         "scheme": config.get("tokenizer", "squares"),
         "pooling": config.get("pooling", "mean"),
+        "pretrained_from": config.get("pretrained_from"),
         "heads": list(config.get("heads", ENCODER_HEADS)),
         "metrics": metrics,
         "curve": curve,

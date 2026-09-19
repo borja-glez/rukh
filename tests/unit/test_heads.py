@@ -178,6 +178,11 @@ def test_a_frozen_encoder_is_kept_in_eval_mode() -> None:
     assert model.training and not model.encoder.training  # no dropout on a frozen feature
     set_training_mode(model, "full")
     assert model.encoder.training
+    # Under last-n the frozen prefix is frozen for dropout too: only what is learning is
+    # regularised, and the early blocks give the same vector for the same position every epoch.
+    set_training_mode(model, "last-n", last_n=1)
+    assert model.training and not model.encoder.blocks[0].training
+    assert model.encoder.blocks[-1].training and model.encoder.ln_f.training
 
 
 def test_the_dataset_turns_a_row_into_69_tokens_and_three_labels(labels_source: str) -> None:
@@ -190,8 +195,8 @@ def test_the_dataset_turns_a_row_into_69_tokens_and_three_labels(labels_source: 
     assert item["result"].dtype == torch.int64
     assert item["blunder_mask"].dtype == torch.bool
     assert len(dataset) == train.height and val.height
-    with pytest.raises(ValueError, match="only the 'squares' scheme"):
-        LabelledPositions(train, "moves")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="needs the games of the labelled rows"):
+        LabelledPositions(train, "moves")
 
 
 def test_probe_leaves_the_encoder_bit_identical(rukh_home: Path, labels_source: str) -> None:
@@ -297,3 +302,106 @@ def test_cli_train_heads_reads_the_shipped_config(repo_root: Path) -> None:
     assert result.exit_code == 0, result.output
     for option in ("--config", "--mode", "--fraction", "--curve"):
         assert option in result.output
+
+
+# --- the `moves` scheme: the line that reached the position ------------------------------------
+
+GAME_UCI = "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6"
+"""Eight real half-moves, so a prefix of any ply in ``eval_rows`` exists."""
+
+
+def toy_games(frame: pl.DataFrame) -> pl.DataFrame:
+    """The ``rukh.data.labels.game_moves`` frame for ``eval_rows``: one line per game."""
+    games = sorted({int(game) for game in frame["game_id"].to_list()})
+    return pl.DataFrame(
+        {
+            "game_id": games,
+            "uci": [GAME_UCI] * len(games),
+            "white_elo": [1850] * len(games),
+            "black_elo": [1920] * len(games),
+        }
+    )
+
+
+def test_a_moves_item_is_the_header_plus_the_prefix_of_the_game(labels_source: str) -> None:
+    from rukh.tokenize.uci_vocab import UciTokenizer, elo_token
+
+    cfg = toy_heads_config(labels_source, input="moves", block=200)
+    train, _val = build_frames(cfg)
+    dataset = LabelledPositions(train, "moves", toy_games(train), cfg.block)
+    tok = UciTokenizer()
+    for index in range(min(8, len(dataset))):
+        ids = dataset.tokens(index)
+        ply = dataset.plies[index]
+        assert tok.decode(ids[:3]) == ["<bos>", elo_token(1850, "w"), elo_token(1920, "b")]
+        # ``ply`` counts the move that led to this position, so it is inside the prefix.
+        assert tok.decode(ids[3:]) == GAME_UCI.split()[:ply]
+        assert len(ids) == 3 + ply
+
+
+def test_a_prefix_longer_than_the_block_is_cropped_after_the_header(labels_source: str) -> None:
+    from rukh.tokenize.uci_vocab import UciTokenizer
+
+    cfg = toy_heads_config(labels_source, input="moves", block=5)
+    train, _val = build_frames(cfg)
+    dataset = LabelledPositions(train, "moves", toy_games(train), cfg.block)
+    tok = UciTokenizer()
+    longest = max(range(len(dataset)), key=lambda index: dataset.plies[index])
+    ply = dataset.plies[longest]
+    assert ply + 3 > cfg.block  # otherwise this test is not testing the crop
+    ids = dataset.tokens(longest)
+    assert len(ids) == cfg.block
+    # The Elo conditioning survives the crop and the *oldest* moves are the ones dropped.
+    assert tok.decode(ids[:3])[0] == "<bos>"
+    assert tok.decode(ids[3:]) == GAME_UCI.split()[:ply][-(cfg.block - 3) :]
+
+
+def test_padding_does_not_reach_the_heads(labels_source: str) -> None:
+    from rukh.train.heads import collate
+
+    cfg = toy_heads_config(labels_source, input="moves", block=200)
+    train, _val = build_frames(cfg)
+    dataset = LabelledPositions(train, "moves", toy_games(train), cfg.block)
+    short = min(range(len(dataset)), key=lambda index: dataset.plies[index])
+    long = max(range(len(dataset)), key=lambda index: dataset.plies[index])
+    assert dataset.plies[short] < dataset.plies[long]
+
+    torch.manual_seed(0)
+    model = MultiHead(
+        PositionEncoder(EncoderConfig(input="moves", n_layer=2, n_head=2, d_model=32, dropout=0.0))
+    ).eval()
+    padded = collate([dataset[short], dataset[long]])
+    alone = collate([dataset[short]])
+    assert bool(padded["attention_mask"][0, dataset.plies[short] + 3 :].eq(False).all())
+    with torch.no_grad():
+        mixed = model(padded["idx"], padded["attention_mask"])
+        tight = model(alone["idx"], alone["attention_mask"])
+    for head in HEADS:
+        assert torch.allclose(mixed[head][:1], tight[head], atol=1e-6)
+
+
+def test_each_scheme_only_loads_its_own_pretrained_encoder(
+    rukh_home: Path, labels_source: str
+) -> None:
+    from rukh.train.heads import load_encoder_for
+
+    torch.manual_seed(0)
+    for scheme in ("moves", "squares"):
+        encoder = PositionEncoder(
+            EncoderConfig(input=scheme, n_layer=2, n_head=2, d_model=32, block=200)
+        )
+        save_checkpoint(
+            rukh_home / f"{scheme}.pt",
+            step=0,
+            model=encoder,
+            optimizer=None,
+            cfg={},
+            model_cfg=encoder.cfg.model_dump(mode="json"),
+        )
+    where = torch.device("cpu")
+    for scheme, other in (("moves", "squares"), ("squares", "moves")):
+        cfg = toy_heads_config(labels_source, input=scheme, encoder_ckpt=f"{scheme}.pt")
+        assert load_encoder_for(cfg, where).cfg.input == scheme
+        wrong = cfg.model_copy(update={"encoder_ckpt": f"{other}.pt"})
+        with pytest.raises(ValueError, match=f"was trained on the {other!r} scheme"):
+            load_encoder_for(wrong, where)

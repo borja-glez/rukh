@@ -15,10 +15,12 @@ from rukh.data.labels import (
     LabelsConfig,
     build_labels,
     counts,
+    game_moves,
     game_split,
     label_subsets,
     run,
 )
+from rukh.data.uci import sha256_file
 
 pytestmark = pytest.mark.unit
 
@@ -187,3 +189,27 @@ def test_run_writes_the_parquet_and_a_manifest(rukh_home: Path) -> None:
     assert manifest.filters["split"]["by"] == "game_id"
     assert (rukh_home / "labels" / "manifest.json").is_file()
     assert counts(pl.read_parquet(written))["positions"] == 4
+    # The labels are a pure function of the source file; its digest is what identifies them.
+    assert manifest.filters["positions_eval_sha256"] == sha256_file(source)
+
+
+def test_game_moves_reads_one_row_per_game_and_only_the_labelled_ones(rukh_home: Path) -> None:
+    """The join back to the P1 games: by game, semi-joined, and never per position."""
+    games = rukh_home / "uci" / "year=2025" / "month=01" / "games.parquet"
+    games.parent.mkdir(parents=True)
+    pl.DataFrame(
+        {
+            "game_id": [1, 2, 3],
+            "uci": ["e2e4 e7e5", "d2d4 d7d5", "c2c4 c7c5"],
+            "n_plies": [2, 2, 2],
+            "white_elo": [1850, 1900, 2000],
+            "black_elo": [1860, 1910, 2010],
+            "result": ["1-0", "0-1", "1/2-1/2"],
+        }
+    ).write_parquet(games)
+    labelled = pl.DataFrame({"game_id": [1, 1, 3]})  # two positions of game 1, none of game 2
+    found = game_moves(labelled, "uci")
+    assert sorted(found["game_id"].to_list()) == [1, 3]
+    assert found.height == 2  # one row per game, never one per position
+    assert set(found.columns) == {"game_id", "uci", "white_elo", "black_elo"}
+    assert found.filter(pl.col("game_id") == 1)["uci"][0] == "e2e4 e7e5"

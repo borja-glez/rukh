@@ -41,11 +41,27 @@ PAD_ID = 0
 MMM_IGNORE_INDEX = -100
 """Label of a position the masked-move loss must skip.
 
-Not the decoder's ``0``: there ``0`` is ``<pad>`` and a padded target is genuinely nothing to
-learn from, while here ``0`` is a token the ``squares`` scheme can legitimately ask the model to
-predict. ``-100`` is outside every vocabulary, so "not predicted" and "predict ``<pad>``" stay
-different things.
+Not the decoder's ``0``. ``0`` is ``<pad>`` in **both** schemes, so using it to mean "nothing to
+predict" would overload one id with two jobs: the loss could no longer tell a position it must
+skip from a position where the right answer happens to be ``<pad>``. The decoder gets away with
+it because its target is the next token of a packed stream and ``<pad>`` is never a target there;
+here the distinction has to be explicit, and ``-100`` is outside every vocabulary, so "not
+predicted" and "predict ``<pad>``" stay different things.
 """
+
+
+def _tracing() -> bool:
+    """``True`` while ``torch.export`` or ``torch.compile`` is capturing a graph.
+
+    The padding check below reads a tensor to decide whether to raise, and a data-dependent
+    branch like that is precisely what a graph capture cannot represent. Under ``torch.export``
+    it would send the exporter back to the deprecated TorchScript tracer (D-027); under
+    ``torch.compile`` it is worse in a quieter way — Dynamo cannot prove the condition, so it
+    graph-breaks around it on **every** masked step of the MMM loop, which is a synchronisation
+    point plus two half-graphs per step for a check that has already passed. Eager behaviour is
+    unchanged: outside a capture both calls are ``False`` and the ValueError is raised as before.
+    """
+    return torch.compiler.is_exporting() or torch.compiler.is_compiling()
 
 
 class PositionEncoder(nn.Module):
@@ -101,7 +117,7 @@ class PositionEncoder(nn.Module):
         mask = attention_mask.bool()
         if mask.dim() != 2:
             raise ValueError(f"attention_mask must be (B, T), got {tuple(attention_mask.shape)}")
-        if not torch.compiler.is_exporting() and not bool(mask.any(dim=-1).all()):
+        if not _tracing() and not bool(mask.any(dim=-1).all()):
             # An entirely masked row would make softmax return NaN, so it is refused here rather
             # than debugged three layers down. The check reads a tensor, which is exactly what
             # `torch.export` cannot trace (a data-dependent guard), and skipping it under the

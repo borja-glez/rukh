@@ -13,9 +13,10 @@ Two things differ from the decoder's loop, and only two:
 * control tokens are never hidden. ``<bos>``, the two Elo tokens, the result token and
   ``<eos>`` are the *condition* of the game, not the signal; predicting the result from a full
   game would be free and would teach nothing about chess.
-* the ignored label is ``-100``, not the decoder's ``0``. Here ``0`` is ``<pad>``, a token the
-  ``squares`` scheme can legitimately be asked to predict, so "nothing to predict" needs a value
-  outside every vocabulary. See ``rukh.models.encoder.MMM_IGNORE_INDEX``.
+* the ignored label is ``-100``, not the decoder's ``0``. ``0`` is ``<pad>`` in both schemes, so
+  it cannot double as "not predicted" without the loss losing the ability to tell the two apart;
+  "nothing to predict" needs a value outside every vocabulary. See
+  ``rukh.models.encoder.MMM_IGNORE_INDEX``.
 
 Everything else — optimizer, schedule, checkpoints, resume, MLflow — is ``rukh.train.common``,
 the same machinery the decoder uses, so the two runs are comparable.
@@ -277,11 +278,16 @@ def train_mmm(cfg: MmmConfig, resume: Path | None = None, device: str | None = N
     generator = masking_generator(cfg.masking.seed, where)
 
     def probe(compiled: nn.Module) -> None:
-        """One masked step of the training shape, to force compilation here and not mid-run."""
+        """One masked step of the training shape, to force compilation here and not mid-run.
+
+        With the padding mask the loop actually passes: probing with ``attention_mask=None``
+        compiles a graph the loop never runs and buys a recompilation at step 1, which is the
+        very cost this probe exists to pay up front.
+        """
         warm = torch.full((cfg.batch_size, cfg.block), max(MOVE_CONTROL_IDS) + 1, device=where)
         labels = torch.full_like(warm, MMM_IGNORE_INDEX)
         labels[:, 0] = warm[:, 0]
-        _, loss = masked_step(model, compiled, warm, labels)
+        _, loss = masked_step(model, compiled, warm, labels, model.padding_mask(warm))
         loss.backward()
 
     with autocast:  # compile under the same precision the loop will use

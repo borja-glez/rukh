@@ -23,6 +23,12 @@ from rukh.models import DecoderConfig, EncoderConfig, MoveDecoder, PositionEncod
 from rukh.models.heads import HeadWeights, MultiHead
 
 BEST_NAME = "best.pt"
+CURVE_KEY = "label_curve"
+"""Where ``rukh.train.heads.label_curve`` writes its points and ``rukh eval encoder`` reads them.
+
+The curve is the lesson of M3 ("how many labels does this actually take?") and a ``GOAL.md``
+deliverable, so it travels **inside** the checkpoint: a number that only ever existed in a log
+line is a number nobody can put in a table."""
 TIED_HEAD = "lm_head.weight"
 """Tied to ``tokens.weight``; a published state dict leaves it out and it is re-tied on load."""
 TIED_HEADS = frozenset({TIED_HEAD, "mlm_head.weight", "encoder.mlm_head.weight"})
@@ -138,6 +144,21 @@ def load_checkpoint(path: Path, map_location: str | torch.device = "cpu") -> dic
     if not isinstance(payload, dict) or "model_state" not in payload:
         raise ValueError(f"{path} is not a rukh checkpoint")
     return payload
+
+
+def attach_payload(path: Path, **extra: Any) -> Path:
+    """Add plain values to an existing checkpoint, rewriting it atomically.
+
+    Used for facts a run only knows once it is over — the label-count curve is the whole of it —
+    so they do not need a second file next to the weights that can be lost or go stale.
+    """
+    path = Path(path)
+    payload = load_checkpoint(path)
+    payload.update(extra)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    torch.save(payload, tmp)
+    tmp.replace(path)
+    return path
 
 
 def load_state(model: nn.Module, state: Mapping[str, Any]) -> None:

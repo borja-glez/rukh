@@ -21,8 +21,9 @@ A bidirectional transformer written from scratch that reads a chess **position**
 things about it: how good it is, whether the move that led to it threw the game away, and how
 the game is going to end. This is the `{{ stage }}` stage of [Rukh]({{ repository_url }}), a
 course that builds a chess language model end to end: {{ "{:,}".format(params) }} parameters
-over {{ config.get("n_layer", 8) }} layers of width {{ config.get("d_model", 384) }}, pretrained
-with masked move modeling and fine-tuned on Stockfish labels.
+over {{ config.get("n_layer", 8) }} layers of width {{ config.get("d_model", 384) }},
+{% if pretrained_from %}pretrained with masked move modeling and fine-tuned on Stockfish
+labels{% else %}trained from scratch on Stockfish labels, with no pretraining stage{% endif %}.
 
 See it evaluate a live game: [{{ demo_url }}]({{ demo_url }}) · read how it was built:
 [{{ course_url }}]({{ course_url }})
@@ -80,7 +81,13 @@ padding. The enumeration ships in `tokenizer/vocab.json` and is fixed by constru
 learned from data.
 {% else %}
 A position is the game that led to it, in the same UCI vocabulary the decoder was trained on,
-which ships in `tokenizer/vocab.json`.
+which ships in `tokenizer/vocab.json`: `<bos>`, the two Elo tokens, and the moves up to the
+position, cropped from the left while keeping those three header tokens.
+
+One caveat that comes with this scheme: the supervised table is deduplicated by four-field FEN,
+so the prefix is **a** line that reaches the position, not necessarily the one the labelled game
+played. The position, the value and the blunder verdict are the same either way; the history may
+not be.
 {% endif %}
 Tokens are pooled with `{{ pooling }}` pooling into one vector per position, and three linear
 heads read that vector: {% for head in heads %}`{{ head }}`{% if not loop.last %}, {% endif %}{% endfor %}.
@@ -124,10 +131,16 @@ the model is in `config.json`.
 
 ## Data
 
-Pretrained with masked move modeling on {% for dataset in datasets %}[`{{ dataset }}`](https://huggingface.co/datasets/{{ dataset }}){% if not loop.last %}, {% endif %}{% endfor %},
+{% if pretrained_from %}Pretrained with masked move modeling on {% for dataset in datasets %}[`{{ dataset }}`](https://huggingface.co/datasets/{{ dataset }}){% if not loop.last %}, {% endif %}{% endfor %},
 derived from the [Lichess open database](https://database.lichess.org) (CC0), and fine-tuned on
-positions crossed with the Lichess Stockfish evaluations: `value` and `blunder` come from those
+positions{% else %}The encoder of this release was **not** pretrained: it was initialised at
+random and trained directly on the labels, which is the honest baseline a pretrained encoder has
+to beat. Its data is the {% for dataset in datasets %}[`{{ dataset }}`](https://huggingface.co/datasets/{{ dataset }}){% if not loop.last %}, {% endif %}{% endfor %} positions{% endif %}
+crossed with the Lichess Stockfish evaluations: `value` and `blunder` come from those
 scores, `result` from the game the position was played in.
+{% if pretrained_from %}
+The pretraining checkpoint the heads started from: `{{ pretrained_from }}`.
+{% endif %}
 
 ## Limitations
 

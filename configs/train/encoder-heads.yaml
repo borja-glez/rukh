@@ -1,10 +1,15 @@
-# Fine-tuning of the three heads (value, blunder, result) over the encoder pretrained with
-# masked move modeling. The default is `probe`: the encoder is frozen and only the three linear
-# heads learn, which is the run that answers whether the pretraining put the information in the
-# representation. `--mode last-n` and `--mode full` are the next two stages, and `--curve` runs
-# the whole thing on 10/25/50/100 % of the labels.
-encoder_ckpt: null # set to the masked-move checkpoint, e.g. checkpoints/encoder-mmm-.../best.pt
-input: squares # the labels are FENs, one row per position
+# Fine-tuning of the three heads (value, blunder, result) on the `squares` scheme: the position
+# itself, 69 fixed tokens. The default is `probe`: the encoder is frozen and only the three
+# linear heads learn, which is the run that answers whether the representation already carries
+# the information. `--mode last-n` and `--mode full` are the next two stages, and `--curve` runs
+# the whole thing on 10/25/50/100 % of the labels and writes the points into the checkpoint.
+#
+# `encoder_ckpt` stays null here: masked move modeling only runs on `moves` (there is no packed
+# stream of board tokens in P1), so a `squares` encoder starts from random weights. That is the
+# baseline the pretrained `moves` run of `encoder-heads-moves.yaml` is compared against, and
+# pointing this file at an MMM checkpoint is refused rather than silently reinterpreted.
+encoder_ckpt: null
+input: squares # the labels are FENs, one row per position; see encoder-heads-moves.yaml
 pooling: mean
 mode: probe
 last_n: 2
@@ -34,7 +39,7 @@ weight_decay: 0.01
 betas: [0.9, 0.95]
 grad_clip: 1.0
 precision: bf16
-compile: false # three linear heads over a short sequence: compiling costs more than it saves
+compile: false # three linear heads over 69 fixed positions: compiling costs more than it saves
 eval_every: 250
 eval_batches: 50
 ckpt_every: 1000
