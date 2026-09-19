@@ -5,6 +5,10 @@ imported by the training loop, the sampler and the ONNX exporter alike. Blocks a
 (``x = x + attn(ln1(x))``; ``x = x + mlp(ln2(x))``), attention is causal through
 ``F.scaled_dot_product_attention(..., is_causal=True)``, the MLP uses GELU and the language
 modelling head is tied to the token embedding.
+
+The blocks themselves live in ``rukh.models.layers``, shared with the bidirectional
+``PositionEncoder``; the classes below are the ``DecoderConfig`` adapters of those blocks, so
+the module names in a checkpoint (``blocks.N.attn.qkv`` and friends) are unchanged.
 """
 
 from __future__ import annotations
@@ -15,87 +19,43 @@ import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
 
+from rukh.models import layers
 from rukh.models.config import DecoderConfig
+from rukh.models.layers import apply_rope, rope_tables
+
+__all__ = [
+    "IGNORE_INDEX",
+    "Block",
+    "CausalSelfAttention",
+    "Mlp",
+    "MoveDecoder",
+    "apply_rope",
+    "rope_tables",
+]
 
 # ``<pad>`` is id 0 in every scheme; the loss must ignore it (see ``loader.IGNORE_INDEX``).
 IGNORE_INDEX = 0
 
 
-def rope_tables(
-    seq_len: int, head_dim: int, device: torch.device, base: float = 10_000.0
-) -> tuple[Tensor, Tensor]:
-    """``(cos, sin)`` of shape ``(seq_len, head_dim)`` for rotary position embeddings."""
-    inv_freq = 1.0 / (base ** (torch.arange(0, head_dim, 2, dtype=torch.float32) / head_dim))
-    angles = torch.outer(torch.arange(seq_len, dtype=torch.float32), inv_freq)
-    full = torch.cat([angles, angles], dim=-1)
-    return full.cos().to(device), full.sin().to(device)
-
-
-def apply_rope(x: Tensor, cos: Tensor, sin: Tensor) -> Tensor:
-    """Rotate ``x`` of shape ``(B, H, T, D)`` by the angles of the first ``T`` positions."""
-    t = x.shape[-2]
-    cos_t = cos[:t].to(dtype=x.dtype).view(1, 1, t, -1)
-    sin_t = sin[:t].to(dtype=x.dtype).view(1, 1, t, -1)
-    half = x.shape[-1] // 2
-    rotated = torch.cat([-x[..., half:], x[..., :half]], dim=-1)
-    return x * cos_t + rotated * sin_t
-
-
-class CausalSelfAttention(nn.Module):
+class CausalSelfAttention(layers.SelfAttention):
     """Multi-head causal self-attention with a single fused ``qkv`` projection."""
 
     def __init__(self, cfg: DecoderConfig) -> None:
-        super().__init__()
-        self.n_head = cfg.n_head
-        self.head_dim = cfg.head_dim
-        self.dropout = cfg.dropout
-        self.qkv = nn.Linear(cfg.d_model, 3 * cfg.d_model)
-        self.proj = nn.Linear(cfg.d_model, cfg.d_model)
-        self.resid_drop = nn.Dropout(cfg.dropout)
-
-    def forward(self, x: Tensor, cos: Tensor | None = None, sin: Tensor | None = None) -> Tensor:
-        batch, seq, _ = x.shape
-        q, k, v = self.qkv(x).split(x.shape[-1], dim=2)
-        shape = (batch, seq, self.n_head, self.head_dim)
-        q = q.view(shape).transpose(1, 2)
-        k = k.view(shape).transpose(1, 2)
-        v = v.view(shape).transpose(1, 2)
-        if cos is not None and sin is not None:
-            q = apply_rope(q, cos, sin)
-            k = apply_rope(k, cos, sin)
-        out = F.scaled_dot_product_attention(
-            q, k, v, dropout_p=self.dropout if self.training else 0.0, is_causal=True
-        )
-        out = out.transpose(1, 2).contiguous().view(batch, seq, -1)
-        return self.resid_drop(self.proj(out))
+        super().__init__(cfg.d_model, cfg.n_head, cfg.dropout, causal=True)
 
 
-class Mlp(nn.Module):
+class Mlp(layers.Mlp):
     """Position-wise GELU feed-forward network."""
 
     def __init__(self, cfg: DecoderConfig) -> None:
-        super().__init__()
-        self.fc = nn.Linear(cfg.d_model, cfg.ff)
-        self.proj = nn.Linear(cfg.ff, cfg.d_model)
-        self.drop = nn.Dropout(cfg.dropout)
-
-    def forward(self, x: Tensor) -> Tensor:
-        return self.drop(self.proj(F.gelu(self.fc(x))))
+        super().__init__(cfg.d_model, cfg.ff, cfg.dropout)
 
 
-class Block(nn.Module):
+class Block(layers.Block):
     """One pre-norm transformer block."""
 
     def __init__(self, cfg: DecoderConfig) -> None:
-        super().__init__()
-        self.ln1 = nn.LayerNorm(cfg.d_model)
-        self.attn = CausalSelfAttention(cfg)
-        self.ln2 = nn.LayerNorm(cfg.d_model)
-        self.mlp = Mlp(cfg)
-
-    def forward(self, x: Tensor, cos: Tensor | None = None, sin: Tensor | None = None) -> Tensor:
-        x = x + self.attn(self.ln1(x), cos, sin)
-        return x + self.mlp(self.ln2(x))
+        super().__init__(cfg.d_model, cfg.n_head, cfg.ff, cfg.dropout, causal=True)
 
 
 class MoveDecoder(nn.Module):
@@ -130,12 +90,7 @@ class MoveDecoder(nn.Module):
 
     @staticmethod
     def _init_weights(module: nn.Module) -> None:
-        if isinstance(module, nn.Linear):
-            nn.init.normal_(module.weight, mean=0.0, std=0.02)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+        layers.init_weights(module)
 
     def num_params(self, non_embedding: bool = True) -> int:
         """Parameter count; ``non_embedding`` drops the learned position table (nanoGPT rule)."""
