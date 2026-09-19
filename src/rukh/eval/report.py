@@ -74,13 +74,26 @@ class EncoderWebRow(BaseModel):
     kind: Literal["encoder"] = "encoder"
     params: int
     blunder_f1: float | None = None
-    """F1 of the blunder head on the held-out split."""
+    """F1 of the blunder head at its tuned operating point, on the half it was not tuned on."""
+    blunder_f1_fixed: float | None = None
+    """F1 of the same head on the same rows at the configured threshold, usually 0.5.
+
+    On a class this rare the two differ by a lot, and publishing only one of them would be
+    publishing a threshold instead of a model."""
+    blunder_threshold: float | None = None
+    """The threshold behind ``blunder_f1``, chosen on the other half of the labelled rows."""
     blunder_f1_heuristic: float | None = None
-    """F1 of the material baseline on the very same rows."""
+    """F1 of the material baseline on the very same rows. It is a rule: nothing was tuned."""
     blunder_f1_margin: float | None = None
     """The difference above, in F1 points; ``GOAL.md`` asks for five."""
     blunder_precision: float | None = None
     blunder_recall: float | None = None
+    blunder_roc_auc: float | None = None
+    """Threshold-free: the probability that a blunder is ranked above a quiet move."""
+    blunder_average_precision: float | None = None
+    """Threshold-free: area under the precision-recall curve; a coin flip scores the base rate."""
+    blunder_base_rate: float | None = None
+    """Share of blunders among the scored rows; without it the two numbers above mean nothing."""
     value_pearson: float | None = None
     value_spearman: float | None = None
     result_accuracy: float | None = None
@@ -127,16 +140,23 @@ def row_of(result: SuiteResult) -> WebRow:
 def encoder_row_of(result: EncoderResult) -> EncoderWebRow:
     """The table row a finished encoder evaluation produces."""
     encoder = result.encoder_blunder
+    fixed = result.encoder_blunder_fixed
     baseline = result.heuristic_blunder
+    measured = result.encoder_blunder_ranking
     value = result.encoder_value
     return EncoderWebRow(
         stage=result.stage,
         params=result.params,
         blunder_f1=encoder.f1 if encoder else None,
+        blunder_f1_fixed=fixed.f1 if fixed else None,
+        blunder_threshold=result.threshold_tuned,
         blunder_f1_heuristic=baseline.f1 if baseline else None,
         blunder_f1_margin=result.f1_margin,
         blunder_precision=encoder.precision if encoder else None,
         blunder_recall=encoder.recall if encoder else None,
+        blunder_roc_auc=measured.roc_auc if measured else None,
+        blunder_average_precision=measured.average_precision if measured else None,
+        blunder_base_rate=result.blunder_base_rate,
         value_pearson=value.pearson if value else None,
         value_spearman=value.spearman if value else None,
         result_accuracy=result.result_accuracy,

@@ -417,15 +417,32 @@ def encoder_card_context(
     files: list[str],
 ) -> dict[str, Any]:
     """Everything the encoder card needs: its metrics, the baseline's, and the input scheme."""
+    from rukh.eval.encoder import base_rate_caveat, sentence
+
     measured = evaluation or {}
     encoder = measured.get("encoder_blunder") or {}
+    fixed = measured.get("encoder_blunder_fixed") or {}
+    ranked = measured.get("encoder_blunder_ranking") or {}
     baseline = measured.get("heuristic_blunder") or {}
     value = measured.get("encoder_value") or {}
     margin = measured.get("f1_margin")
+    tuned = measured.get("threshold_tuned")
+    configured = measured.get("threshold_fixed")
     metrics = [
-        ("Blunder F1", _percent(encoder.get("f1"))),
+        (
+            "Blunder F1" + ("" if tuned is None else f" (tuned, `p >= {float(tuned):.4g}`)"),
+            _percent(encoder.get("f1")),
+        ),
         ("Blunder precision", _percent(encoder.get("precision"))),
         ("Blunder recall", _percent(encoder.get("recall"))),
+        (
+            "Blunder F1"
+            + ("" if configured is None else f" (fixed, `p >= {float(configured):.4g}`)"),
+            _percent(fixed.get("f1")),
+        ),
+        ("Blunder ROC AUC", _ratio(ranked.get("roc_auc"))),
+        ("Blunder average precision", _ratio(ranked.get("average_precision"))),
+        ("Blunder base rate", _percent(measured.get("blunder_base_rate"))),
         ("Blunder F1, material baseline", _percent(baseline.get("f1"))),
         (
             "Margin over the baseline",
@@ -459,6 +476,12 @@ def encoder_card_context(
         "curve": curve,
         "positions": measured.get("items"),
         "blunder_items": measured.get("blunder_items"),
+        "blunder_caveat": sentence(base_rate_caveat(measured.get("blunder_base_rate"))),
+        "tune_items": measured.get("tune_items"),
+        "score_items": measured.get("score_items"),
+        "tune_games": measured.get("tune_games"),
+        "score_games": measured.get("score_games"),
+        "threshold_tuned": tuned,
         "evaluated_on": measured.get("date"),
         "notes": [str(note) for note in measured.get("notes", []) if str(note).strip()],
         "run_id": run.run_id if run else None,

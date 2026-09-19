@@ -20,16 +20,23 @@ from rukh.cli import app
 from rukh.eval.encoder import (
     EncoderEvalConfig,
     EncoderResult,
+    average_precision,
+    best_threshold,
+    blunder_notes,
     build_items,
     classification,
     evaluate_encoder,
+    f1_at,
     label_curve_points,
     load_encoder_suite,
+    measure_blunder,
     pearson,
     ranks,
     render_markdown,
+    roc_auc,
     run_encoder_suite,
     spearman,
+    threshold_halves,
 )
 from rukh.eval.report import RESULTS_NAME, EncoderWebRow, encoder_row_of, upsert_row
 from rukh.models import EncoderConfig, PositionEncoder
@@ -405,3 +412,181 @@ def test_the_value_criterion_is_checked_against_the_bounded_score(tmp_path: Path
     measure(items, {**predictions, "value": -perfect}, baseline, cfg, result_bad)
     assert result_bad.value_correlation_meets_goal is False
     assert GOAL_VALUE_CORRELATION == 0.80
+
+
+# --- the operating point ------------------------------------------------------------------------
+
+
+def synthetic(
+    high: float, low: float, other_high: float, other_low: float, games: int = 40, rows: int = 10
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Labels, probabilities and game ids where the two halves want different thresholds.
+
+    Every game gets ``rows`` positions, one of which is a blunder. The probabilities of the
+    ``tune`` half separate at one place and those of the ``score`` half at another, so a
+    threshold copied from the first half is measurably wrong on the second: that is the only way
+    to prove the harness is not quietly choosing the threshold on the rows it reports.
+    """
+    identifiers = np.repeat(np.arange(1, games + 1), rows)
+    truth = np.tile(np.array([1] + [0] * (rows - 1)), games)
+    tune = threshold_halves(identifiers, 42)
+    probability = np.where(
+        tune,
+        np.where(truth == 1, high, low),
+        np.where(truth == 1, other_high, other_low),
+    )
+    return truth, probability, identifiers
+
+
+def scored(truth: np.ndarray, probability: np.ndarray, games: np.ndarray) -> EncoderResult:
+    """Run the blunder half of the suite over arrays, with no model and no chess in the way."""
+    result = EncoderResult(
+        stage="toy", checkpoint="x", model_sha="sha", params=1, date="2026-09-19"
+    )
+    calls = np.zeros(len(truth), dtype=np.int64)
+    return measure_blunder(truth, probability, calls, games, EncoderEvalConfig(), result)
+
+
+def test_the_threshold_is_chosen_on_tune_and_applied_to_score() -> None:
+    truth, probability, games = synthetic(high=0.30, low=0.10, other_high=0.60, other_low=0.45)
+    result = scored(truth, probability, games)
+    tune = threshold_halves(games, 42)
+
+    assert result.threshold_split_degenerate is False
+    assert result.tune_items + result.score_items == result.blunder_items == len(truth)
+    assert set(games[tune].tolist()).isdisjoint(set(games[~tune].tolist()))
+    assert result.tune_games + result.score_games == len(set(games.tolist()))
+
+    # The threshold is the `tune` half's own optimum, and it is the whole of what `tune` is for.
+    chosen = best_threshold(truth[tune], probability[tune])[0]
+    assert result.threshold_tuned == pytest.approx(chosen)
+    assert result.tune_f1 == pytest.approx(1.0)
+    # It is then applied verbatim to the other half, which separates somewhere else: the number
+    # that gets reported is well below what choosing the threshold on these rows would have given.
+    assert result.encoder_blunder is not None
+    assert result.encoder_blunder.items == result.score_items
+    assert result.encoder_blunder.f1 < best_threshold(truth[~tune], probability[~tune])[1]
+    flagged = (probability[~tune] >= result.threshold_tuned).astype(np.int64)
+    assert result.encoder_blunder.f1 == pytest.approx(classification(truth[~tune], flagged).f1)
+
+
+def test_a_head_whose_probabilities_never_reach_one_half_still_gets_a_number() -> None:
+    """The real case: every probability below 0.5, so the fixed threshold fires on nothing."""
+    truth, probability, games = synthetic(high=0.20, low=0.02, other_high=0.26, other_low=0.01)
+    result = scored(truth, probability, games)
+    assert result.encoder_blunder is not None and result.encoder_blunder_fixed is not None
+    assert result.threshold_tuned is not None and result.threshold_tuned < 0.5
+    assert result.encoder_blunder_fixed.f1 == 0.0  # nothing is flagged at 0.5 and F1 says nothing
+    assert result.encoder_blunder.f1 == pytest.approx(1.0)
+    assert result.encoder_blunder_ranking is not None
+    assert result.encoder_blunder_ranking.roc_auc == pytest.approx(1.0)
+    assert result.encoder_blunder_ranking.max_score == pytest.approx(0.26)
+    assert result.blunder_base_rate == pytest.approx(0.1)
+
+
+def test_a_degenerate_split_is_reported_rather_than_hidden() -> None:
+    """Two games on the same side: there is no half to hold back, and the report says so."""
+    truth, probability, games = synthetic(0.9, 0.1, 0.9, 0.1, games=2, rows=6)
+    result = scored(truth, probability, games)
+    assert result.threshold_split_degenerate is True
+    assert result.tune_items == result.score_items == result.blunder_items
+    assert any("upper bound" in note for note in blunder_notes(result))
+    assert "Warning:" in render_markdown(result)
+
+
+def test_a_separable_case_scores_one_everywhere() -> None:
+    truth = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
+    scores = [0.90, 0.80, 0.70, 0.20, 0.10, 0.05, 0.04, 0.03, 0.02, 0.01]
+    threshold, f1 = best_threshold(truth, scores)
+    assert f1 == pytest.approx(1.0)
+    assert 0.2 < threshold <= 0.7
+    assert roc_auc(truth, scores) == pytest.approx(1.0)
+    assert average_precision(truth, scores) == pytest.approx(1.0)
+
+
+def test_a_random_predictor_scores_a_coin_flip_and_the_base_rate() -> None:
+    rng = np.random.default_rng(11)
+    truth = (rng.random(20_000) < 0.037).astype(np.int64)
+    scores = rng.random(20_000)
+    base_rate = float(truth.mean())
+    assert roc_auc(truth, scores) == pytest.approx(0.5, abs=0.02)
+    assert average_precision(truth, scores) == pytest.approx(base_rate, abs=0.01)
+    # A constant predictor ranks nothing: the average ranks make it exactly a coin flip, and its
+    # precision-recall curve is the flat line at the base rate. Neither is a sorting accident.
+    flat = np.full(len(truth), 0.3)
+    assert roc_auc(truth, flat) == pytest.approx(0.5)
+    assert average_precision(truth, flat) == pytest.approx(base_rate)
+
+
+def test_the_tuned_f1_is_never_below_the_fixed_one_on_the_rows_it_was_chosen_on() -> None:
+    """The only guarantee a sweep can honestly give, which is why it is measured elsewhere."""
+    rng = np.random.default_rng(5)
+    for trial in range(20):
+        truth = (rng.random(400) < 0.05).astype(np.int64)
+        scores = np.clip(rng.random(400) * 0.3 + truth * 0.1, 0.0, 1.0)
+        threshold, tuned = best_threshold(truth, scores, include=0.5)
+        assert tuned >= f1_at(truth, scores, 0.5), trial
+        assert tuned == pytest.approx(f1_at(truth, scores, threshold)), trial
+
+
+def test_neither_ranking_metric_is_defined_without_both_classes() -> None:
+    assert roc_auc([1, 1, 1], [0.1, 0.2, 0.3]) is None
+    assert roc_auc([0, 0, 0], [0.1, 0.2, 0.3]) is None
+    assert average_precision([0, 0, 0], [0.1, 0.2, 0.3]) is None
+    with pytest.raises(ValueError, match="2 labels against 3"):
+        roc_auc([1, 0], [0.1, 0.2, 0.3])
+    with pytest.raises(ValueError, match="2 labels against 3"):
+        average_precision([1, 0], [0.1, 0.2, 0.3])
+
+
+def test_the_report_renders_both_operating_points_and_the_caveat() -> None:
+    truth, probability, games = synthetic(high=0.20, low=0.02, other_high=0.26, other_low=0.01)
+    result = scored(truth, probability, games)
+    text = render_markdown(result)
+    tuned = f"{result.threshold_tuned:.4g}"
+    assert f"| Blunder F1, encoder (tuned, `p >= {tuned}`) |" in text
+    assert "| Blunder F1, encoder (fixed, `p >= 0.5`) |" in text
+    assert "| Blunder ROC AUC |" in text and "| Blunder average precision |" in text
+    assert "accuracy is meaningless" in text
+    assert 'always answers "no blunder" scores 90.0 %' in text
+    assert f"chose the threshold `p >= {tuned}`" in text
+    assert "rule, no threshold to tune" in text
+    assert "no `game_id` is in both halves" in text
+    assert f"{result.tune_items:,} rows, {result.tune_games:,} games" in text
+
+
+def test_the_caveat_and_both_operating_points_reach_the_model_card() -> None:
+    from rukh.publish.model import (
+        ENCODER_CARD_TEMPLATE,
+        ModelPublishConfig,
+        encoder_card_context,
+        render_card,
+    )
+
+    truth, probability, games = synthetic(high=0.20, low=0.02, other_high=0.26, other_low=0.01)
+    result = scored(truth, probability, games)
+    context = encoder_card_context(
+        "chorcat/rukh-encoder",
+        "encoder",
+        ModelPublishConfig(),
+        {"params": 15_052_800, "tokenizer": "squares"},
+        json.loads(result.model_dump_json()),
+        None,
+        [],
+    )
+    card = render_card(context, ENCODER_CARD_TEMPLATE)
+    assert "accuracy is meaningless" in card
+    assert "| Blunder ROC AUC |" in card
+    assert f"`p >= {result.threshold_tuned:.4g}`" in card
+    assert "it has no threshold" in card
+
+
+def test_the_web_row_carries_both_operating_points() -> None:
+    truth, probability, games = synthetic(high=0.20, low=0.02, other_high=0.26, other_low=0.01)
+    result = scored(truth, probability, games)
+    row = encoder_row_of(result)
+    assert row.blunder_f1 == result.encoder_blunder.f1
+    assert row.blunder_f1_fixed == result.encoder_blunder_fixed.f1
+    assert row.blunder_threshold == result.threshold_tuned
+    assert row.blunder_roc_auc == pytest.approx(1.0)
+    assert row.blunder_base_rate == pytest.approx(0.1)

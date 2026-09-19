@@ -13,6 +13,19 @@ Four questions, four numbers:
     precision, recall and F1 over the rows that have a blunder label at all, for the encoder
     *and* for the material baseline. The headline is the difference in F1 points.
 
+    A blunder is rare (about 3.7 % of the labelled rows) and that changes what an F1 at a
+    fixed threshold means. The head's probabilities are not calibrated (nobody calibrated
+    them), so at 0.5 a perfectly informative head can fire on nothing at all and score an F1 of
+    zero while ranking the positions almost right. Scoring the *threshold* instead of the
+    representation is not a measurement, so the rows are cut in two **by game** (the policy of
+    ``rukh.data.labels``, for the same reason): the ``tune`` half chooses the threshold that
+    maximises F1, and the ``score`` half is where the reported F1, precision and recall are
+    measured. The number at the fixed 0.5 is printed next to it, on the same ``score`` half, so
+    nothing is hidden, and ``ROC AUC`` and ``average precision`` are printed too because they
+    are the two summaries that do not depend on an operating point at all. The baseline is a
+    hard yes/no rule with no threshold to tune, which the report says out loud: the comparison
+    gives the model a sweep the baseline cannot have.
+
 ``value``
     Spearman **and** Pearson between the predicted value and ``tanh(cp / 400)``, the bounded
     score the head was trained on — never raw ``cp``, where a forced mate is ``±9 99x`` and a
@@ -39,6 +52,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import zlib
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -70,6 +84,10 @@ CURVE_KEY = "label_curve"
 """The payload key ``rukh.train.checkpoint.CURVE_KEY`` writes; a test pins the two together."""
 GOAL_MARGIN = 5.0
 """F1 points the encoder has to add to the baseline (``GOAL.md``)."""
+TUNE_HALF = "tune"
+"""Half of the labelled rows the operating point is chosen on, and never scored on."""
+SCORE_HALF = "score"
+"""Half of the labelled rows every reported blunder number is measured on."""
 GOAL_VALUE_CORRELATION = 0.80
 """The second acceptance criterion of ``GOAL.md``: value against Stockfish, at least 0.8.
 
@@ -142,6 +160,31 @@ class ClassificationResult(BaseModel):
     accuracy: float
 
 
+class RankingResult(BaseModel):
+    """What a detector's *score* is worth before anyone picks a threshold for it.
+
+    ROC AUC is the probability that a random blunder is ranked above a random quiet move, and
+    average precision is the area under the precision-recall curve, which is the right summary
+    when the positive class is rare: a coin flip scores 0.5 on the first and the base rate on
+    the second, so the two say different things about the same ranking. The span of the
+    probabilities is here as well, because it is what makes a fixed threshold reasonable or
+    absurd: a head whose largest output is 0.26 fires on nothing at 0.5.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    items: int
+    positives: int
+    base_rate: float
+    """Share of the rows that are blunders; also what average precision is compared against."""
+    roc_auc: float | None = None
+    average_precision: float | None = None
+    min_score: float | None = None
+    max_score: float | None = None
+    mean_score: float | None = None
+
+
 class CorrelationResult(BaseModel):
     """How well a predicted value tracks Stockfish's score."""
 
@@ -182,9 +225,37 @@ class EncoderResult(BaseModel):
     run_id: str | None = None
     items: int = 0
     blunder_items: int = 0
-    """Rows that carry a blunder label; the encoder and the baseline are scored on these."""
+    """Rows that carry a blunder label; they are split in two halves by ``game_id``."""
+    blunder_positives: int = 0
+    """How many of those rows are blunders."""
+    blunder_base_rate: float | None = None
+    """Share of blunders among the labelled rows: the number every metric here has to be read
+    against, and the reason accuracy says nothing (see ``BASE_RATE_CAVEAT``)."""
+    tune_items: int = 0
+    """Rows of the ``tune`` half: where the threshold is chosen and where nothing is reported."""
+    score_items: int = 0
+    """Rows of the ``score`` half: where every reported blunder number is measured."""
+    tune_games: int = 0
+    score_games: int = 0
+    """Games behind each half; no ``game_id`` is ever in both."""
+    threshold_fixed: float | None = None
+    """The configured threshold, reported as a second operating point and never as the headline."""
+    threshold_tuned: float | None = None
+    """The threshold that maximises F1 on the ``tune`` half; the headline is measured with it."""
+    tune_f1: float | None = None
+    """F1 of the tuned threshold **on the half it was chosen on**: the optimistic number, kept
+    next to the honest one so the distance between the two is visible."""
+    threshold_split_degenerate: bool = False
+    """True when the by-game split could not give both halves blunders, so the threshold had to
+    be chosen and measured on the same rows; the report says so and the number is optimistic."""
     encoder_blunder: ClassificationResult | None = None
+    """The headline: the encoder at the tuned threshold, on the ``score`` half."""
+    encoder_blunder_fixed: ClassificationResult | None = None
+    """The same rows at the fixed threshold, so the operating point cannot hide anything."""
+    encoder_blunder_ranking: RankingResult | None = None
+    """ROC AUC and average precision on the ``score`` half: no threshold involved."""
     heuristic_blunder: ClassificationResult | None = None
+    """The baseline on the very same ``score`` half. It is a yes/no rule: nothing was tuned."""
     f1_margin: float | None = None
     """Encoder F1 minus baseline F1, in points; ``GOAL.md`` asks for at least five."""
     meets_goal: bool | None = None
@@ -241,6 +312,158 @@ def classification(
         f1=f1,
         accuracy=correct / len(labels) if len(labels) else 0.0,
     )
+
+
+def base_rate_caveat(base_rate: float | None) -> str:
+    """The one sentence that has to travel with every number in this section.
+
+    It is in the report and in the model card because it is the transferable lesson of the
+    module: on a rare class, the two numbers everybody reaches for first say nothing.
+    """
+    share = "the blunder base rate" if base_rate is None else f"{base_rate * 100:.1f} %"
+    always = "" if base_rate is None else f" scores {(1 - base_rate) * 100:.1f} %"
+    return (
+        f"a blunder is rare ({share} of the labelled rows), so **accuracy is meaningless** here: "
+        f'a model that always answers "no blunder"{always} without knowing anything about '
+        "chess. F1 at an arbitrary threshold is nearly as bad, because an uncalibrated sigmoid "
+        "can rank the positions well and still put every probability below 0.5: that number "
+        "measures the operating point, not the representation. This is why the threshold is "
+        f"chosen on a `{TUNE_HALF}` half and the F1 is reported on a `{SCORE_HALF}` half, and "
+        "why ROC AUC and average precision, which no threshold can flatter, are reported next "
+        "to it"
+    )
+
+
+def sentence(text: str) -> str:
+    """The same clause as a sentence: the notes start in lower case, the prose does not.
+
+    ``str.capitalize`` is not it: it would lower-case ``ROC AUC`` and ``F1`` on the way past.
+    """
+    text = text.strip()
+    return text[:1].upper() + text[1:] + ("" if text.endswith(".") else ".")
+
+
+def threshold_half(game_id: int, seed: int) -> str:
+    """Which half of the labelled rows a game falls on: ``tune`` or ``score``.
+
+    By game and never by position, exactly like ``rukh.data.labels.game_split`` and for exactly
+    the same reason: two positions of the same game are one move apart, so choosing a threshold
+    on one and scoring it on the other would tune on the rows being scored through the back
+    door. CRC-32 of a salted string, so the halves are the same in every process and every run,
+    and the salt keeps this split independent of the train/val one.
+    """
+    return TUNE_HALF if zlib.crc32(f"{seed}:threshold:{game_id}".encode()) % 2 == 0 else SCORE_HALF
+
+
+def threshold_halves(games: Sequence[int], seed: int) -> np.ndarray:
+    """Boolean mask of the rows that belong to the ``tune`` half, one entry per row."""
+    return np.array([threshold_half(int(game), seed) == TUNE_HALF for game in games], dtype=bool)
+
+
+def roc_auc(truth: Sequence[int], scores: Sequence[float]) -> float | None:
+    """Area under the ROC curve, as the rank sum of the positives (Mann-Whitney U).
+
+    Written out rather than imported: ``scipy`` and ``scikit-learn`` are not dependencies. Ties
+    are handled by the average ranks of ``ranks``, which is what gives a constant predictor
+    exactly 0.5 instead of 0 or 1 depending on how the sort happened to break the tie.
+    """
+    labels = np.asarray(truth, dtype=np.int64)
+    values = np.asarray(scores, dtype=np.float64)
+    if len(labels) != len(values):
+        raise ValueError(f"{len(labels)} labels against {len(values)} scores")
+    positives = int(np.sum(labels == 1))
+    negatives = int(np.sum(labels == 0))
+    if not positives or not negatives:
+        return None
+    rank = np.asarray(ranks(values.tolist()), dtype=np.float64)
+    rank_sum = float(rank[labels == 1].sum())
+    return (rank_sum - positives * (positives + 1) / 2.0) / (positives * negatives)
+
+
+def average_precision(truth: Sequence[int], scores: Sequence[float]) -> float | None:
+    """Area under the precision-recall curve, summed over the steps of the recall.
+
+    ``sum (R_n - R_{n-1}) * P_n`` over the distinct scores, taken from the highest down. Rows
+    that share a score are one step, because a threshold cannot separate them; without that,
+    a predictor that outputs the same number everywhere would score 1.0 by sorting luck. A
+    random ranking scores the base rate, which is why this is the summary that means something
+    when the positive class is rare.
+    """
+    labels = np.asarray(truth, dtype=np.int64)
+    values = np.asarray(scores, dtype=np.float64)
+    if len(labels) != len(values):
+        raise ValueError(f"{len(labels)} labels against {len(values)} scores")
+    positives = int(np.sum(labels == 1))
+    if not positives:
+        return None
+    order = np.argsort(-values, kind="stable")
+    ordered = values[order]
+    hits = np.cumsum(labels[order] == 1)
+    seen = np.arange(1, len(labels) + 1, dtype=np.float64)
+    last = np.append(ordered[1:] != ordered[:-1], True)  # the end of each group of equal scores
+    recall = hits[last] / positives
+    precision = hits[last] / seen[last]
+    steps = np.diff(np.concatenate(([0.0], recall)))
+    return float(np.sum(steps * precision))
+
+
+def ranking(truth: Sequence[int], scores: Sequence[float], name: str = "encoder") -> RankingResult:
+    """Everything about a detector's ranking that no threshold can change."""
+    labels = np.asarray(truth, dtype=np.int64)
+    values = np.asarray(scores, dtype=np.float64)
+    positives = int(np.sum(labels == 1))
+    return RankingResult(
+        name=name,
+        items=len(labels),
+        positives=positives,
+        base_rate=positives / len(labels) if len(labels) else 0.0,
+        roc_auc=roc_auc(labels, values),
+        average_precision=average_precision(labels, values),
+        min_score=float(values.min()) if len(values) else None,
+        max_score=float(values.max()) if len(values) else None,
+        mean_score=float(values.mean()) if len(values) else None,
+    )
+
+
+def f1_at(truth: Sequence[int], scores: Sequence[float], threshold: float) -> float:
+    """F1 of ``scores >= threshold`` against ``truth``."""
+    calls = (np.asarray(scores, dtype=np.float64) >= threshold).astype(np.int64)
+    return classification(truth, calls).f1
+
+
+def best_threshold(
+    truth: Sequence[int], scores: Sequence[float], include: float = 0.5
+) -> tuple[float, float]:
+    """The threshold that maximises F1 on these rows, and the F1 it reaches.
+
+    The candidates are the distinct scores (every threshold that can change a single call) plus
+    ``include``, the configured one, so the answer is never *worse* than the fixed threshold on
+    the rows it was chosen on — which is the only guarantee a sweep can honestly give, and the
+    reason the reported number is measured somewhere else. Ties go to the lowest threshold: on a
+    rare class, the lower one flags more and is the less lucky of the two.
+    """
+    labels = np.asarray(truth, dtype=np.int64)
+    values = np.asarray(scores, dtype=np.float64)
+    if len(labels) != len(values):
+        raise ValueError(f"{len(labels)} labels against {len(values)} scores")
+    positives = int(np.sum(labels == 1))
+    if not len(labels) or not positives:
+        return float(include), f1_at(labels, values, include)
+    order = np.argsort(-values, kind="stable")
+    ordered = values[order]
+    hits = np.cumsum(labels[order] == 1)
+    seen = np.arange(1, len(labels) + 1, dtype=np.float64)
+    last = np.append(ordered[1:] != ordered[:-1], True)
+    recall = hits[last] / positives
+    precision = hits[last] / seen[last]
+    total = precision + recall
+    f1 = np.where(total > 0, 2 * precision * recall / np.where(total > 0, total, 1.0), 0.0)
+    candidates = [
+        (float(value), float(score)) for value, score in zip(ordered[last], f1, strict=True)
+    ]
+    candidates.append((float(include), f1_at(labels, values, include)))
+    candidates.sort(key=lambda pair: (-pair[1], pair[0]))
+    return candidates[0]
 
 
 def pearson(x: Sequence[float], y: Sequence[float]) -> float | None:
@@ -453,6 +676,65 @@ def _finite(*arrays: np.ndarray) -> np.ndarray:
     return mask
 
 
+def measure_blunder(
+    truth: np.ndarray,
+    probability: np.ndarray,
+    baseline_calls: np.ndarray,
+    games: Sequence[int],
+    cfg: EncoderEvalConfig,
+    result: EncoderResult,
+) -> EncoderResult:
+    """Score the blunder detector at an operating point that was not chosen on these rows.
+
+    The labelled rows are cut in two **by game**: ``tune`` chooses the threshold that maximises
+    F1, ``score`` is where the F1, the precision and the recall that go into the report and into
+    the ``GOAL.md`` comparison are measured. The baseline is measured on the same ``score`` rows;
+    it has no threshold to tune, so the comparison hands the model a sweep the rule cannot have,
+    and the report says so rather than leaving the reader to notice.
+
+    When the split cannot give both halves a blunder — a handful of games, or every blunder in
+    one of them — there is no honest way to hold rows back: the threshold is then chosen and
+    measured on the same rows, ``threshold_split_degenerate`` is set and the report prints the
+    warning next to the number.
+    """
+    result.blunder_items = len(truth)
+    result.blunder_positives = int(np.sum(truth == 1))
+    result.blunder_base_rate = float(np.mean(truth == 1)) if len(truth) else None
+    result.threshold_fixed = float(cfg.threshold)
+    tune = threshold_halves(games, cfg.seed)
+    score = ~tune
+    identifiers = np.asarray(games)
+    usable = bool(
+        truth[tune].sum()
+        and truth[score].sum()
+        and (truth[tune] == 0).any()
+        and (truth[score] == 0).any()
+    )
+    if not usable:
+        result.threshold_split_degenerate = True
+        tune = np.ones(len(truth), dtype=bool)
+        score = np.ones(len(truth), dtype=bool)
+    result.tune_items = int(tune.sum())
+    result.score_items = int(score.sum())
+    result.tune_games = int(len(np.unique(identifiers[tune])))
+    result.score_games = int(len(np.unique(identifiers[score])))
+    threshold, tune_f1 = best_threshold(truth[tune], probability[tune], cfg.threshold)
+    result.threshold_tuned = threshold
+    result.tune_f1 = tune_f1
+    result.encoder_blunder = classification(
+        truth[score], (probability[score] >= threshold).astype(np.int64), "encoder"
+    )
+    result.encoder_blunder_fixed = classification(
+        truth[score], (probability[score] >= cfg.threshold).astype(np.int64), "encoder"
+    )
+    result.encoder_blunder_ranking = ranking(truth[score], probability[score], "encoder")
+    result.heuristic_blunder = classification(truth[score], baseline_calls[score], "heuristic")
+    margin = 100.0 * (result.encoder_blunder.f1 - result.heuristic_blunder.f1)
+    result.f1_margin = margin
+    result.meets_goal = margin >= GOAL_MARGIN
+    return result
+
+
 def measure(
     items: pl.DataFrame,
     predictions: dict[str, np.ndarray],
@@ -470,16 +752,14 @@ def measure(
     scored = _finite(labels, baseline["blunder"])
     result.blunder_items = int(scored.sum())
     if result.blunder_items:
-        truth = labels[scored].astype(np.int64)
-        result.encoder_blunder = classification(
-            truth, (predictions["blunder"][scored] >= cfg.threshold).astype(np.int64), "encoder"
+        measure_blunder(
+            labels[scored].astype(np.int64),
+            predictions["blunder"][scored].astype(np.float64),
+            baseline["blunder"][scored].astype(np.int64),
+            items["game_id"].to_numpy()[scored],
+            cfg,
+            result,
         )
-        result.heuristic_blunder = classification(
-            truth, baseline["blunder"][scored].astype(np.int64), "heuristic"
-        )
-        margin = 100.0 * (result.encoder_blunder.f1 - result.heuristic_blunder.f1)
-        result.f1_margin = margin
-        result.meets_goal = margin >= GOAL_MARGIN
     if items.height:
         target = f"tanh(cp / {cfg.labels.value_scale:g})"
         result.encoder_value = correlation(predictions["value"], bounded, "encoder", target)
@@ -512,7 +792,9 @@ def evaluate_encoder(
     log.info("evaluating %s on %s", path, where)
     notes: list[str] = [
         "the blunder F1 of the encoder and of the material baseline are measured on the same "
-        f"rows of the held-out '{cfg.split}' split, which is drawn by game_id, never by position"
+        f"rows of the held-out '{cfg.split}' split, which is drawn by game_id, never by "
+        f"position, and those rows are cut in two by game_id again: the '{TUNE_HALF}' half "
+        f"chooses the threshold and the '{SCORE_HALF}' half is what gets reported"
     ]
     result = EncoderResult(
         stage=cfg.stage or path.parent.name,
@@ -571,13 +853,38 @@ def evaluate_encoder(
         "resulting position and has to infer that something was thrown away. That is the "
         "comparison GOAL.md asks for, but it is not a level playing field"
     )
-    notes.append(
-        f"blunder F1 is measured at the fixed threshold {cfg.threshold} on the encoder's "
-        "probability, with no sweep: no operating point was chosen to make the number look "
-        "better, and none was chosen to make it look worse either"
-    )
+    notes.extend(blunder_notes(result))
     result.notes = notes
     return result
+
+
+def blunder_notes(result: EncoderResult) -> list[str]:
+    """How the blunder numbers have to be read; the report and the model card share this text."""
+    fixed = result.encoder_blunder_fixed
+    if result.encoder_blunder is None or fixed is None:
+        return []
+    if result.threshold_tuned is None or result.threshold_fixed is None:
+        return []
+    notes = [
+        f"the blunder threshold {result.threshold_tuned:.4g} was chosen on the "
+        f"'{TUNE_HALF}' half ({result.tune_items:,} rows, {result.tune_games:,} games) by "
+        f"maximising F1 there, and the reported numbers are measured on the '{SCORE_HALF}' half "
+        f"({result.score_items:,} rows, {result.score_games:,} games)"
+        + ("" if result.threshold_split_degenerate else ", which no threshold ever saw")
+        + f"; the same rows at the fixed threshold {result.threshold_fixed:.4g} give an F1 of "
+        f"{fixed.f1:.4f} against {result.encoder_blunder.f1:.4f} tuned",
+        "the material baseline is a hard yes/no rule: it has no threshold, so nothing was tuned "
+        "on its side and it got no half to tune on. The margin therefore compares a model at its "
+        "best operating point against a rule at its only one",
+        base_rate_caveat(result.blunder_base_rate),
+    ]
+    if result.threshold_split_degenerate:
+        notes.append(
+            f"the by-game split could not give both halves blunders ({result.blunder_positives} "
+            f"of {result.blunder_items} labelled rows are blunders), so the threshold was chosen "
+            "and measured on the same rows: this F1 is an upper bound, not a held-out number"
+        )
+    return notes
 
 
 def _heuristic_cache(cfg: EncoderEvalConfig, use_cache: bool) -> EvalCache:
@@ -610,18 +917,93 @@ def _verdict_cell(met: bool | None) -> str:
     return "not measured" if met is None else ("yes" if met else "no")
 
 
-def _detector_rows(result: EncoderResult) -> list[str]:
+def _detector_row(measured: ClassificationResult | None, operating_point: str) -> str | None:
+    if measured is None:
+        return None
+    return (
+        f"| {measured.name} | {operating_point} | {measured.items} | {measured.positives} | "
+        f"{measured.predicted} | {_percent(measured.precision)} | "
+        f"{_percent(measured.recall)} | {_percent(measured.f1)} |"
+    )
+
+
+def _blunder_section(result: EncoderResult) -> list[str]:
+    """The whole blunder block: how the operating point was chosen, then every number it gave."""
+    tuned = "n/a" if result.threshold_tuned is None else f"{result.threshold_tuned:.4g}"
+    fixed = "n/a" if result.threshold_fixed is None else f"{result.threshold_fixed:.4g}"
     lines = [
-        "| Detector | Items | Blunders | Flagged | Precision | Recall | F1 |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "## Blunder detection",
+        "",
+        sentence(base_rate_caveat(result.blunder_base_rate)),
+        "",
+        f"The {result.blunder_items:,} labelled rows are cut in two by `game_id`, never by "
+        "position, the policy the held-out split itself uses, because two positions of the same "
+        f"game are one move apart. The `{TUNE_HALF}` half ({result.tune_items:,} rows, "
+        f"{result.tune_games:,} games) chose the threshold `p >= {tuned}` by maximising F1 "
+        f"there; the `{SCORE_HALF}` half ({result.score_items:,} rows, {result.score_games:,} "
+        "games) is where every number below is measured"
+        + ("." if result.threshold_split_degenerate else ", and no `game_id` is in both halves."),
+        "",
+        "The material baseline is a hard yes/no rule: it has no threshold, so it was given no "
+        "half to tune on and nothing was swept on its side. The margin below compares the model "
+        "at its best operating point against the rule at its only one, and that is a courtesy "
+        "the model receives, not one the baseline does.",
+        "",
+        "| Detector | Operating point | Items | Blunders | Flagged | Precision | Recall | F1 |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
     ]
-    for measured in (result.encoder_blunder, result.heuristic_blunder):
-        if measured is None:
-            continue
-        lines.append(
-            f"| {measured.name} | {measured.items} | {measured.positives} | "
-            f"{measured.predicted} | {_percent(measured.precision)} | "
-            f"{_percent(measured.recall)} | {_percent(measured.f1)} |"
+    rows = [
+        _detector_row(result.encoder_blunder, f"tuned, `p >= {tuned}` (chosen on `{TUNE_HALF}`)"),
+        _detector_row(result.encoder_blunder_fixed, f"fixed, `p >= {fixed}`"),
+        _detector_row(result.heuristic_blunder, "rule, no threshold to tune"),
+    ]
+    lines.extend(row for row in rows if row is not None)
+    lines.append("")
+    if result.tune_f1 is not None:
+        lines.extend(
+            [
+                f"The same threshold reaches an F1 of {_percent(result.tune_f1)} on the "
+                f"`{TUNE_HALF}` half it was chosen on. The distance between that and the "
+                f"`{SCORE_HALF}` half above is what picking an operating point costs, and it is "
+                "the reason the two halves are not the same rows.",
+                "",
+            ]
+        )
+    if result.threshold_split_degenerate:
+        lines.extend(
+            [
+                "**Warning:** the by-game split could not give both halves blunders, so the "
+                "threshold was chosen and measured on the same rows. The F1 above is an upper "
+                "bound, not a held-out number.",
+                "",
+            ]
+        )
+    measured = result.encoder_blunder_ranking
+    if measured is not None:
+        span = "n/a"
+        if measured.min_score is not None and measured.max_score is not None:
+            span = f"{measured.min_score:.4f} to {measured.max_score:.4f}"
+            if measured.mean_score is not None:
+                span += f" (mean {measured.mean_score:.4f})"
+        lines.extend(
+            [
+                "### Without an operating point",
+                "",
+                "ROC AUC is the probability that a random blunder is ranked above a random quiet "
+                "move (0.5 is a coin flip); average precision is the area under the "
+                "precision-recall curve, and a random ranking scores the base rate, which is "
+                "printed next to it. Neither depends on a threshold, so neither can be flattered "
+                "by choosing one. The span of the probabilities is here because it is what makes "
+                "a fixed threshold reasonable or absurd.",
+                "",
+                "| Detector | Items | Blunders | Base rate | ROC AUC | Average precision | "
+                "Probability span |",
+                "|---|---:|---:|---:|---:|---:|---|",
+                f"| {measured.name} | {measured.items} | {measured.positives} | "
+                f"{_percent(measured.base_rate)} | {_number(measured.roc_auc)} | "
+                f"{_number(measured.average_precision)} | {span} |",
+                "",
+            ]
         )
     return lines
 
@@ -629,9 +1011,13 @@ def _detector_rows(result: EncoderResult) -> list[str]:
 def render_markdown(result: EncoderResult) -> str:
     """The human-readable report: the margin first, then every breakdown."""
     encoder = result.encoder_blunder
+    fixed = result.encoder_blunder_fixed
     baseline = result.heuristic_blunder
+    measured = result.encoder_blunder_ranking
     margin = "n/a" if result.f1_margin is None else f"{result.f1_margin:+.1f} points"
     target = result.encoder_value.target if result.encoder_value else "tanh(cp / value_scale)"
+    tuned = "n/a" if result.threshold_tuned is None else f"{result.threshold_tuned:.4g}"
+    at_fixed = "n/a" if result.threshold_fixed is None else f"{result.threshold_fixed:.4g}"
     lines: list[str] = [
         f"# Evaluation of `{result.stage}`",
         "",
@@ -647,10 +1033,17 @@ def render_markdown(result: EncoderResult) -> str:
         "",
         "| Metric | Value |",
         "|---|---|",
-        f"| Blunder F1, encoder | {_percent(encoder.f1 if encoder else None)} |",
+        f"| Blunder F1, encoder (tuned, `p >= {tuned}`) | "
+        f"{_percent(encoder.f1 if encoder else None)} |",
+        f"| Blunder F1, encoder (fixed, `p >= {at_fixed}`) | "
+        f"{_percent(fixed.f1 if fixed else None)} |",
         f"| Blunder F1, material baseline | {_percent(baseline.f1 if baseline else None)} |",
         f"| Margin over the baseline | {margin} |",
         f"| Margin >= {GOAL_MARGIN:.0f} points | {_verdict_cell(result.meets_goal)} |",
+        f"| Blunder ROC AUC | {_number(measured.roc_auc if measured else None)} |",
+        f"| Blunder average precision | "
+        f"{_number(measured.average_precision if measured else None)} |",
+        f"| Blunder base rate | {_percent(result.blunder_base_rate)} |",
         f"| Value vs `{target}`, Spearman (headline) | "
         f"{_number(result.encoder_value.spearman if result.encoder_value else None)} |",
         f"| Value vs `{target}`, Pearson | "
@@ -658,11 +1051,12 @@ def render_markdown(result: EncoderResult) -> str:
         f"| Value correlation >= {GOAL_VALUE_CORRELATION:.2f} | "
         f"{_verdict_cell(result.value_correlation_meets_goal)} |",
         f"| Result accuracy | {_percent(result.result_accuracy)} |",
-        f"| Positions | {result.items:,} ({result.blunder_items:,} with a blunder label) |",
+        f"| Positions | {result.items:,} ({result.blunder_items:,} with a blunder label, "
+        f"{result.score_items:,} of them scored) |",
         "",
     ]
     if encoder is not None or baseline is not None:
-        lines.extend(["## Blunder detection", "", *_detector_rows(result), ""])
+        lines.extend(_blunder_section(result))
     if result.encoder_value is not None:
         lines.extend(
             [
@@ -727,11 +1121,29 @@ def track_result(result: EncoderResult, cfg: EncoderEvalConfig) -> str | None:
 def _metrics(result: EncoderResult) -> dict[str, float]:
     """Flat metrics for MLflow (only what was actually measured)."""
     metrics: dict[str, float] = {}
-    for measured in (result.encoder_blunder, result.heuristic_blunder):
+    for measured, name in (
+        (result.encoder_blunder, "encoder"),
+        (result.encoder_blunder_fixed, "encoder_fixed"),
+        (result.heuristic_blunder, "heuristic"),
+    ):
         if measured is not None:
-            metrics[f"blunder_f1/{measured.name}"] = measured.f1
-            metrics[f"blunder_precision/{measured.name}"] = measured.precision
-            metrics[f"blunder_recall/{measured.name}"] = measured.recall
+            metrics[f"blunder_f1/{name}"] = measured.f1
+            metrics[f"blunder_precision/{name}"] = measured.precision
+            metrics[f"blunder_recall/{name}"] = measured.recall
+    if result.encoder_blunder_ranking is not None:
+        auc = result.encoder_blunder_ranking.roc_auc
+        precision = result.encoder_blunder_ranking.average_precision
+        if auc is not None:
+            metrics["blunder_roc_auc"] = auc
+        if precision is not None:
+            metrics["blunder_average_precision"] = precision
+    for name, value in (
+        ("blunder_threshold", result.threshold_tuned),
+        ("blunder_base_rate", result.blunder_base_rate),
+        ("blunder_f1_tune", result.tune_f1),
+    ):
+        if value is not None:
+            metrics[name] = float(value)
     for measured in (result.encoder_value, result.heuristic_value):
         if measured is not None and measured.pearson is not None:
             metrics[f"value_pearson/{measured.name}"] = measured.pearson

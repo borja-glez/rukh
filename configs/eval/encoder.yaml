@@ -5,6 +5,11 @@ stage: null # defaults to the checkpoint's run directory
 split: val # never `train` for a published number
 positions: 10000 # 0 evaluates the whole split
 batch_size: 256
+# The fixed operating point, reported next to the tuned one and never as the headline: a
+# blunder is ~3.7 % of the rows and the head's sigmoid is not calibrated, so the F1 at 0.5
+# measures the threshold rather than the model. The reported F1 uses the threshold that
+# maximises F1 on the `tune` half of the labelled rows (split by game_id, like everything
+# else here) and is measured on the `score` half, together with ROC AUC and average precision.
 threshold: 0.5 # probability above which the blunder logit counts as a blunder
 # The baseline of GOAL.md: material (1/3/3/5/9) plus mobility, one ply of captures ahead.
 mobility_weight: 0.05

@@ -672,12 +672,31 @@ def eval_encoder_cmd(
         f"items:    {result.items} positions, {result.blunder_items} with a blunder label "
         f"on {result.device}"
     )
-    for measured in (result.encoder_blunder, result.heuristic_blunder):
+    typer.echo(
+        f"split:    tune {result.tune_items} rows / {result.tune_games} games, "
+        f"score {result.score_items} rows / {result.score_games} games "
+        f"(base rate {(result.blunder_base_rate or 0.0) * 100:.2f} %)"
+    )
+    tuned = "n/a" if result.threshold_tuned is None else f"{result.threshold_tuned:.4g}"
+    fixed = "n/a" if result.threshold_fixed is None else f"{result.threshold_fixed:.4g}"
+    for measured, point in (
+        (result.encoder_blunder, f"p>={tuned} tuned"),
+        (result.encoder_blunder_fixed, f"p>={fixed} fixed"),
+        (result.heuristic_blunder, "rule, untuned"),
+    ):
         if measured is not None:
             typer.echo(
-                f"blunder:  {measured.name:<9} P {measured.precision:.4f}  "
+                f"blunder:  {measured.name:<15} {point:<16} P {measured.precision:.4f}  "
                 f"R {measured.recall:.4f}  F1 {measured.f1:.4f}"
             )
+    if result.encoder_blunder_ranking is not None:
+        rank = result.encoder_blunder_ranking
+        auc = "n/a" if rank.roc_auc is None else f"{rank.roc_auc:.4f}"
+        average = "n/a" if rank.average_precision is None else f"{rank.average_precision:.4f}"
+        typer.echo(
+            f"ranking:  roc auc {auc}  average precision {average}  "
+            f"(a coin flip scores 0.5000 and {rank.base_rate:.4f})"
+        )
     if result.f1_margin is not None:
         verdict = "meets the bar" if result.meets_goal else "below the bar"
         typer.echo(f"margin:   {result.f1_margin:+.1f} F1 points over the baseline ({verdict})")

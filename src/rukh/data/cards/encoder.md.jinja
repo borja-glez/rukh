@@ -40,6 +40,21 @@ Not evaluated yet: run `rukh eval encoder --model <checkpoint>` to fill this tab
 | {{ name }} | {{ value }} |
 {%- endfor %}
 
+### How the blunder numbers were measured
+
+{{ blunder_caveat }}
+{% if threshold_tuned is not none %}
+The labelled rows are cut in two **by game**, never by position: the `tune` half
+({{ tune_items }} rows, {{ tune_games }} games) chose the threshold `p >= {{ threshold_tuned }}`
+by maximising F1 there, and the `score` half ({{ score_items }} rows, {{ score_games }} games) is
+where the F1, the precision and the recall in the table are measured. No game is in both halves,
+and the threshold never saw the rows it is scored on. The F1 at the fixed threshold is in the
+same table so that the operating point cannot hide anything.
+
+The material baseline is a hard yes/no rule: it has no threshold, so nothing was tuned on its
+side and it was given no half to tune on. The margin compares the model at its best operating
+point against the rule at its only one.
+{% endif %}
 ### The baseline these numbers are compared against
 
 The blunder head is only interesting if it beats a program that understands nothing. The
