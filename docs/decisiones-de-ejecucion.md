@@ -726,3 +726,21 @@ Evidencia obtenida por el controlador, no por subagentes:
   documentado, como manda GOAL.
 - **Si está mal:** más pasos de afinado, más ficheros del dataset de evaluaciones (hay 20 y el
   cruce solo recuperó el 9,8 %) o una escala de valor menos comprimida.
+
+### D-057 · Afinar menos red gana, y las etiquetas se saturan a las 110 000
+- **Qué:** dos resultados del afinado del encoder, ambos a 4 000 pasos sobre las mismas etiquetas:
+  - **Modo de afinado** (MAE del valor): `probe` (tronco congelado) 0,1429 · `full` (todo) 0,1354 ·
+    **`last-n` (los dos últimos bloques y la norma final) 0,1180**. Afinar *menos* red gana.
+  - **Curva por número de etiquetas** (`last-n`): 10 % (43 809 filas) 0,1217 y 95,59 % de acierto de
+    error; 25 % (109 523) 0,1192 y 96,78 %; 50 % (219 046) 0,1210 y 96,78 %; 100 % (438 093) 0,1215
+    y 96,78 %. **Plana a partir del 25 %.**
+- **Por qué importa:** responde la pregunta que el módulo M3 plantea. Con 110 000 etiquetas de
+  Stockfish el encoder ya está donde va a estar; las 330 000 restantes no compran nada medible. Y
+  el orden `last-n > full > probe` es el argumento de que la adaptación específica de la tarea vive
+  en los últimos bloques, mientras que mover los primeros aleja la representación que construyó el
+  preentrenamiento.
+- **Honestidad:** una tirada por modo y por punto. La dispersión entre los cuatro puntos de la curva
+  (0,1192-0,1217) es del mismo tamaño que la distancia a la tirada suelta de `last-n` (0,1180), así
+  que el orden es sugerente, no establecido; haría falta repetir con varias semillas. La única
+  diferencia que supera claramente ese ruido es el acierto de error al 10 % (95,59 % frente a 96,78 %).
+- **Si está mal:** repetir con tres semillas por punto separaría señal de ruido.
