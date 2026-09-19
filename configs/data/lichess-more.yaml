@@ -13,4 +13,4 @@ out_dir: data/raw
 limit: 6000000
 duckdb:
   memory_limit: 16GB
-  threads: 8
+  threads: 3   # 8 tripped HTTP 429 three times running; fewer parallel range requests
