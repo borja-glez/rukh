@@ -29,6 +29,12 @@ TIED_HEADS = frozenset({TIED_HEAD, "mlm_head.weight", "encoder.mlm_head.weight"}
 """Every tied head in the project: the decoder's and the encoder's masked-move head.
 
 The last name is the same head seen from a ``MultiHead``, which holds the encoder as a child."""
+TIED_SOURCES: dict[str, str] = {
+    TIED_HEAD: "tokens.weight",
+    "mlm_head.weight": "tokens.weight",
+    "encoder.mlm_head.weight": "encoder.tokens.weight",
+}
+"""The embedding each tied head shares its storage with, when the tie is switched on."""
 
 
 def step_name(step: int) -> str:
@@ -170,6 +176,16 @@ def load_encoder(
     return model.eval(), payload
 
 
+def build_heads(payload: Mapping[str, Any]) -> MultiHead:
+    """A ``MultiHead`` shaped by a payload, with no weights loaded yet."""
+    run_cfg = payload.get("cfg") or {}
+    encoder = PositionEncoder(EncoderConfig.model_validate(payload["model_cfg"]))
+    pooling = run_cfg.get("pooling") or "mean"
+    if pooling not in ("cls", "mean"):
+        raise ValueError(f"unknown pooling {pooling!r} in the checkpoint's config")
+    return MultiHead(encoder, HeadWeights.model_validate(run_cfg.get("weights") or {}), pooling)
+
+
 def load_heads(
     path: Path, map_location: str | torch.device = "cpu"
 ) -> tuple[MultiHead, dict[str, Any]]:
@@ -180,12 +196,7 @@ def load_heads(
     weights come from the run's config, which travels in the same payload.
     """
     payload = load_checkpoint(path, map_location=map_location)
-    run_cfg = payload.get("cfg") or {}
-    encoder = PositionEncoder(EncoderConfig.model_validate(payload["model_cfg"]))
-    pooling = run_cfg.get("pooling") or "mean"
-    if pooling not in ("cls", "mean"):
-        raise ValueError(f"{path} was trained with an unknown pooling {pooling!r}")
-    model = MultiHead(encoder, HeadWeights.model_validate(run_cfg.get("weights") or {}), pooling)
+    model = build_heads(payload)
     load_state(model, payload["model_state"])
     return model.eval(), payload
 
@@ -201,6 +212,26 @@ def checkpoint_kind(payload: Mapping[str, Any]) -> str:
     if any(str(name).startswith("encoder.") for name in state):
         return "encoder"
     return "encoder" if "input" in (payload.get("model_cfg") or {}) else "decoder"
+
+
+def load_any(
+    path: Path, map_location: str | torch.device = "cpu"
+) -> tuple[nn.Module, dict[str, Any], str]:
+    """Rebuild whatever model a checkpoint describes: ``(model, payload, kind)``.
+
+    ``rukh export`` and ``rukh publish`` take a checkpoint and have to work out what is in it;
+    this is the one place that decides, so the two commands can never disagree.
+    """
+    payload = load_checkpoint(path, map_location=map_location)
+    kind = checkpoint_kind(payload)
+    if kind == "decoder":
+        model: nn.Module = MoveDecoder(DecoderConfig.model_validate(payload["model_cfg"]))
+    elif any(str(name).startswith("encoder.") for name in payload["model_state"]):
+        model = build_heads(payload)
+    else:
+        model = PositionEncoder(EncoderConfig.model_validate(payload["model_cfg"]))
+    load_state(model, payload["model_state"])
+    return model.eval(), payload, kind
 
 
 def restore(

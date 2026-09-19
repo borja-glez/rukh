@@ -101,7 +101,12 @@ class PositionEncoder(nn.Module):
         mask = attention_mask.bool()
         if mask.dim() != 2:
             raise ValueError(f"attention_mask must be (B, T), got {tuple(attention_mask.shape)}")
-        if not bool(mask.any(dim=-1).all()):
+        if not torch.compiler.is_exporting() and not bool(mask.any(dim=-1).all()):
+            # An entirely masked row would make softmax return NaN, so it is refused here rather
+            # than debugged three layers down. The check reads a tensor, which is exactly what
+            # `torch.export` cannot trace (a data-dependent guard), and skipping it under the
+            # exporter is what keeps the encoder on the modern exporter instead of the
+            # deprecated tracer: the exported graph is a pure function of its input either way.
             raise ValueError("every sequence needs at least one unmasked token")
         return mask[:, None, None, :]
 

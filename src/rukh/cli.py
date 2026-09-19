@@ -707,6 +707,9 @@ def export_cmd(
         ),
     ],
     out: Annotated[Path, typer.Option("--out", help="Output directory (or .onnx file).")],
+    kind: Annotated[
+        str, typer.Option("--kind", help="What to export: decoder or encoder.")
+    ] = "decoder",
     opset: Annotated[int, typer.Option("--opset", help="ONNX opset version.")] = 18,
     seq_len: Annotated[
         int, typer.Option("--seq-len", help="Example length the exporter traces.")
@@ -731,14 +734,22 @@ def export_cmd(
     ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
 ) -> None:
-    """Export the next-move head to ONNX, quantize it and check parity with PyTorch."""
-    from rukh.export import export_all
+    """Export a model to ONNX, quantize it and check parity with PyTorch.
+
+    The decoder exports its next-move head; ``--kind encoder`` exports the two heads the demo
+    reads from a position, ``value`` and ``blunder``.
+    """
+    from rukh.export import KINDS, export_all
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    if kind not in KINDS:
+        typer.echo(f"error: --kind must be one of {', '.join(KINDS)}", err=True)
+        raise typer.Exit(code=2)
     try:
         bundle = export_all(
             ckpt,
             out,
+            kind=kind,
             opset=opset,
             seq_len=seq_len,
             fp16=fp16,
@@ -754,6 +765,7 @@ def export_cmd(
         typer.echo(bundle.model_dump_json(indent=2))
         return
     typer.echo(f"exporter: {bundle.onnx.exporter} (opset {bundle.onnx.opset})")
+    typer.echo(f"kind:     {bundle.onnx.kind} -> {', '.join(bundle.onnx.outputs)}")
     if bundle.onnx.warning:
         typer.echo(f"warning:  {bundle.onnx.warning}")
     checked = "verified" if bundle.onnx.dynamic_seq_verified else "not verified"
@@ -768,14 +780,65 @@ def export_cmd(
                 f"{quantized.kind}:     {quantized.path} ({quantized.bytes} bytes, "
                 f"{quantized.ratio:.2f} of fp32, {quantized.method})"
             )
-    for kind, result in bundle.parity.items():
+    for name, result in bundle.parity.items():
         typer.echo(
-            f"parity {kind}: {result.agreement:.4f} on {result.positions} "
+            f"parity {name}: {result.agreement:.4f} on {result.positions} "
             f"{bundle.parity_source} positions "
             f"(max |delta logits| {result.max_abs_logit_delta:.4g})"
         )
+    for name, heads in bundle.heads_parity.items():
+        typer.echo(
+            f"parity {name}: {heads.agreement:.4f} of the blunder decisions on "
+            f"{heads.positions} {bundle.parity_source} positions "
+            f"(max |delta value| {heads.max_abs_value_delta:.4g})"
+        )
     if bundle.parity_warning:
         typer.echo(f"warning:  {bundle.parity_warning}")
+
+
+@encoder_app.command("embed")
+def encoder_embed_cmd(
+    positions: Annotated[
+        Path,
+        typer.Option(
+            "--positions",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Parquet with a `fen` column (the P1 positions or evaluations table).",
+        ),
+    ],
+    out: Annotated[Path, typer.Option("--out", help="Where to write the .npy array.")],
+    ckpt: Annotated[
+        Path,
+        typer.Option(
+            "--ckpt", exists=True, dir_okay=False, readable=True, help="Encoder checkpoint."
+        ),
+    ],
+    batch_size: Annotated[
+        int, typer.Option("--batch-size", help="Positions per forward pass.")
+    ] = 256,
+    device: Annotated[
+        str | None, typer.Option("--device", help="Where to run: cuda, cpu... ")
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Write mean-pooled position embeddings plus the `fen4` sidecar that names their rows."""
+    from rukh.export import embed_positions
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    try:
+        result = embed_positions(ckpt, positions, out, batch_size=batch_size, device=device)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(f"positions: {result.positions}")
+    typer.echo(f"dim:       {result.dim} ({result.pooling} pooling, {result.input} scheme)")
+    typer.echo(f"array:     {result.array}")
+    typer.echo(f"sidecar:   {result.sidecar} (row, fen4)")
 
 
 @publish_app.command("model")
@@ -823,7 +886,7 @@ def publish_model_cmd(
     if as_json:
         typer.echo(result.model_dump_json(indent=2))
         return
-    typer.echo(f"repo:     {result.repo_id} ({result.repo_type})")
+    typer.echo(f"repo:     {result.repo_id} ({result.repo_type}, {result.kind})")
     typer.echo(f"stage:    {result.stage} ({result.params:,} parameters)")
     typer.echo(f"mode:     {'dry-run (staged, nothing uploaded)' if dry_run else 'uploaded'}")
     typer.echo(f"weights:  {result.weights_format}")

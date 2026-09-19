@@ -7,6 +7,11 @@ are reported: ``agreement`` is the share of positions where the chosen token mat
 ``max_abs_logit_delta`` is the worst absolute difference seen anywhere in the logits, which is
 what tells fp32, fp16 and int8 apart.
 
+The encoder is checked the same way on its own kind of item: the **validation positions** of
+``rukh.data.labels`` (the held-out side of the by-game split), never a random walk, because the
+number that matters there is whether the exported file makes the same *blunder decision* as the
+checkpoint. Its report carries that agreement and the worst drift of the ``value`` output.
+
 The positions are the thousand **validation** prefixes of ``docs/spec/02`` §6, the same ones the
 legality and accuracy metrics use: a random legal walk visits positions no human would reach, so
 agreeing on them says little about the file the demo will load. ``random_prefixes`` stays for the
@@ -26,8 +31,10 @@ import numpy as np
 import torch
 from pydantic import BaseModel, ConfigDict
 
+from rukh.data.labels import LabelsConfig
 from rukh.export.onnx import INPUT_NAME, LastStepLogits
 from rukh.models import MoveDecoder
+from rukh.models.heads import MultiHead
 from rukh.tokenize.uci_vocab import UciTokenizer
 
 log = logging.getLogger(__name__)
@@ -36,6 +43,8 @@ DEFAULT_N = 1_000
 MAX_MISMATCHES = 20
 DEFAULT_GAMES = "data/uci/year=2025/month=02/games.parquet"
 """The validation month of P1: the parity positions come from here when it exists."""
+BLUNDER_THRESHOLD = 0.5
+"""The exported graph returns a probability; this is where the demo's alert switches on."""
 
 
 class ParityResult(BaseModel):
@@ -48,6 +57,20 @@ class ParityResult(BaseModel):
     max_abs_logit_delta: float
     mismatches: list[int]
     """Indices of the first few positions where the chosen token differed."""
+
+
+class EncoderParityResult(BaseModel):
+    """How well an exported encoder reproduces the checkpoint's two heads."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    positions: int
+    agreement: float
+    """Share of positions where the ``blunder`` decision (at 0.5) is the same."""
+    max_abs_value_delta: float
+    max_abs_blunder_delta: float
+    mismatches: list[int]
+    """Indices of the first few positions where the decision differed."""
 
 
 def random_prefixes(
@@ -118,6 +141,97 @@ def parity_positions(
     )
     log.warning("%s", warning)
     return random_prefixes(tok, n, seed=seed), "random-walk", warning
+
+
+def label_positions(
+    cfg: LabelsConfig | None = None,
+    n: int = DEFAULT_N,
+    split: str = "val",
+) -> list[list[int]]:
+    """Token sequences of ``n`` held-out labelled positions, in the encoder's own scheme.
+
+    Empty when the labelled table has not been built: an encoder parity check has no honest
+    fallback (a random board is not a position the demo will ever evaluate), so the caller
+    reports that it could not be measured instead of measuring something else.
+    """
+    import polars as pl
+
+    from rukh.data.labels import LabelsConfig as Labels
+    from rukh.data.labels import build_labels
+    from rukh.models.squares import fen_to_tokens
+
+    try:
+        frame = build_labels(cfg if cfg is not None else Labels())
+    except FileNotFoundError as exc:
+        log.warning("no labelled positions for the parity check: %s", exc)
+        return []
+    rows = frame.filter(pl.col("split") == split).sort(["order", "game_id", "ply"]).head(n)
+    return [fen_to_tokens(fen) for fen in rows["fen"].to_list()]
+
+
+def encoder_parity_positions(
+    cfg: LabelsConfig | None = None, n: int = DEFAULT_N, split: str = "val"
+) -> tuple[list[list[int]], str, str | None]:
+    """``(positions, source, warning)`` for the encoder: validation labels, or nothing."""
+    positions = label_positions(cfg, n=n, split=split)
+    if positions:
+        return positions, "validation-labels", None
+    warning = (
+        "no labelled validation positions (build them with `rukh data labels`): the encoder "
+        "parity check was skipped rather than measured on positions nobody will evaluate"
+    )
+    log.warning("%s", warning)
+    return [], "none", warning
+
+
+def encoder_parity(
+    model: MultiHead,
+    onnx_path: Path,
+    positions: Sequence[Sequence[int]],
+    n: int = DEFAULT_N,
+    threshold: float = BLUNDER_THRESHOLD,
+) -> EncoderParityResult:
+    """Compare the blunder decision and the value of the checkpoint and the exported file."""
+    from rukh.export.onnx import BLUNDER_OUTPUT, ENCODER_OUTPUTS, VALUE_OUTPUT, EncoderHeads
+
+    used = list(positions)[:n]
+    if not used:
+        raise ValueError("parity needs at least one position")
+    wrapper = EncoderHeads(model.eval()).eval()
+    session = _session(Path(onnx_path))
+
+    agreed = 0
+    worst_value = worst_blunder = 0.0
+    mismatches: list[int] = []
+    for index, tokens in enumerate(used):
+        idx = np.asarray([list(tokens)], dtype=np.int64)
+        with torch.no_grad():
+            value, blunder = wrapper(torch.from_numpy(idx))
+        reference = {
+            VALUE_OUTPUT: float(value[0]),
+            BLUNDER_OUTPUT: float(blunder[0]),
+        }
+        outputs = session.run(None, {INPUT_NAME: idx})
+        exported = {
+            name: float(np.asarray(array).reshape(-1)[0])
+            for name, array in zip(ENCODER_OUTPUTS, outputs, strict=False)
+        }
+        worst_value = max(worst_value, abs(reference[VALUE_OUTPUT] - exported[VALUE_OUTPUT]))
+        worst_blunder = max(
+            worst_blunder, abs(reference[BLUNDER_OUTPUT] - exported[BLUNDER_OUTPUT])
+        )
+        same = (reference[BLUNDER_OUTPUT] >= threshold) == (exported[BLUNDER_OUTPUT] >= threshold)
+        if same:
+            agreed += 1
+        elif len(mismatches) < MAX_MISMATCHES:
+            mismatches.append(index)
+    return EncoderParityResult(
+        positions=len(used),
+        agreement=agreed / len(used),
+        max_abs_value_delta=worst_value,
+        max_abs_blunder_delta=worst_blunder,
+        mismatches=mismatches,
+    )
 
 
 def _session(onnx_path: Path):  # type: ignore[no-untyped-def]

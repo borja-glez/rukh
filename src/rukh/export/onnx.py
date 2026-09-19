@@ -1,4 +1,4 @@
-"""Exporting a ``MoveDecoder`` to ONNX for the browser.
+"""Exporting a ``MoveDecoder`` (and the encoder's heads) to ONNX for the browser.
 
 The demo only ever needs the distribution over the *next* move, so the exported graph is not the
 model itself but a wrapper whose forward returns the last step only: ``(B, V)`` instead of
@@ -10,6 +10,12 @@ what ``docs/spec/02`` asks for) and falls back to the legacy TorchScript tracer 
 when dynamo is unavailable or fails; which path produced the file is recorded in the metadata,
 because the two exporters do not emit the same graph and a parity check is only meaningful when
 it is known which one ran.
+
+The encoder travels the same road with a different wrapper: ``EncoderHeads`` returns the two
+outputs the demo needs (``value`` and ``blunder``) and nothing else, the ``squares`` scheme has
+no dynamic sequence axis at all (it is always 69 tokens) and the metadata carries ``rukh_kind``
+and ``rukh_heads`` so a file can say what it is. Everything else — the exporter, the fallback,
+the verification, the metadata, the sidecar — is the same code: the decoder's path is untouched.
 
 ``dynamic_seq`` is not taken on trust. The legacy tracer happily bakes the traced length into
 the graph while still being asked for a dynamic axis, and the demo feeds a sequence that grows
@@ -23,7 +29,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
@@ -33,12 +39,17 @@ from torch import Tensor, nn
 
 from rukh import __version__
 from rukh.models import MoveDecoder
+from rukh.models.heads import MultiHead
 
 log = logging.getLogger(__name__)
 
 MODEL_NAME = "model.onnx"
 INPUT_NAME = "idx"
 OUTPUT_NAME = "logits"
+VALUE_OUTPUT = "value"
+BLUNDER_OUTPUT = "blunder"
+ENCODER_OUTPUTS = (VALUE_OUTPUT, BLUNDER_OUTPUT)
+"""What the encoder graph returns: the evaluation bar and the blunder alert of the demo."""
 BATCH_AXIS = "batch"
 SEQUENCE_AXIS = "sequence"
 DEFAULT_OPSET = 18
@@ -57,12 +68,32 @@ class LastStepLogits(nn.Module):
         return logits[:, -1, :]
 
 
+class EncoderHeads(nn.Module):
+    """Wraps a fine-tuned encoder so that ``forward(idx)`` returns ``(value, blunder)``.
+
+    The third head (``result``) is left out on purpose: the demo draws an evaluation bar and a
+    blunder alert, and every tensor the graph returns is one the browser has to read back over
+    the worker boundary. ``blunder`` comes out as a probability rather than a logit, so the page
+    compares it against 0.5 instead of carrying a sigmoid of its own.
+    """
+
+    def __init__(self, model: MultiHead) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, idx: Tensor) -> tuple[Tensor, Tensor]:
+        pooled = self.model.pooled(idx)
+        return self.model.value(pooled), torch.sigmoid(self.model.blunder(pooled))
+
+
 class ExportResult(BaseModel):
     """What was written and how."""
 
     model_config = ConfigDict(extra="forbid")
 
     path: str
+    kind: Literal["decoder", "encoder"] = "decoder"
+    outputs: list[str] = [OUTPUT_NAME]
     exporter: Literal["dynamo", "legacy"]
     opset: int
     seq_len: int
@@ -96,13 +127,16 @@ def _dynamic_shapes(dynamic_batch: bool, dynamic_seq: bool) -> dict[str, dict[in
     return {INPUT_NAME: axes} if axes else None
 
 
-def _dynamic_axes(dynamic_batch: bool, dynamic_seq: bool) -> dict[str, dict[int, str]] | None:
+def _dynamic_axes(
+    dynamic_batch: bool, dynamic_seq: bool, outputs: Sequence[str] = (OUTPUT_NAME,)
+) -> dict[str, dict[int, str]] | None:
     shapes = _dynamic_shapes(dynamic_batch, dynamic_seq)
     if shapes is None:
         return None
     axes = dict(shapes)
     if dynamic_batch:
-        axes[OUTPUT_NAME] = {0: BATCH_AXIS}
+        for name in outputs:
+            axes[name] = {0: BATCH_AXIS}
     return axes
 
 
@@ -130,6 +164,51 @@ def _utf8_console() -> Iterator[None]:
                 stream.reconfigure(encoding=encoding, errors=errors)
 
 
+def _write_graph(
+    wrapper: nn.Module,
+    example: Tensor,
+    path: Path,
+    opset: int,
+    outputs: Sequence[str],
+    dynamic_batch: bool,
+    dynamic_seq: bool,
+) -> tuple[Literal["dynamo", "legacy"], str | None]:
+    """Write one ONNX file with the modern exporter, falling back to the legacy one.
+
+    Both graphs of the project (the decoder's next move and the encoder's two heads) are written
+    here so that the fallback, the console workaround and the axis declarations exist once.
+    """
+    common: dict[str, Any] = {
+        "input_names": [INPUT_NAME],
+        "output_names": list(outputs),
+        "opset_version": opset,
+    }
+    try:
+        with torch.no_grad(), _utf8_console():
+            torch.onnx.export(
+                wrapper,
+                (example,),
+                str(path),
+                dynamo=True,
+                dynamic_shapes=_dynamic_shapes(dynamic_batch, dynamic_seq),
+                **common,
+            )
+    except Exception as exc:  # noqa: BLE001 - any exporter failure must fall back, not stop
+        warning = f"the dynamo exporter failed ({type(exc).__name__}: {exc}); used the legacy one"
+        log.warning("%s", warning)
+        with torch.no_grad():
+            torch.onnx.export(
+                wrapper,
+                (example,),
+                str(path),
+                dynamo=False,
+                dynamic_axes=_dynamic_axes(dynamic_batch, dynamic_seq, outputs),
+                **common,
+            )
+        return "legacy", warning
+    return "dynamo", None
+
+
 def export_onnx(
     ckpt: Path | MoveDecoder,
     out: Path,
@@ -154,36 +233,9 @@ def export_onnx(
     path = target_path(out)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    common: dict[str, Any] = {
-        "input_names": [INPUT_NAME],
-        "output_names": [OUTPUT_NAME],
-        "opset_version": opset,
-    }
-    warning: str | None = None
-    exporter: Literal["dynamo", "legacy"] = "dynamo"
-    try:
-        with torch.no_grad(), _utf8_console():
-            torch.onnx.export(
-                wrapper,
-                (example,),
-                str(path),
-                dynamo=True,
-                dynamic_shapes=_dynamic_shapes(dynamic_batch, dynamic_seq),
-                **common,
-            )
-    except Exception as exc:  # noqa: BLE001 - any exporter failure must fall back, not stop
-        warning = f"the dynamo exporter failed ({type(exc).__name__}: {exc}); used the legacy one"
-        log.warning("%s", warning)
-        exporter = "legacy"
-        with torch.no_grad():
-            torch.onnx.export(
-                wrapper,
-                (example,),
-                str(path),
-                dynamo=False,
-                dynamic_axes=_dynamic_axes(dynamic_batch, dynamic_seq),
-                **common,
-            )
+    exporter, warning = _write_graph(
+        wrapper, example, path, opset, [OUTPUT_NAME], dynamic_batch, dynamic_seq
+    )
     works = verify_dynamic_seq(path, seq_len, model.cfg.block)
     if dynamic_seq and works is False:
         raise ValueError(
@@ -216,6 +268,81 @@ def export_onnx(
         metadata=metadata,
         vocab_size=model.cfg.vocab_size,
         params=model.num_params(non_embedding=False),
+        bytes=path.stat().st_size,
+        warning=warning,
+    )
+
+
+def export_encoder_onnx(
+    ckpt: Path | MultiHead,
+    out: Path,
+    opset: int = DEFAULT_OPSET,
+    dynamic_batch: bool = True,
+) -> ExportResult:
+    """Export the ``value`` and ``blunder`` heads of a fine-tuned encoder to ONNX.
+
+    The length of the input is the scheme's, not the caller's: ``squares`` is always 69 tokens
+    and there is no sequence axis to make dynamic, while ``moves`` reads a growing game exactly
+    as the decoder does. The example the exporter traces is a sequence of real tokens rather
+    than zeros, because ``<pad>`` everywhere is a position the encoder legitimately refuses.
+    """
+    model = ckpt if isinstance(ckpt, MultiHead) else _load_heads(Path(ckpt))
+    model = model.eval()
+    cfg = model.encoder.cfg
+    seq_len = cfg.seq
+    dynamic_seq = cfg.input == "moves"
+    wrapper = EncoderHeads(model).eval()
+    # Two rows, not one, and no zeros. `torch.export` specialises a dimension whose example is
+    # 1 (the 0/1 specialisation), so a batch of one is baked into the graph and the demo's
+    # second position fails inside a reshape; tracing at two keeps the axis dynamic and the file
+    # still accepts a batch of one. `<pad>` everywhere would be an entirely masked row, which
+    # the encoder refuses on purpose, so the example is made of real token ids.
+    example = torch.ones((2, seq_len), dtype=torch.long)
+    path = target_path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    exporter, warning = _write_graph(
+        wrapper, example, path, opset, list(ENCODER_OUTPUTS), dynamic_batch, dynamic_seq
+    )
+    works = verify_dynamic_seq(path, seq_len, cfg.seq) if dynamic_seq else None
+    if dynamic_seq and works is False:
+        raise ValueError(
+            f"{path} was exported with a dynamic sequence axis but only runs at length "
+            f"{seq_len}: the {exporter} exporter baked the length in."
+        )
+    really_dynamic = dynamic_seq if works is None else works
+    clear_value_info(path)
+    metadata = write_metadata(
+        path,
+        {
+            "kind": "encoder",
+            "heads": ",".join(ENCODER_OUTPUTS),
+            "input": cfg.input,
+            "pooling": model.pooling,
+            "blunder": "probability",
+            "block": seq_len,
+            "vocab_size": cfg.tokens,
+            "seq_len": seq_len,
+            "dynamic_batch": dynamic_batch,
+            "dynamic_seq": really_dynamic,
+            "exporter": exporter,
+            "version": __version__,
+        },
+    )
+    return ExportResult(
+        path=path.as_posix(),
+        kind="encoder",
+        outputs=list(ENCODER_OUTPUTS),
+        exporter=exporter,
+        opset=opset,
+        seq_len=seq_len,
+        block=seq_len,
+        dynamic_batch=dynamic_batch,
+        dynamic_seq=really_dynamic,
+        dynamic_seq_verified=works is not None,
+        metadata=metadata,
+        vocab_size=cfg.tokens,
+        params=sum(parameter.numel() for parameter in model.parameters()),
         bytes=path.stat().st_size,
         warning=warning,
     )
@@ -280,6 +407,27 @@ def write_metadata(path: Path, props: dict[str, Any]) -> dict[str, str]:
     )
 
 
+def clear_value_info(path: Path) -> int:
+    """Drop the graph's annotations for intermediate values; returns how many were removed.
+
+    The modern exporter records a shape for every intermediate tensor, and some of those are the
+    shape of the traced example rather than of the dynamic graph. Nothing runs them:
+    onnxruntime executes the file regardless. But ``quantize_dynamic`` re-runs shape inference
+    in strict mode first and refuses a file whose annotations disagree with what it infers, so
+    the int8 build of the encoder dies on an annotation instead of on a weight. They are
+    optional by the specification, so the encoder's graph goes out without them.
+    """
+    try:
+        import onnx
+    except ImportError:  # pragma: no cover - onnx is a hard dependency of the exporter
+        return 0
+    model = onnx.load(str(path))
+    removed = len(model.graph.value_info)
+    del model.graph.value_info[:]
+    onnx.save(model, str(path))
+    return removed
+
+
 def read_metadata(path: Path) -> dict[str, str]:
     """The ``rukh_*`` metadata of an exported file (needs ``onnx``)."""
     import onnx
@@ -292,4 +440,11 @@ def _load(ckpt: Path) -> MoveDecoder:
     from rukh.train import load_model
 
     model, _payload = load_model(ckpt)
+    return model
+
+
+def _load_heads(ckpt: Path) -> MultiHead:
+    from rukh.train import load_heads
+
+    model, _payload = load_heads(ckpt)
     return model

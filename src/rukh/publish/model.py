@@ -1,4 +1,4 @@
-"""Publish a trained decoder to the Hugging Face Hub: weights, ONNX, tokenizer and card.
+"""Publish a trained model to the Hugging Face Hub: weights, ONNX, tokenizer and card.
 
 One repository per stage holds everything somebody needs to reproduce or run the model: the
 PyTorch weights, the fp16 and int8 ONNX files the demo loads, the exact vocabulary the model was
@@ -9,6 +9,13 @@ The folder is always staged locally first (under ``artifacts/publish/<repo>/``) 
 one ``upload_folder`` call; ``dry_run`` stops after staging and touches no network. Every
 ``HfApi`` call goes through ``_api`` so the tests can replace it, exactly as ``data/publish``
 does.
+
+Two kinds of model go out through this one path. A decoder is published with its UCI
+vocabulary and the metrics of ``rukh eval``; an encoder (the ``MultiHead`` of M3: the position
+encoder plus the value, blunder and result heads) is published with the ``squares`` vocabulary
+it reads and the metrics of ``rukh eval encoder``, including the F1 of the material baseline it
+has to beat. ``checkpoint_kind`` decides which one a checkpoint is, from the weights themselves,
+and the two differ only in the card, the config and the vocabulary file.
 
 The head is tied to the token embedding, so ``lm_head.weight`` and ``tokens.weight`` are one
 tensor under two names. ``safetensors`` refuses to serialise that (it stores tensors, not
@@ -33,11 +40,12 @@ from rukh.config import BaseConfig
 from rukh.data.publish import CARDS_DIR
 from rukh.paths import resolve
 from rukh.tokenize.uci_vocab import UciTokenizer
-from rukh.train.checkpoint import TIED_HEAD
+from rukh.train.checkpoint import TIED_SOURCES
 
 log = logging.getLogger(__name__)
 
 CARD_TEMPLATE = "model.md.jinja"
+ENCODER_CARD_TEMPLATE = "encoder.md.jinja"
 CONFIG_NAME = "config.json"
 README_NAME = "README.md"
 SAFETENSORS_NAME = "model.safetensors"
@@ -46,6 +54,9 @@ VOCAB_PATH = "tokenizer/vocab.json"
 ONNX_DIR = "onnx"
 ONNX_FILES = ("model-fp16.onnx", "model-int8.onnx", "model.onnx")
 REPO_TYPE = "model"
+ARCHITECTURES = {"decoder": "MoveDecoder", "encoder": "PositionEncoder"}
+MODEL_TYPES = {"decoder": "rukh-move-decoder", "encoder": "rukh-position-encoder"}
+ENCODER_HEADS = ("value", "blunder", "result")
 
 
 class ModelPublishConfig(BaseConfig):
@@ -79,6 +90,8 @@ class ModelPublishResult(BaseModel):
 
     repo_id: str
     repo_type: str = REPO_TYPE
+    kind: str = "decoder"
+    """``decoder`` or ``encoder``, read off the checkpoint's own weights."""
     stage: str
     dry_run: bool
     folder: str
@@ -156,16 +169,32 @@ def read_eval(stage: str, cfg: ModelPublishConfig) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def tied_names(model: Any) -> list[str]:
+    """The tied heads of a model: the names whose storage is the embedding's, under another name.
+
+    Asked of the tensors rather than of the config, because the encoder's tie lives one level
+    down (``encoder.mlm_head.weight``) and only exists for the ``moves`` scheme.
+    """
+    state = model.state_dict()
+    return [
+        name
+        for name, source in TIED_SOURCES.items()
+        if name in state and source in state and state[name].data_ptr() == state[source].data_ptr()
+    ]
+
+
 def publish_state(model: Any) -> dict[str, Any]:
     """The state dict as it is published: on the CPU, contiguous and with no aliased tensor.
 
     With tied embeddings ``lm_head.weight`` *is* ``tokens.weight``; it is dropped here so the
     file holds every tensor exactly once. Loading re-ties it (see the module docstring).
     """
-    state = {key: value.detach().cpu().contiguous() for key, value in model.state_dict().items()}
-    if model.cfg.tie_embeddings:
-        state.pop(TIED_HEAD, None)
-    return state
+    dropped = set(tied_names(model))
+    return {
+        key: value.detach().cpu().contiguous()
+        for key, value in model.state_dict().items()
+        if key not in dropped
+    }
 
 
 def write_weights(state: dict[str, Any], folder: Path) -> tuple[str, str]:
@@ -189,27 +218,69 @@ def write_weights(state: dict[str, Any], folder: Path) -> tuple[str, str]:
     return SAFETENSORS_NAME, "safetensors"
 
 
-def write_config(payload: dict[str, Any], stage: str, params: int, folder: Path) -> dict[str, Any]:
-    """Write ``config.json``: the decoder shape plus the provenance of the checkpoint."""
+def write_config(
+    payload: dict[str, Any],
+    stage: str,
+    params: int,
+    folder: Path,
+    kind: str = "decoder",
+) -> dict[str, Any]:
+    """Write ``config.json``: the model's shape plus the provenance of the checkpoint."""
     model_cfg = dict(payload.get("model_cfg") or {})
+    scheme = str(model_cfg.get("input") or "moves")
+    encoder = kind == "encoder"
     config = {
-        "architectures": ["MoveDecoder"],
-        "model_type": "rukh-move-decoder",
+        "architectures": [ARCHITECTURES.get(kind, ARCHITECTURES["decoder"])],
+        "model_type": MODEL_TYPES.get(kind, MODEL_TYPES["decoder"]),
         "library_name": "rukh",
         "rukh_version": __version__,
         "stage": stage,
         "step": payload.get("step"),
         "params": params,
-        "tokenizer": "uci",
+        "tokenizer": scheme if encoder else "uci",
         "vocab_hash": payload.get("vocab_hash"),
         "data_manifest_sha": payload.get("data_manifest_sha"),
         "git_sha": payload.get("git_sha"),
+        **({"heads": list(ENCODER_HEADS), "pooling": _pooling(payload)} if encoder else {}),
         **model_cfg,
     }
     (folder / CONFIG_NAME).write_text(
         json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
     )
     return config
+
+
+def _pooling(payload: dict[str, Any]) -> str:
+    """How the published encoder pools its tokens, as its fine-tuning run recorded it."""
+    return str((payload.get("cfg") or {}).get("pooling") or "mean")
+
+
+def write_vocab(folder: Path, kind: str, scheme: str) -> str:
+    """Write the vocabulary the model actually reads, and return its path in the repository.
+
+    A decoder (and an encoder on the ``moves`` scheme) reads the P1 UCI enumeration; an encoder
+    on the ``squares`` scheme reads the 47 fixed square tokens, which are just as much part of
+    the released model: without them the 69 integers of an input mean nothing.
+    """
+    if kind == "encoder" and scheme == "squares":
+        from rukh.models.squares import SQUARE_TOKENS, SQUARE_VOCAB, vocab_hash
+
+        path = folder / VOCAB_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": 1,
+            "scheme": "squares",
+            "size": len(SQUARE_VOCAB),
+            "sequence": SQUARE_TOKENS,
+            "vocab_hash": vocab_hash(),
+            "tokens": list(SQUARE_VOCAB),
+        }
+        path.write_text(
+            json.dumps(payload, indent=0, ensure_ascii=True) + "\n", encoding="utf-8", newline="\n"
+        )
+        return VOCAB_PATH
+    UciTokenizer().export(folder / VOCAB_PATH)
+    return VOCAB_PATH
 
 
 def copy_onnx(onnx_dir: Path | None, folder: Path) -> list[str]:
@@ -313,7 +384,72 @@ def card_context(
     }
 
 
-def render_card(context: dict[str, Any]) -> str:
+def _ratio(value: Any) -> str:
+    return "n/a" if value is None else f"{float(value):.3f}"
+
+
+def encoder_card_context(
+    repo_id: str,
+    stage: str,
+    cfg: ModelPublishConfig,
+    config: dict[str, Any],
+    evaluation: dict[str, Any] | None,
+    run: RunSummary | None,
+    files: list[str],
+) -> dict[str, Any]:
+    """Everything the encoder card needs: its metrics, the baseline's, and the input scheme."""
+    measured = evaluation or {}
+    encoder = measured.get("encoder_blunder") or {}
+    baseline = measured.get("heuristic_blunder") or {}
+    value = measured.get("encoder_value") or {}
+    margin = measured.get("f1_margin")
+    metrics = [
+        ("Blunder F1", _percent(encoder.get("f1"))),
+        ("Blunder precision", _percent(encoder.get("precision"))),
+        ("Blunder recall", _percent(encoder.get("recall"))),
+        ("Blunder F1, material baseline", _percent(baseline.get("f1"))),
+        (
+            "Margin over the baseline",
+            "n/a" if margin is None else f"{float(margin):+.1f} F1 points",
+        ),
+        ("Value vs Stockfish cp, Pearson", _ratio(value.get("pearson"))),
+        ("Value vs Stockfish cp, Spearman", _ratio(value.get("spearman"))),
+        ("Result accuracy", _percent(measured.get("result_accuracy"))),
+    ]
+    curve = [
+        (f"{float(point.get('fraction', 0)) * 100:.0f} %", point.get("train_labels"))
+        for point in measured.get("label_curve", [])
+        if isinstance(point, dict)
+    ]
+    return {
+        "repo_id": repo_id,
+        "stage": stage,
+        "license": cfg.license,
+        "datasets": cfg.datasets,
+        "demo_url": f"{cfg.demo_url}/?stage={stage}",
+        "course_url": cfg.course_url,
+        "repository_url": cfg.repository_url,
+        "params": config.get("params", 0),
+        "config": config,
+        "config_json": json.dumps(config, indent=2, ensure_ascii=False),
+        "scheme": config.get("tokenizer", "squares"),
+        "pooling": config.get("pooling", "mean"),
+        "heads": list(config.get("heads", ENCODER_HEADS)),
+        "metrics": metrics,
+        "curve": curve,
+        "positions": measured.get("items"),
+        "blunder_items": measured.get("blunder_items"),
+        "evaluated_on": measured.get("date"),
+        "notes": [str(note) for note in measured.get("notes", []) if str(note).strip()],
+        "run_id": run.run_id if run else None,
+        "recipe": sorted((run.params if run else {}).items()),
+        "files": files,
+        "has_onnx": any(name.startswith(f"{ONNX_DIR}/") for name in files),
+        "rukh_version": __version__,
+    }
+
+
+def render_card(context: dict[str, Any], template: str = CARD_TEMPLATE) -> str:
     """Render the English model card."""
     env = Environment(
         loader=FileSystemLoader(str(CARDS_DIR)),
@@ -321,7 +457,7 @@ def render_card(context: dict[str, Any]) -> str:
         autoescape=False,
         keep_trailing_newline=True,
     )
-    return env.get_template(CARD_TEMPLATE).render(**context)
+    return env.get_template(template).render(**context)
 
 
 def publish_model(
@@ -333,27 +469,38 @@ def publish_model(
     run_id: str | None = None,
     dry_run: bool = False,
 ) -> ModelPublishResult:
-    """Stage (and unless ``dry_run``, upload) one trained decoder as a Hub model repository."""
-    from rukh.train import load_model
+    """Stage (and unless ``dry_run``, upload) one trained model as a Hub model repository."""
+    from rukh.train import load_any
 
     cfg = cfg or ModelPublishConfig()
     ckpt = Path(ckpt)
     repo_id = repo if "/" in repo else f"{cfg.owner}/{repo}"
     name = stage or repo_id.split("/")[-1].removeprefix("rukh-")
-    model, payload = load_model(ckpt)
+    model, payload, kind = load_any(ckpt)
     state = publish_state(model)
-    params = model.num_params(non_embedding=False)
+    params = (
+        model.num_params(non_embedding=False)
+        if hasattr(model, "num_params")
+        else sum(parameter.numel() for parameter in model.parameters())
+    )
 
     folder = resolve(cfg.publish_dir) / repo_id
     folder.mkdir(parents=True, exist_ok=True)
     weights_name, weights_format = write_weights(state, folder)
-    config = write_config(payload, name, params, folder)
-    UciTokenizer().export(folder / VOCAB_PATH)
+    config = write_config(payload, name, params, folder, kind)
+    write_vocab(folder, kind, str(config.get("input") or "moves"))
     files = [weights_name, CONFIG_NAME, VOCAB_PATH, *copy_onnx(onnx_dir, folder)]
 
     run = read_run(run_id, run_name=ckpt.parent.name)
     evaluation = read_eval(name, cfg)
-    card = render_card(card_context(repo_id, name, cfg, config, evaluation, run, files))
+    card = (
+        render_card(
+            encoder_card_context(repo_id, name, cfg, config, evaluation, run, files),
+            ENCODER_CARD_TEMPLATE,
+        )
+        if kind == "encoder"
+        else render_card(card_context(repo_id, name, cfg, config, evaluation, run, files))
+    )
     card_path = folder / README_NAME
     card_path.write_text(card, encoding="utf-8", newline="\n")
 
@@ -368,6 +515,7 @@ def publish_model(
         )
     return ModelPublishResult(
         repo_id=repo_id,
+        kind=kind,
         stage=name,
         dry_run=dry_run,
         folder=folder.as_posix(),
@@ -376,5 +524,5 @@ def publish_model(
         weights_format=weights_format,
         run_id=run.run_id if run else None,
         params=params,
-        tied_embeddings=model.cfg.tie_embeddings,
+        tied_embeddings=bool(tied_names(model)),
     )

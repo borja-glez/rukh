@@ -1,0 +1,150 @@
+---
+license: {{ license }}
+library_name: rukh
+pipeline_tag: feature-extraction
+language:
+  - en
+datasets:
+{%- for dataset in datasets %}
+  - {{ dataset }}
+{%- endfor %}
+tags:
+  - chess
+  - rukh
+  - encoder
+  - onnx
+---
+
+# {{ repo_id }}
+
+A bidirectional transformer written from scratch that reads a chess **position** and says three
+things about it: how good it is, whether the move that led to it threw the game away, and how
+the game is going to end. This is the `{{ stage }}` stage of [Rukh]({{ repository_url }}), a
+course that builds a chess language model end to end: {{ "{:,}".format(params) }} parameters
+over {{ config.get("n_layer", 8) }} layers of width {{ config.get("d_model", 384) }}, pretrained
+with masked move modeling and fine-tuned on Stockfish labels.
+
+See it evaluate a live game: [{{ demo_url }}]({{ demo_url }}) · read how it was built:
+[{{ course_url }}]({{ course_url }})
+
+## Results
+
+{% if evaluated_on %}Measured with `rukh eval encoder` on {{ evaluated_on }}, over
+{{ positions }} held-out positions ({{ blunder_items }} of them with a blunder label).{% else %}
+Not evaluated yet: run `rukh eval encoder --model <checkpoint>` to fill this table.{% endif %}
+
+| Metric | Value |
+|---|---|
+{%- for name, value in metrics %}
+| {{ name }} | {{ value }} |
+{%- endfor %}
+
+### The baseline these numbers are compared against
+
+The blunder head is only interesting if it beats a program that understands nothing. The
+baseline in the table is deliberately the dumbest thing that can judge a move: **material**
+(pawn 1, knight 3, bishop 3, rook 5, queen 9) plus **mobility** (legal moves, 0.05 of a pawn
+each), calling a move a blunder when it loses at least one point of net material after one ply
+of the opponent's captures. It is measured on exactly the same rows as the model, and the
+project's target is five F1 points above it.
+
+What the baseline cannot see is the point: a positional sacrifice is invisible to it. Given
+Fischer's 17...Be6 against Byrne (New York, 1956), it sees a queen hanging and calls one of the
+most famous moves in chess a nine-point blunder.
+
+The held-out split is drawn **by game**, never by position: two positions of the same game are
+the same game one move apart, and splitting between them would leak.
+{% if curve %}
+### How many labels it takes
+
+| Labels | Training rows |
+|---|---|
+{%- for fraction, rows in curve %}
+| {{ fraction }} | {{ rows if rows is not none else "n/a" }} |
+{%- endfor %}
+{% endif %}
+{% if notes %}
+How to read these numbers:
+
+{% for note in notes %}- {{ note }}
+{% endfor %}{% endif %}
+
+## Input and output
+
+The model reads the `{{ scheme }}` scheme.
+{% if scheme == "squares" %}
+A position is 69 fixed tokens, in this order: `<cls>`, the 64 squares (a piece or `<empty>`,
+file-major from a1 to h8), the side to move, the four castling rights as one token of sixteen
+combinations, the en-passant file, and the halfmove clock in four buckets. There is never any
+padding. The enumeration ships in `tokenizer/vocab.json` and is fixed by construction, not
+learned from data.
+{% else %}
+A position is the game that led to it, in the same UCI vocabulary the decoder was trained on,
+which ships in `tokenizer/vocab.json`.
+{% endif %}
+Tokens are pooled with `{{ pooling }}` pooling into one vector per position, and three linear
+heads read that vector: {% for head in heads %}`{{ head }}`{% if not loop.last %}, {% endif %}{% endfor %}.
+`value` is `tanh(cp / 400)` from White's point of view, `blunder` is a logit in PyTorch (and a
+probability in the exported graph), and `result` is three classes (White, draw, Black).
+
+The pooled vector is itself a released output: it is the position embedding used to retrieve
+similar positions (`rukh encoder embed --positions <parquet> --out <npy>`).
+
+## Files
+
+{% for file in files %}- `{{ file }}`
+{% endfor %}
+{%- if has_onnx %}
+The ONNX graph returns **two** outputs, `value` and `blunder`, because that is all the demo's
+evaluation bar and blunder alert need; `blunder` comes out as a probability, so the page
+compares it against 0.5. `model-fp16.onnx` is for WebGPU and `model-int8.onnx` for the WASM
+fallback. The metadata carries `rukh_kind=encoder` and `rukh_heads`.
+{%- else %}
+This release carries the PyTorch weights only; the ONNX files the browser demo loads are built
+with `rukh export --ckpt <checkpoint> --kind encoder --out <dir> --fp16 --int8`.
+{%- endif %}
+
+## Training recipe
+
+{% if recipe %}
+| Parameter | Value |
+|---|---|
+{%- for name, value in recipe %}
+| `{{ name }}` | `{{ value }}` |
+{%- endfor %}
+{% else %}
+The MLflow run for this checkpoint was not available when the card was generated; the shape of
+the model is in `config.json`.
+{% endif %}
+{% if run_id %}MLflow run: `{{ run_id }}`.{% endif %}
+
+```json
+{{ config_json }}
+```
+
+## Data
+
+Pretrained with masked move modeling on {% for dataset in datasets %}[`{{ dataset }}`](https://huggingface.co/datasets/{{ dataset }}){% if not loop.last %}, {% endif %}{% endfor %},
+derived from the [Lichess open database](https://database.lichess.org) (CC0), and fine-tuned on
+positions crossed with the Lichess Stockfish evaluations: `value` and `blunder` come from those
+scores, `result` from the game the position was played in.
+
+## Limitations
+
+- It has no search. It judges a position from the position, so a tactic that needs three moves
+  to appear is one it can only guess at.
+- The blunder label is a threshold on a Stockfish score (100 centipawns lost against the best
+  line of the previous position), not a human judgement of what counts as a mistake.
+- `result` is the noisiest of the three heads: every position of a game carries the same label,
+  including the ones played before anything was decided.
+- The evaluations come from community analysis of varying depth, so the `value` head inherits
+  whatever bias that has.
+- It was trained on games between 1800+ humans on Lichess; the positions it knows best are the
+  positions those games reach.
+
+## License
+
+{{ license | upper }}. The code and the weights are released under the Apache License 2.0;
+the training data comes from Lichess under CC0. Please credit Lichess when you use them.
+
+Generated with `rukh` {{ rukh_version }}.

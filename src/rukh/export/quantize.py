@@ -66,6 +66,11 @@ def to_fp16(path: Path, out: Path | None = None) -> QuantizeResult:
         converted = _cast_initializers(model)
         method = "onnx.numpy_helper fallback"
         log.warning("onnxconverter_common is not installed; used the initializer-casting fallback")
+    repaired = _align_cast_outputs(converted)
+    if repaired:
+        log.info(
+            "retyped %d Cast node(s) the fp16 conversion left disagreeing with the graph", repaired
+        )
     onnx.save(converted, str(target))
     return QuantizeResult(
         path=target.as_posix(),
@@ -74,6 +79,35 @@ def to_fp16(path: Path, out: Path | None = None) -> QuantizeResult:
         bytes=target.stat().st_size,
         source_bytes=source.stat().st_size,
     )
+
+
+def _align_cast_outputs(model: object) -> int:
+    """Make every ``Cast`` say the type its own output is declared to be; count the repairs.
+
+    ``convert_float_to_float16`` retypes the values of the graph but does not touch the ``to``
+    attribute of a ``Cast`` node, so a cast that used to produce float32 keeps saying so while
+    its declared output is now float16. onnxruntime refuses to load that file — the symptom is a
+    ``Type Error: Type (tensor(float16)) of output arg ... does not match expected type
+    (tensor(float))`` — and the encoder hits it because pooling casts its padding mask to the
+    hidden dtype. Only intermediate values are considered: the graph's own inputs and outputs
+    keep the types ``keep_io_types`` promised the caller.
+    """
+    from onnx import TensorProto
+
+    graph = model.graph  # type: ignore[attr-defined]
+    declared = {value.name: value.type.tensor_type.elem_type for value in graph.value_info}
+    repaired = 0
+    for node in graph.node:
+        if node.op_type != "Cast" or not node.output:
+            continue
+        wanted = declared.get(node.output[0])
+        if wanted not in (TensorProto.FLOAT, TensorProto.FLOAT16):
+            continue
+        for attribute in node.attribute:
+            if attribute.name == "to" and attribute.i != wanted:
+                attribute.i = int(wanted)
+                repaired += 1
+    return repaired
 
 
 def _cast_initializers(model: object) -> object:
