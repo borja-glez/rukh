@@ -39,3 +39,7 @@ Thumbs.db
 # to them are the record and do belong in git.
 /artifacts/eval/**/*.sqlite
 /artifacts/eval/*.sqlite
+
+# Generated embeddings: 715 MB of vectors that `rukh encoder embed` rebuilds from a checkpoint.
+# They feed phase 2's position retrieval and belong on the Hub, never in git.
+/artifacts/embeddings/
