@@ -27,6 +27,11 @@ engine_app = typer.Typer(help="Stockfish engine utilities.", no_args_is_help=Tru
 app.add_typer(engine_app, name="engine")
 publish_app = typer.Typer(help="Publish trained models to the Hub.", no_args_is_help=True)
 app.add_typer(publish_app, name="publish")
+train_app = typer.Typer(
+    help="Train a model: the decoder by default, a subcommand for the encoder.",
+    invoke_without_command=True,
+)
+app.add_typer(train_app, name="train")
 
 
 def _version_callback(value: bool) -> None:
@@ -321,14 +326,15 @@ def data_publish(
         typer.echo(f"  {path}")
 
 
-@app.command("train")
+@train_app.callback(invoke_without_command=True)
 def train_cmd(
+    ctx: typer.Context,
     config: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--config", exists=True, dir_okay=False, readable=True, help="Training YAML config."
         ),
-    ],
+    ] = None,
     model_preset: Annotated[
         str | None, typer.Option("--preset", help="Override the preset: tiny, small or medium.")
     ] = None,
@@ -342,11 +348,20 @@ def train_cmd(
         int | None, typer.Option("--max-steps", help="Override max_steps from the config.")
     ] = None,
 ) -> None:
-    """Train a MoveDecoder from a packed token stream, logging the run to MLflow."""
+    """Train a MoveDecoder from a packed token stream, logging the run to MLflow.
+
+    ``rukh train --config ...`` is the decoder, exactly as it always was; the subcommands train
+    the other models (``rukh train encoder``).
+    """
     from rukh.config import load_yaml
     from rukh.models import PRESETS
     from rukh.train import TrainConfig, train
 
+    if ctx.invoked_subcommand is not None:
+        return
+    if config is None:
+        typer.echo("error: --config is required (see rukh train --help)", err=True)
+        raise typer.Exit(code=2)
     cfg = load_yaml(config, TrainConfig)
     if model_preset is not None:
         if model_preset not in PRESETS:
@@ -362,6 +377,47 @@ def train_cmd(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"preset:     {cfg.preset}")
+    typer.echo(f"steps:      {cfg.max_steps}")
+    typer.echo(f"checkpoint: {checkpoint}")
+
+
+@train_app.command("encoder")
+def train_encoder_cmd(
+    config: Annotated[
+        Path,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Training YAML config."
+        ),
+    ],
+    resume: Annotated[
+        Path | None,
+        typer.Option(
+            "--resume", exists=True, dir_okay=False, readable=True, help="Checkpoint to continue."
+        ),
+    ] = None,
+    max_steps: Annotated[
+        int | None, typer.Option("--max-steps", help="Override max_steps from the config.")
+    ] = None,
+) -> None:
+    """Pretrain the PositionEncoder with masked move modeling, logging the run to MLflow."""
+    from rukh.config import load_yaml
+    from rukh.train import MmmConfig, train_mmm
+
+    cfg = load_yaml(config, MmmConfig)
+    if max_steps is not None:
+        cfg = cfg.model_copy(update={"max_steps": max_steps})
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    try:
+        checkpoint = train_mmm(cfg, resume=resume)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"input:      {cfg.input}")
+    typer.echo(
+        f"masking:    {cfg.masking.prob:.0%} at "
+        f"{cfg.masking.mask_ratio:.0%}/{cfg.masking.random_ratio:.0%}/"
+        f"{cfg.masking.keep_ratio:.0%}"
+    )
     typer.echo(f"steps:      {cfg.max_steps}")
     typer.echo(f"checkpoint: {checkpoint}")
 

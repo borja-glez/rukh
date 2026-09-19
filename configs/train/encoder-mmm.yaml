@@ -1,0 +1,36 @@
+# The bidirectional `PositionEncoder` (8 layers, d=384, 6 heads, 15,052,800 parameters)
+# pretrained with masked move modeling on the very same packed UCI stream the decoder trains on,
+# so the two models can be compared on the same games. Roughly a third of `small`'s size, so the
+# 12 000 steps below are well under an hour on a 5090.
+input: moves
+tokens_dir: data/tokens/uci
+block: 200
+batch_size: 96
+grad_accum: 3 # 288 effective sequences of 200 tokens
+lr: 5.0e-4
+min_lr_ratio: 0.1
+warmup: 1000
+max_steps: 12000
+weight_decay: 0.1
+betas: [0.9, 0.95]
+grad_clip: 1.0
+precision: bf16
+compile: true
+eval_every: 500
+eval_batches: 50
+ckpt_every: 1000
+out_dir: checkpoints
+seed: 42
+run_name: encoder-mmm
+# A timestamp is appended: a second run must not overwrite the step-*.pt series.
+unique_run_name: true
+workers: 4
+log_every: 10
+masking:
+  # BERT's recipe, unchanged: 15 % of the *moves* are hidden, and of those 80 % become <mask>,
+  # 10 % become another move and 10 % are left alone. Control tokens are never hidden.
+  prob: 0.15
+  mask_ratio: 0.8
+  random_ratio: 0.1
+  keep_ratio: 0.1
+  seed: 0

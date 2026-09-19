@@ -6,10 +6,10 @@ import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - only for type checkers
-    from rukh.train.loop import TrainConfig
+    from rukh.train.common import RunConfig
 
 
-def lr_at(step: int, cfg: TrainConfig) -> float:
+def lr_at(step: int, cfg: RunConfig) -> float:
     """Learning rate for ``step`` (0-based).
 
     It rises linearly from 0 to ``cfg.lr`` over the first ``cfg.warmup`` steps, then follows a

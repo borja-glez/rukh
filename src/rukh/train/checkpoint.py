@@ -19,11 +19,13 @@ import numpy as np
 import torch
 from torch import nn
 
-from rukh.models import DecoderConfig, MoveDecoder
+from rukh.models import DecoderConfig, EncoderConfig, MoveDecoder, PositionEncoder
 
 BEST_NAME = "best.pt"
 TIED_HEAD = "lm_head.weight"
 """Tied to ``tokens.weight``; a published state dict leaves it out and it is re-tied on load."""
+TIED_HEADS = frozenset({TIED_HEAD, "mlm_head.weight"})
+"""Every tied head in the project: the decoder's and the encoder's masked-move head."""
 
 
 def step_name(step: int) -> str:
@@ -138,7 +140,7 @@ def load_state(model: nn.Module, state: Mapping[str, Any]) -> None:
     refuse the file) loads cleanly and nothing else may be missing.
     """
     missing, unexpected = model.load_state_dict(dict(state), strict=False)
-    absent = [name for name in missing if name != TIED_HEAD]
+    absent = [name for name in missing if name not in TIED_HEADS]
     if absent or unexpected:
         raise ValueError(
             f"the weights do not match the model: missing {absent}, unexpected {list(unexpected)}"
@@ -151,6 +153,16 @@ def load_model(
     """Rebuild the decoder a checkpoint describes, in eval mode, plus the whole payload."""
     payload = load_checkpoint(path, map_location=map_location)
     model = MoveDecoder(DecoderConfig.model_validate(payload["model_cfg"]))
+    load_state(model, payload["model_state"])
+    return model.eval(), payload
+
+
+def load_encoder(
+    path: Path, map_location: str | torch.device = "cpu"
+) -> tuple[PositionEncoder, dict[str, Any]]:
+    """Rebuild the encoder a checkpoint describes, in eval mode, plus the whole payload."""
+    payload = load_checkpoint(path, map_location=map_location)
+    model = PositionEncoder(EncoderConfig.model_validate(payload["model_cfg"]))
     load_state(model, payload["model_state"])
     return model.eval(), payload
 
