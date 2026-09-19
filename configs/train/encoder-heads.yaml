@@ -1,0 +1,46 @@
+# Fine-tuning of the three heads (value, blunder, result) over the encoder pretrained with
+# masked move modeling. The default is `probe`: the encoder is frozen and only the three linear
+# heads learn, which is the run that answers whether the pretraining put the information in the
+# representation. `--mode last-n` and `--mode full` are the next two stages, and `--curve` runs
+# the whole thing on 10/25/50/100 % of the labels.
+encoder_ckpt: null # set to the masked-move checkpoint, e.g. checkpoints/encoder-mmm-.../best.pt
+input: squares # the labels are FENs, one row per position
+pooling: mean
+mode: probe
+last_n: 2
+fraction: 1.0
+curve: [0.1, 0.25, 0.5, 1.0]
+weights:
+  # The three tasks have different scales and different amounts of data; `result` is the noisiest
+  # (one label per game, repeated over every position of it), so it counts for half.
+  value: 1.0
+  blunder: 1.0
+  result: 0.5
+labels:
+  positions_eval: data/evals/positions-eval.parquet
+  out_dir: data/labels
+  value_scale: 400.0
+  blunder_cp: 100
+  val_fraction: 0.1
+  seed: 42
+block: 200 # ignored by the squares scheme, which always uses its 69 positions
+batch_size: 256
+grad_accum: 1
+lr: 1.0e-3 # a frozen encoder with three linear heads takes a much larger rate than pretraining
+min_lr_ratio: 0.1
+warmup: 200
+max_steps: 4000
+weight_decay: 0.01
+betas: [0.9, 0.95]
+grad_clip: 1.0
+precision: bf16
+compile: false # three linear heads over a short sequence: compiling costs more than it saves
+eval_every: 250
+eval_batches: 50
+ckpt_every: 1000
+out_dir: checkpoints
+seed: 42
+run_name: encoder-heads
+unique_run_name: true
+workers: 4
+log_every: 10

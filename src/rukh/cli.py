@@ -422,6 +422,63 @@ def train_encoder_cmd(
     typer.echo(f"checkpoint: {checkpoint}")
 
 
+@train_app.command("heads")
+def train_heads_cmd(
+    config: Annotated[
+        Path,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Training YAML config."
+        ),
+    ],
+    mode: Annotated[
+        str | None, typer.Option("--mode", help="Override the mode: probe, last-n or full.")
+    ] = None,
+    fraction: Annotated[
+        float | None, typer.Option("--fraction", help="Train on this fraction of the labels.")
+    ] = None,
+    curve: Annotated[
+        bool, typer.Option("--curve", help="Run the whole label-count curve instead of one run.")
+    ] = False,
+    max_steps: Annotated[
+        int | None, typer.Option("--max-steps", help="Override max_steps from the config.")
+    ] = None,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Print the results as JSON only.")
+    ] = False,
+) -> None:
+    """Fine-tune the value, blunder and result heads over the pretrained encoder."""
+    import json
+
+    from rukh.config import load_yaml
+    from rukh.train import HeadsConfig, label_curve, train_heads
+
+    cfg = load_yaml(config, HeadsConfig)
+    if mode is not None:
+        if mode not in ("probe", "last-n", "full"):
+            typer.echo("error: --mode must be probe, last-n or full", err=True)
+            raise typer.Exit(code=2)
+        cfg = cfg.model_copy(update={"mode": mode})
+    if fraction is not None:
+        cfg = cfg.model_copy(update={"fraction": fraction})
+    if max_steps is not None:
+        cfg = cfg.model_copy(update={"max_steps": max_steps})
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    try:
+        results = label_curve(cfg) if curve else [train_heads(cfg)]
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(json.dumps([result.model_dump() for result in results], indent=2))
+        return
+    typer.echo(f"mode:       {cfg.mode}")
+    for result in results:
+        typer.echo(f"  {result.fraction:>5.0%} of the labels ({result.train_labels} rows)")
+        for key, value in result.metrics.items():
+            typer.echo(f"    {key:<20} {value:.4f}")
+        typer.echo(f"    checkpoint           {result.checkpoint}")
+
+
 @app.command("play")
 def play_cmd(
     ckpt: Annotated[

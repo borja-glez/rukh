@@ -23,6 +23,14 @@ from rukh.train.common import (
     run_dir,
     skip_batches,
 )
+from rukh.train.heads import (
+    HeadsConfig,
+    HeadsResult,
+    evaluate_heads,
+    freeze_encoder,
+    label_curve,
+    train_heads,
+)
 from rukh.train.loop import TrainConfig, evaluate, train
 from rukh.train.mmm import MaskingConfig, MmmConfig, apply_masking, evaluate_mmm, train_mmm
 from rukh.train.schedule import lr_at
@@ -31,14 +39,19 @@ __all__ = [
     "BEST_NAME",
     "TIED_HEAD",
     "TIED_HEADS",
+    "HeadsConfig",
+    "HeadsResult",
     "MaskingConfig",
     "MmmConfig",
     "RunConfig",
     "TrainConfig",
     "apply_masking",
     "evaluate",
+    "evaluate_heads",
     "evaluate_mmm",
     "forever",
+    "freeze_encoder",
+    "label_curve",
     "load_checkpoint",
     "load_encoder",
     "load_model",
@@ -55,5 +68,6 @@ __all__ = [
     "skip_batches",
     "step_name",
     "train",
+    "train_heads",
     "train_mmm",
 ]
