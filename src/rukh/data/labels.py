@@ -72,7 +72,7 @@ class LabelsConfig(BaseConfig):
     Only the ``moves`` scheme reads it: the ``squares`` path never touches ``data/uci``."""
     out_dir: str = "data/labels"
     value_scale: float = Field(default=400.0, gt=0.0)
-    """``tanh(cp / value_scale)``: 400 centipawns (a rook) is about 0.76."""
+    """``tanh(cp / value_scale)``: 400 centipawns (four pawns, a bit less than a rook) is 0.76."""
     blunder_cp: int = Field(default=100, ge=1)
     val_fraction: float = Field(default=0.1, gt=0.0, lt=1.0)
     seed: int = 42
