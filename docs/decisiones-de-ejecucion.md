@@ -933,6 +933,26 @@ Evidencia obtenida por el controlador, no por subagentes:
   ampliara el corpus se lo habría encontrado, y el mensaje de error no señala a los datos.
 - **Si está mal:** el coste es reabrir dos memmaps por worker al arrancar, una vez por época.
 
+### D-068 · La carga de CPU infla el Elo en ~13 puntos, dentro del ruido
+- **Duda:** Stockfish juega a 0,1 s por jugada, así que bajo carga busca menos profundo y regala
+  Elo. Si el sesgo fuese grande, ninguna medición tomada mientras la GPU entrena sería comparable
+  con las publicadas, y habría que serializar toda la noche.
+- **Medido:** el mismo checkpoint de `small` v1, misma configuración, misma semilla, con un caché
+  aparte para no pisar las partidas originales:
+
+  | Condición | Elo | IC 95 % | Puntuación |
+  |---|---|---|---|
+  | máquina libre (lo publicado) | 1006,8 | 920-1101 | 0,2656 |
+  | bajo carga (entrenando + descargando) | 1019,7 | 931-1116 | 0,2750 |
+
+- **Conclusión:** **+12,9 Elo**, una séptima parte del intervalo de confianza. La diferencia de
+  puntuación es 0,0094 sobre 160 partidas, con error típico 0,035: indistinguible del ruido. Para
+  efectos de 100-200 Elo no es un confusor, así que las mediciones pueden ir en paralelo con el
+  entrenamiento anotando el sesgo.
+- **Si está mal:** el sesgo no es cero y se suma en la dirección favorable, así que cualquier
+  resultado que quede a menos de ~15 Elo del listón hay que repetirlo con la máquina parada antes
+  de declararlo cumplido.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
