@@ -278,3 +278,25 @@ def test_play_rung_against_stockfish_plays_both_colours_and_caches(tmp_path: Pat
         assert cache.count("elo") == 2
         again = play_rung(model, tok, rung, 2, cfg, move_time=0.01, max_plies=8, cache=cache)
     assert [r.model_dump() for r in again] == [r.model_dump() for r in played]
+
+
+def test_cache_key_separates_elo_headers() -> None:
+    """Two runs of the same rung under different headers are different games.
+
+    Without this the Elo of a model asked to play at 2600 would be read back from the games it
+    played at 1800: same rung, same index, silently the wrong answer. The default stays bare so
+    every game cached before the header existed is still addressable.
+    """
+    base = {
+        "rung": "uci-1320",
+        "opponent_elo": 1320,
+        "index": 7,
+        "model_white": True,
+        "result": "1-0",
+        "score": 1.0,
+        "plies": 40,
+        "illegal_proposals": 0,
+    }
+    assert GameRecord(**base).item_id() == "uci-1320:7"
+    assert GameRecord(**base, header_elo=2600).item_id() == "uci-1320:7:e2600"
+    assert GameRecord(**base, header_elo=1800).item_id() == GameRecord(**base).item_id()

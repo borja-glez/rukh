@@ -88,6 +88,8 @@ class GameRecord(BaseModel):
     rung: str
     opponent_elo: int
     index: int
+    header_elo: int = 1800
+    """The Elo the model was asked to play at. Part of the cache key: same rung, different game."""
     model_white: bool
     result: str
     score: float
@@ -99,7 +101,14 @@ class GameRecord(BaseModel):
     """How a cut game was decided (``engine depth 8``, ``material count``), or None."""
 
     def item_id(self) -> str:
-        return f"{self.rung}:{self.index}"
+        """Cache key. The header is only in it when it is not the default.
+
+        Without the header a run at ``<2600>`` would silently read back the games played at
+        ``<1800>``: same rung, same index, completely different game. Leaving the default out
+        keeps every game cached before this existed addressable.
+        """
+        suffix = "" if self.header_elo == 1800 else f":e{self.header_elo}"
+        return f"{self.rung}:{self.index}{suffix}"
 
 
 class RungResult(BaseModel):
@@ -312,6 +321,7 @@ def record_of(
     index: int,
     model_white: bool,
     engine: chess.engine.SimpleEngine | None = None,
+    header_elo: int = 1800,
 ) -> GameRecord:
     """One played game as a record, adjudicating it first when it was cut short."""
     result = outcome.result
@@ -322,6 +332,7 @@ def record_of(
         rung=rung.name,
         opponent_elo=rung.elo,
         index=index,
+        header_elo=header_elo,
         model_white=model_white,
         result=result,
         score=score_of(result, model_white),
@@ -341,6 +352,7 @@ def play_rung(
     move_time: float = MOVE_TIME,
     max_plies: int | None = None,
     cache: EvalCache | None = None,
+    header_elo: int = 1800,
 ) -> list[GameRecord]:
     """Play ``games`` games against one rung, alternating colours, reusing cached games.
 
@@ -349,8 +361,9 @@ def play_rung(
     final position.
     """
     records: list[GameRecord] = []
+    suffix = "" if header_elo == 1800 else f":e{header_elo}"
     for index in range(games):
-        cached = cache.get(SUITE, f"{rung.name}:{index}") if cache is not None else None
+        cached = cache.get(SUITE, f"{rung.name}:{index}{suffix}") if cache is not None else None
         if cached is not None:
             records.append(GameRecord.model_validate(cached))
     done = {record.index for record in records}
@@ -368,9 +381,13 @@ def play_rung(
                 opponent,
                 cfg.model_copy(update={"seed": None if cfg.seed is None else cfg.seed + index}),
                 model_color=chess.WHITE if model_white else chess.BLACK,
+                white_elo=header_elo,
+                black_elo=header_elo,
                 max_plies=max_plies,
             )
-            record = record_of(outcome, rung, index, model_white, engine=opponent.engine)
+            record = record_of(
+                outcome, rung, index, model_white, engine=opponent.engine, header_elo=header_elo
+            )
             if cache is not None:
                 cache.put(SUITE, record.item_id(), record.model_dump())
             records.append(record)
@@ -388,6 +405,7 @@ def play_rungs(
     move_time: float = MOVE_TIME,
     max_plies: int | None = None,
     cache: EvalCache | None = None,
+    header_elo: int = 1800,
 ) -> list[GameRecord]:
     """Play every rung and return all the game records."""
     records: list[GameRecord] = []
@@ -402,6 +420,7 @@ def play_rungs(
                 move_time=move_time,
                 max_plies=max_plies,
                 cache=cache,
+                header_elo=header_elo,
             )
         )
     return records
