@@ -1020,6 +1020,28 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Si está mal:** la escalera corregida ya no tiene ningún rival por debajo de 1320, así que un
   modelo débil queda mal acotado por abajo. Para los actuales (~1400) la escalera los rodea.
 
+### D-071 · DPO compra Elo y rompe el criterio de legalidad
+- **Medido** con la suite completa y la escalera corregida de D-070:
+
+  | Etapa | Elo | IC 95 % | legal argmax | top-1 | puzles |
+  |---|---|---|---|---|---|
+  | `small` v1 | 1359 | 1293-1429 | 99,40 % | 51,10 % | 22,07 % |
+  | `small` v2 | 1407 | 1344-1462 | 99,30 % | 51,80 % | 26,93 % |
+  | `small` v3 | 1425 | 1367-1485 | 99,10 % | 52,40 % | 26,73 % |
+  | **`small` v3 + DPO** | **1460** | 1401-1517 | **98,90 %** | **53,20 %** | **27,87 %** |
+
+- **+35 Elo sobre v3**, y a la vez sube top-1 y puzles. Es la única palanca del día que no está
+  limitada por lo fuertes que fueran los jugadores del corpus: un par de preferencia dice «esta
+  jugada es 100 cp mejor que aquella», que no aparece en ninguna partida humana.
+- **Rompe la legalidad:** 98,90 % frente al listón de 99 %. La serie venía bajando (99,40 → 99,30
+  → 99,10) y DPO la cruza. El mejor modelo que cumple **los dos** criterios sigue siendo `small`
+  v3 con 1425 Elo y 99,10 %.
+- **Hay volante:** `nll_weight` está en 0,5. Subirlo ancla más la política a la referencia, lo que
+  debería recuperar legalidad a cambio de parte del Elo. Falta medir esa curva.
+- **Si está mal:** el par proviene de posiciones que están en el corpus de entrenamiento; lo nuevo
+  es la preferencia, no la posición. Si el efecto fuese memorización, no se vería en puzles de un
+  conjunto distinto, y ahí también sube (26,73 → 27,87 %).
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
