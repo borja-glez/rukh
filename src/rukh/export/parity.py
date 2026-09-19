@@ -144,6 +144,7 @@ def parity_positions(
 
 
 def label_positions(
+    model: MultiHead,
     cfg: LabelsConfig | None = None,
     n: int = DEFAULT_N,
     split: str = "val",
@@ -157,23 +158,35 @@ def label_positions(
     import polars as pl
 
     from rukh.data.labels import LabelsConfig as Labels
-    from rukh.data.labels import build_labels
-    from rukh.models.squares import fen_to_tokens
+    from rukh.data.labels import build_labels, game_moves
+    from rukh.train.heads import LabelledPositions
 
+    labels = cfg if cfg is not None else Labels()
     try:
-        frame = build_labels(cfg if cfg is not None else Labels())
+        frame = build_labels(labels)
     except FileNotFoundError as exc:
         log.warning("no labelled positions for the parity check: %s", exc)
         return []
     rows = frame.filter(pl.col("split") == split).sort(["order", "game_id", "ply"]).head(n)
-    return [fen_to_tokens(fen) for fen in rows["fen"].to_list()]
+    if not rows.height:
+        return []
+    # The scheme is the model's, not a constant: a ``moves`` encoder tokenized with
+    # ``fen_to_tokens`` would be compared against its export on ids from another vocabulary, and
+    # the parity number would be meaningless rather than wrong-looking.
+    scheme = str(model.encoder.cfg.input)
+    moves = game_moves(rows, labels.games_dir) if scheme == "moves" else None
+    dataset = LabelledPositions(rows, scheme, moves, model.encoder.cfg.block)
+    return [dataset.tokens(index) for index in range(len(dataset))]
 
 
 def encoder_parity_positions(
-    cfg: LabelsConfig | None = None, n: int = DEFAULT_N, split: str = "val"
+    model: MultiHead, cfg: LabelsConfig | None = None, n: int = DEFAULT_N, split: str = "val"
 ) -> tuple[list[list[int]], str, str | None]:
-    """``(positions, source, warning)`` for the encoder: validation labels, or nothing."""
-    positions = label_positions(cfg, n=n, split=split)
+    """``(positions, source, warning)`` for the encoder: validation labels, or nothing.
+
+    ``model`` is here to say which scheme the positions have to be tokenized in; it is never
+    run."""
+    positions = label_positions(model, cfg, n=n, split=split)
     if positions:
         return positions, "validation-labels", None
     warning = (
@@ -192,7 +205,7 @@ def encoder_parity(
     threshold: float = BLUNDER_THRESHOLD,
 ) -> EncoderParityResult:
     """Compare the blunder decision and the value of the checkpoint and the exported file."""
-    from rukh.export.onnx import BLUNDER_OUTPUT, ENCODER_OUTPUTS, VALUE_OUTPUT, EncoderHeads
+    from rukh.export.onnx import BLUNDER_OUTPUT, VALUE_OUTPUT, EncoderHeads
 
     used = list(positions)[:n]
     if not used:
@@ -212,10 +225,16 @@ def encoder_parity(
             BLUNDER_OUTPUT: float(blunder[0]),
         }
         outputs = session.run(None, {INPUT_NAME: idx})
+        # Named by the graph itself, not by position: zipping against ``ENCODER_OUTPUTS`` would
+        # keep comparing happily if the exporter ever swapped the two heads, and the parity
+        # check would then be measuring `value` against `blunder` and calling it agreement.
         exported = {
-            name: float(np.asarray(array).reshape(-1)[0])
-            for name, array in zip(ENCODER_OUTPUTS, outputs, strict=False)
+            output.name: float(np.asarray(array).reshape(-1)[0])
+            for output, array in zip(session.get_outputs(), outputs, strict=True)
         }
+        missing = [name for name in (VALUE_OUTPUT, BLUNDER_OUTPUT) if name not in exported]
+        if missing:
+            raise ValueError(f"the exported graph has no {missing} output: {sorted(exported)}")
         worst_value = max(worst_value, abs(reference[VALUE_OUTPUT] - exported[VALUE_OUTPUT]))
         worst_blunder = max(
             worst_blunder, abs(reference[BLUNDER_OUTPUT] - exported[BLUNDER_OUTPUT])

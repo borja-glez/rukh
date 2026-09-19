@@ -682,9 +682,15 @@ def eval_encoder_cmd(
         verdict = "meets the bar" if result.meets_goal else "below the bar"
         typer.echo(f"margin:   {result.f1_margin:+.1f} F1 points over the baseline ({verdict})")
     if result.encoder_value is not None:
+        from rukh.eval.encoder import GOAL_VALUE_CORRELATION
+
+        met = result.value_correlation_meets_goal
+        verdict = "not measured" if met is None else ("meets the bar" if met else "below the bar")
         typer.echo(
-            f"value:    pearson {result.encoder_value.pearson}  "
-            f"spearman {result.encoder_value.spearman}"
+            f"value:    vs {result.encoder_value.target}  "
+            f"spearman {result.encoder_value.spearman}  "
+            f"pearson {result.encoder_value.pearson}  "
+            f"(>= {GOAL_VALUE_CORRELATION:.2f}: {verdict})"
         )
     if result.result_accuracy is not None:
         typer.echo(f"result:   {result.result_accuracy:.4f} accuracy")

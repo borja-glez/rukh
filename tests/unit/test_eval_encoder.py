@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import chess
+import numpy as np
 import polars as pl
 import pytest
 import torch
@@ -18,6 +19,7 @@ from helpers_labels import source_frame
 from rukh.cli import app
 from rukh.eval.encoder import (
     EncoderEvalConfig,
+    EncoderResult,
     build_items,
     classification,
     evaluate_encoder,
@@ -193,7 +195,10 @@ def test_the_baseline_verdicts_are_cached_across_checkpoints(tmp_path: Path) -> 
         rows = connection.execute(
             "SELECT COUNT(*) FROM items WHERE suite = 'heuristic'"
         ).fetchone()[0]
-    assert rows == 16
+    # Eight, not sixteen: the fixture is the same game twice, and the verdicts are keyed by the
+    # position and the move judged, so the second copy hits the cache instead of writing its own
+    # row under a `game_id:ply` nobody can match against anything.
+    assert rows == 8
     # A different checkpoint reuses them: the baseline does not depend on the weights.
     evaluate_encoder(checkpoint(tmp_path, "second"), cfg, source=source_frame())
     with sqlite3.connect(database) as connection:
@@ -314,3 +319,89 @@ def test_the_decoder_spelling_of_eval_still_needs_a_model() -> None:
     invocation = CliRunner().invoke(app, ["eval"])
     assert invocation.exit_code == 2
     assert "--model is required" in invocation.output
+
+
+# --- the label-count curve, end to end ----------------------------------------------------------
+
+
+def test_a_two_point_curve_reaches_the_evaluation_report(rukh_home: Path, tmp_path: Path) -> None:
+    """`rukh train heads --curve` writes the points; `rukh eval encoder` renders them."""
+    from rukh.train import HeadsConfig, label_curve
+
+    source = rukh_home / "evals" / "positions-eval.parquet"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source_frame().write_parquet(source)
+    labels = {
+        "positions_eval": "evals/positions-eval.parquet",
+        "out_dir": "labels",
+        # game 1 lands in train and game 2 in val with the default seed, so both sides have rows.
+        "val_fraction": 0.5,
+    }
+    heads = HeadsConfig(
+        model=TOY,
+        labels=labels,
+        batch_size=4,
+        grad_accum=1,
+        warmup=1,
+        max_steps=2,
+        precision="fp32",
+        compile=False,
+        eval_every=2,
+        eval_batches=1,
+        ckpt_every=2,
+        log_every=1,
+        run_name="curve-heads",
+        unique_run_name=False,
+    )
+    results = label_curve(heads, [0.5, 1.0], device="cpu")
+    assert [result.fraction for result in results] == [0.5, 1.0]
+
+    cfg = config(tmp_path).model_copy(
+        update={"labels": EncoderEvalConfig().labels.model_copy(update=labels)}
+    )
+    measured = evaluate_encoder(
+        Path(results[-1].checkpoint), cfg, use_cache=False, source=source_frame()
+    )
+    assert [point.fraction for point in measured.label_curve] == [0.5, 1.0]
+    assert measured.label_curve[0].train_labels == results[0].train_labels
+    assert measured.label_curve[0].train_labels < measured.label_curve[1].train_labels
+    assert all("no label-count curve" not in note for note in measured.notes)
+    assert "## Labels needed" in render_markdown(measured)
+
+
+def test_the_curve_key_is_the_same_string_on_both_sides() -> None:
+    from rukh.eval.encoder import CURVE_KEY
+    from rukh.train.checkpoint import CURVE_KEY as WRITTEN
+
+    assert CURVE_KEY == WRITTEN  # the reader and the writer, one string
+
+
+# --- the second acceptance criterion ------------------------------------------------------------
+
+
+def test_the_value_criterion_is_checked_against_the_bounded_score(tmp_path: Path) -> None:
+    from rukh.eval.encoder import GOAL_VALUE_CORRELATION, measure
+
+    cfg = config(tmp_path)
+    items = build_items(cfg, source_frame())
+    rows = items.height
+    perfect = np.tanh(items["cp"].to_numpy().astype(float) / cfg.labels.value_scale)
+    result = EncoderResult(
+        stage="toy", checkpoint="x", model_sha="sha", params=1, date="2026-09-19"
+    )
+    predictions = {
+        "value": perfect,
+        "blunder": np.zeros(rows),
+        "result": np.zeros(rows, dtype=np.int64),
+    }
+    baseline = {"value": np.zeros(rows), "blunder": np.full(rows, np.nan)}
+    measure(items, predictions, baseline, cfg, result)
+    assert result.encoder_value is not None
+    assert result.encoder_value.target == "tanh(cp / 400)"
+    assert result.encoder_value.spearman == pytest.approx(1.0)
+    assert result.value_correlation_meets_goal is True
+    # A predictor with the ranking upside down fails the bar without touching the F1 one.
+    result_bad = result.model_copy(deep=True)
+    measure(items, {**predictions, "value": -perfect}, baseline, cfg, result_bad)
+    assert result_bad.value_correlation_meets_goal is False
+    assert GOAL_VALUE_CORRELATION == 0.80

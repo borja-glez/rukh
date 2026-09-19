@@ -14,11 +14,14 @@ Four questions, four numbers:
     *and* for the material baseline. The headline is the difference in F1 points.
 
 ``value``
-    Pearson **and** Spearman between the predicted value and Stockfish's ``cp``. Pearson asks
-    whether the numbers line up, Spearman only whether the order does, and the two disagree
-    exactly when the model has the ranking right and the scale wrong — which is what a bounded
-    ``tanh`` head does to a score in centipawns, so both are reported. Spearman is Pearson over
-    average ranks, written out here rather than imported: ``scipy`` is not a dependency.
+    Spearman **and** Pearson between the predicted value and ``tanh(cp / 400)``, the bounded
+    score the head was trained on — never raw ``cp``, where a forced mate is ``±9 99x`` and a
+    handful of rows would decide Pearson for the whole set. Spearman is the headline (it asks
+    only whether the ranking is right, which is what "the model knows which position is better"
+    means) and the ``GOAL.md`` bar of 0.80 is checked against it; Pearson is printed next to it
+    because the two disagree exactly when the order is right and the scale is not. Spearman is
+    Pearson over average ranks, written out here rather than imported: ``scipy`` is not a
+    dependency.
 
 ``result``
     plain accuracy over the three classes.
@@ -64,8 +67,19 @@ HEURISTIC_SUITE = "heuristic"
 HEURISTIC_KEY = "material-mobility-v1"
 """Cache key of the baseline: bump it when the heuristic's verdicts change."""
 CURVE_KEY = "label_curve"
+"""The payload key ``rukh.train.checkpoint.CURVE_KEY`` writes; a test pins the two together."""
 GOAL_MARGIN = 5.0
 """F1 points the encoder has to add to the baseline (``GOAL.md``)."""
+GOAL_VALUE_CORRELATION = 0.80
+"""The second acceptance criterion of ``GOAL.md``: value against Stockfish, at least 0.8.
+
+Measured as **Spearman against the bounded score**, and both halves of that sentence matter.
+The target is ``tanh(score / 400)``, so the head cannot reproduce centipawns and was never
+asked to: correlating a bounded output against raw ``cp`` would compare a number in ``(-1, 1)``
+with one that a forced mate sends to ``±9 99x``, and a handful of mates would decide Pearson for
+the whole set. Rank correlation is also the honest reading of "the model knows which position is
+better", which is what the bar is about. Pearson on the same bounded pair is reported next to it.
+"""
 DEFAULT_CONFIG = "encoder.yaml"
 
 
@@ -92,24 +106,20 @@ class EncoderEvalConfig(BaseConfig):
     """Where the model runs; ``None`` means ``rukh.train.pick_device()`` (CUDA when present)."""
     track: bool = True
 
-    def cache_fields(self) -> dict[str, Any]:
-        """The settings that change what a cached item means."""
-        return {
-            "split": self.split,
-            "positions": self.positions,
-            "threshold": self.threshold,
-            "mobility_weight": self.mobility_weight,
-            "blunder_material": self.blunder_material,
-            "seed": self.seed,
-            "labels": self.labels.model_dump(mode="json"),
-        }
-
     def heuristic_fields(self) -> dict[str, Any]:
-        """The settings a cached *baseline* verdict depends on: never the weights."""
+        """The settings a cached *baseline* verdict depends on: never the weights.
+
+        ``labels`` is in here even though the verdict is a function of the position alone,
+        because it says *which table the positions came from*: pointing ``positions_eval`` at a
+        different parquet has to invalidate the cache, and a cached verdict is keyed by the
+        position itself (see ``heuristic_predictions``) precisely so that two tables sharing a
+        position share the answer instead of overwriting each other's.
+        """
         return {
             "heuristic": HEURISTIC_KEY,
             "mobility_weight": self.mobility_weight,
             "blunder_material": self.blunder_material,
+            "labels": self.labels.model_dump(mode="json"),
         }
 
 
@@ -141,6 +151,10 @@ class CorrelationResult(BaseModel):
     items: int
     pearson: float | None = None
     spearman: float | None = None
+    target: str = "tanh(cp / value_scale)"
+    """What the prediction was correlated against; never raw ``cp``.
+
+    See ``GOAL_VALUE_CORRELATION`` for why."""
 
 
 class CurvePoint(BaseModel):
@@ -174,8 +188,13 @@ class EncoderResult(BaseModel):
     f1_margin: float | None = None
     """Encoder F1 minus baseline F1, in points; ``GOAL.md`` asks for at least five."""
     meets_goal: bool | None = None
+    """The **blunder** criterion alone; ``GOAL.md`` has two and this is the first."""
     encoder_value: CorrelationResult | None = None
     heuristic_value: CorrelationResult | None = None
+    value_correlation_meets_goal: bool | None = None
+    """The second criterion: Spearman of the value head against the bounded score >= 0.80."""
+    meets_all_goals: bool | None = None
+    """Both criteria at once, which is what "P3 is done" means."""
     result_accuracy: float | None = None
     label_curve: list[CurvePoint] = []
     notes: list[str] = []
@@ -266,14 +285,18 @@ def spearman(x: Sequence[float], y: Sequence[float]) -> float | None:
 
 
 def correlation(
-    predicted: Sequence[float], target: Sequence[float], name: str
+    predicted: Sequence[float],
+    target: Sequence[float],
+    name: str,
+    target_name: str = "tanh(cp / value_scale)",
 ) -> CorrelationResult:
-    """Both correlations of one predictor against ``cp``, in one record."""
+    """Both correlations of one predictor against the bounded score, in one record."""
     return CorrelationResult(
         name=name,
         items=len(predicted),
         pearson=pearson(predicted, target),
         spearman=spearman(predicted, target),
+        target=target_name,
     )
 
 
@@ -298,23 +321,47 @@ def build_items(cfg: EncoderEvalConfig, source: pl.DataFrame | None = None) -> p
     return items.head(cfg.positions) if cfg.positions else items
 
 
+def encoder_items(items: pl.DataFrame, model: Any, labels: LabelsConfig) -> list[list[int]]:
+    """Tokenize the rows in the scheme the model was trained on, whichever that is.
+
+    ``squares`` reads the FEN and nothing else; ``moves`` needs the line that reached the
+    position, so ``rukh.data.labels.game_moves`` joins the P1 games back in exactly as
+    ``rukh.train.heads`` does — the evaluation has to feed the model the shape it was fine-tuned
+    on, and hard-coding ``fen_to_tokens`` here would silently evaluate a ``moves`` encoder on
+    tokens from another vocabulary.
+    """
+    from rukh.data.labels import game_moves
+    from rukh.train.heads import LabelledPositions
+
+    scheme = str(model.encoder.cfg.input)
+    moves = game_moves(items, labels.games_dir) if scheme == "moves" else None
+    dataset = LabelledPositions(items, scheme, moves, model.encoder.cfg.block)
+    return [dataset.tokens(index) for index in range(len(dataset))]
+
+
 def predict(
-    model: Any, fens: Sequence[str], batch_size: int = 256, device: str | None = None
+    model: Any,
+    items: Sequence[Sequence[int]],
+    batch_size: int = 256,
+    device: str | None = None,
 ) -> dict[str, np.ndarray]:
-    """Run the three heads over every FEN: ``value``, ``blunder`` (probability) and ``result``."""
+    """Run the three heads over the tokenized rows: ``value``, ``blunder`` (a probability) and
+    ``result``; short sequences are padded and the padding is masked out."""
     import torch
 
-    from rukh.models.squares import fen_to_tokens
+    from rukh.train.heads import collate
 
     where = torch.device(device or "cpu")
     values: list[np.ndarray] = []
     blunders: list[np.ndarray] = []
     results: list[np.ndarray] = []
     with torch.no_grad():
-        for start in range(0, len(fens), max(1, batch_size)):
-            chunk = list(fens[start : start + max(1, batch_size)])
-            idx = torch.tensor([fen_to_tokens(fen) for fen in chunk], dtype=torch.long)
-            outputs = model(idx.to(where))
+        for start in range(0, len(items), max(1, batch_size)):
+            chunk = [list(tokens) for tokens in items[start : start + max(1, batch_size)]]
+            batch = collate(
+                [{"idx": torch.tensor(tokens, dtype=torch.long)} for tokens in chunk]  # type: ignore[misc]
+            )
+            outputs = model(batch["idx"].to(where), batch["attention_mask"].to(where))
             values.append(outputs["value"].detach().float().cpu().numpy())
             blunders.append(torch.sigmoid(outputs["blunder"].detach().float()).cpu().numpy())
             results.append(outputs["result"].detach().float().argmax(dim=-1).cpu().numpy())
@@ -342,8 +389,14 @@ def heuristic_predictions(
     values = np.full(items.height, np.nan, dtype=np.float64)
     calls = np.full(items.height, np.nan, dtype=np.float64)
     columns = items.select("game_id", "ply", "fen", "fen_before", "last_move").rows()
-    for index, (game_id, ply, fen, fen_before, last_move) in enumerate(columns):
-        item_id = f"{game_id}:{ply}"
+    for index, (_game_id, _ply, fen, fen_before, last_move) in enumerate(columns):
+        # Keyed by the position judged, never by ``game_id:ply``: the payload is a function of
+        # these three strings and of nothing else, so the same position reached from another
+        # table reuses the answer, and a *different* position that happens to sit at the same
+        # ply of the same game cannot silently inherit a stale verdict. ``fen_before`` is part
+        # of the key because ``fen`` plus ``last_move`` does not recover the captured piece,
+        # and the baseline's whole judgement is the material difference between the two.
+        item_id = f"{fen}|{fen_before or ''}|{last_move or ''}"
         payload = cache.get(HEURISTIC_SUITE, item_id) if cache is not None else None
         if payload is None:
             board_value = heuristic.value(chess.Board(fen), cfg.mobility_weight)
@@ -408,7 +461,10 @@ def measure(
     result: EncoderResult,
 ) -> EncoderResult:
     """Fill ``result`` with every metric the two predictors produced on the same rows."""
-    cp = items["cp"].to_numpy().astype(np.float64)
+    # The value head is trained on ``tanh(cp / value_scale)`` and is measured against it. Raw
+    # ``cp`` would put a mate at +-9 99x against an output that cannot leave (-1, 1), and those
+    # few rows would set the Pearson of the whole set on their own.
+    bounded = np.tanh(items["cp"].to_numpy().astype(np.float64) / float(cfg.labels.value_scale))
     labels = items["blunder"].cast(pl.Float64).fill_null(np.nan).to_numpy().astype(np.float64)
     result.items = items.height
     scored = _finite(labels, baseline["blunder"])
@@ -425,10 +481,17 @@ def measure(
         result.f1_margin = margin
         result.meets_goal = margin >= GOAL_MARGIN
     if items.height:
-        result.encoder_value = correlation(predictions["value"], cp, "encoder")
-        result.heuristic_value = correlation(baseline["value"], cp, "heuristic")
+        target = f"tanh(cp / {cfg.labels.value_scale:g})"
+        result.encoder_value = correlation(predictions["value"], bounded, "encoder", target)
+        result.heuristic_value = correlation(baseline["value"], bounded, "heuristic", target)
+        headline = result.encoder_value.spearman
+        result.value_correlation_meets_goal = (
+            None if headline is None else headline >= GOAL_VALUE_CORRELATION
+        )
         truth_result = items["result_class"].to_numpy().astype(np.int64)
         result.result_accuracy = float(np.mean(predictions["result"] == truth_result))
+    if result.meets_goal is not None and result.value_correlation_meets_goal is not None:
+        result.meets_all_goals = result.meets_goal and result.value_correlation_meets_goal
     return result
 
 
@@ -477,42 +540,61 @@ def evaluate_encoder(
         result.notes = notes
         return result
 
-    caches = _caches(cfg, result.model_sha, use_cache)
+    cache = _heuristic_cache(cfg, use_cache)
     try:
-        predictions = predict(model, items["fen"].to_list(), cfg.batch_size, str(where))
-        baseline = heuristic_predictions(items, cfg, caches[HEURISTIC_SUITE])
+        tokenized = encoder_items(items, model, cfg.labels)
+        predictions = predict(model, tokenized, cfg.batch_size, str(where))
+        baseline = heuristic_predictions(items, cfg, cache)
     finally:
-        for cache in caches.values():
-            cache.close()
+        cache.close()
     measure(items, predictions, baseline, cfg, result)
     if result.f1_margin is not None:
         notes.append(
             f"the encoder is {result.f1_margin:+.1f} F1 points from the baseline; GOAL.md asks "
             f"for at least {GOAL_MARGIN:+.0f}"
         )
+    if result.encoder_value is not None:
+        notes.append(
+            f"the value head is correlated against `{result.encoder_value.target}`, the bounded "
+            "score it is trained on, and not against raw `cp`, where a forced mate is worth "
+            "±9 99x and a few rows would decide Pearson for the whole set; the GOAL.md bar of "
+            f"{GOAL_VALUE_CORRELATION:.2f} is read on Spearman"
+        )
     notes.append(
         "the baseline counts material (1/3/3/5/9) and mobility and looks one ply ahead at "
         "captures: it cannot see a positional sacrifice, and calls Fischer's 17...Be6 "
         "(Byrne-Fischer, 1956) a nine-point blunder"
     )
+    notes.append(
+        "the two blunder detectors do not see the same thing: the baseline is given the "
+        "predecessor position and the move that was played, while the encoder is given only the "
+        "resulting position and has to infer that something was thrown away. That is the "
+        "comparison GOAL.md asks for, but it is not a level playing field"
+    )
+    notes.append(
+        f"blunder F1 is measured at the fixed threshold {cfg.threshold} on the encoder's "
+        "probability, with no sweep: no operating point was chosen to make the number look "
+        "better, and none was chosen to make it look worse either"
+    )
     result.notes = notes
     return result
 
 
-def _caches(cfg: EncoderEvalConfig, model_sha: str, use_cache: bool) -> dict[str, EvalCache]:
-    """One cache for the model's items and one for the baseline's, which outlive the weights."""
+def _heuristic_cache(cfg: EncoderEvalConfig, use_cache: bool) -> EvalCache:
+    """The one cache this suite has: the baseline's verdicts, which outlive the weights.
+
+    There is deliberately no cache for the model's own predictions. A forward pass over ten
+    thousand positions is seconds, the heuristic is a ``python-chess`` board per row, and a
+    second cache keyed by the weights would only ever be read when the very same checkpoint is
+    evaluated twice on the very same rows.
+    """
     database = paths.resolve(cfg.cache_db) if use_cache else None
-    return {
-        SUITE: EvalCache(
-            database, model_sha, enabled=use_cache, config_sha=config_sha(cfg.cache_fields())
-        ),
-        HEURISTIC_SUITE: EvalCache(
-            database,
-            HEURISTIC_KEY,
-            enabled=use_cache,
-            config_sha=config_sha(cfg.heuristic_fields()),
-        ),
-    }
+    return EvalCache(
+        database,
+        HEURISTIC_KEY,
+        enabled=use_cache,
+        config_sha=config_sha(cfg.heuristic_fields()),
+    )
 
 
 def _percent(value: float | None) -> str:
@@ -521,6 +603,11 @@ def _percent(value: float | None) -> str:
 
 def _number(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.3f}"
+
+
+def _verdict_cell(met: bool | None) -> str:
+    """How an acceptance criterion reads in the report: measured, missed, or not measured."""
+    return "not measured" if met is None else ("yes" if met else "no")
 
 
 def _detector_rows(result: EncoderResult) -> list[str]:
@@ -544,6 +631,7 @@ def render_markdown(result: EncoderResult) -> str:
     encoder = result.encoder_blunder
     baseline = result.heuristic_blunder
     margin = "n/a" if result.f1_margin is None else f"{result.f1_margin:+.1f} points"
+    target = result.encoder_value.target if result.encoder_value else "tanh(cp / value_scale)"
     lines: list[str] = [
         f"# Evaluation of `{result.stage}`",
         "",
@@ -562,10 +650,13 @@ def render_markdown(result: EncoderResult) -> str:
         f"| Blunder F1, encoder | {_percent(encoder.f1 if encoder else None)} |",
         f"| Blunder F1, material baseline | {_percent(baseline.f1 if baseline else None)} |",
         f"| Margin over the baseline | {margin} |",
-        f"| Value vs `cp`, Pearson | "
-        f"{_number(result.encoder_value.pearson if result.encoder_value else None)} |",
-        f"| Value vs `cp`, Spearman | "
+        f"| Margin >= {GOAL_MARGIN:.0f} points | {_verdict_cell(result.meets_goal)} |",
+        f"| Value vs `{target}`, Spearman (headline) | "
         f"{_number(result.encoder_value.spearman if result.encoder_value else None)} |",
+        f"| Value vs `{target}`, Pearson | "
+        f"{_number(result.encoder_value.pearson if result.encoder_value else None)} |",
+        f"| Value correlation >= {GOAL_VALUE_CORRELATION:.2f} | "
+        f"{_verdict_cell(result.value_correlation_meets_goal)} |",
         f"| Result accuracy | {_percent(result.result_accuracy)} |",
         f"| Positions | {result.items:,} ({result.blunder_items:,} with a blunder label) |",
         "",
@@ -577,19 +668,21 @@ def render_markdown(result: EncoderResult) -> str:
             [
                 "## Value against Stockfish",
                 "",
-                "Pearson asks whether the numbers line up, Spearman only whether the order does; "
-                "a bounded `tanh` head over a score in centipawns can have the second right and "
-                "the first wrong.",
+                f"Both predictors are correlated against `{target}`, the bounded score the value "
+                "head is trained on, never against raw `cp`: a forced mate is worth ±9 99x "
+                "there and would decide Pearson for the whole set on its own. Spearman asks "
+                "only whether the ranking is right and is the number the goal is checked "
+                "against; Pearson also asks whether the scale is.",
                 "",
-                "| Predictor | Items | Pearson | Spearman |",
-                "|---|---:|---:|---:|",
+                "| Predictor | Items | Target | Spearman | Pearson |",
+                "|---|---:|---|---:|---:|",
             ]
         )
         for measured in (result.encoder_value, result.heuristic_value):
             if measured is not None:
                 lines.append(
-                    f"| {measured.name} | {measured.items} | {_number(measured.pearson)} | "
-                    f"{_number(measured.spearman)} |"
+                    f"| {measured.name} | {measured.items} | `{measured.target}` | "
+                    f"{_number(measured.spearman)} | {_number(measured.pearson)} |"
                 )
         lines.append("")
     if result.label_curve:
@@ -646,6 +739,13 @@ def _metrics(result: EncoderResult) -> dict[str, float]:
             metrics[f"value_spearman/{measured.name}"] = measured.spearman
     if result.f1_margin is not None:
         metrics["blunder_f1_margin"] = result.f1_margin
+    for name, met in (
+        ("meets_goal_blunder", result.meets_goal),
+        ("meets_goal_value", result.value_correlation_meets_goal),
+        ("meets_goal_all", result.meets_all_goals),
+    ):
+        if met is not None:
+            metrics[name] = float(met)
     if result.result_accuracy is not None:
         metrics["result_accuracy"] = result.result_accuracy
     return metrics

@@ -160,7 +160,7 @@ def _export_encoder(
     bundle = ExportBundle(onnx=export_encoder_onnx(model, out, opset=opset))
     checks = _quantize(bundle, fp16, int8)
     if check_parity:
-        items, source, warning = encoder_parity_positions(labels, n=positions, split=split)
+        items, source, warning = encoder_parity_positions(model, labels, n=positions, split=split)
         bundle.parity_source = source
         bundle.parity_warning = warning
         if items:

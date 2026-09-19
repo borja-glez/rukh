@@ -68,13 +68,17 @@ def exported(model: MultiHead, tmp_path_factory: pytest.TempPathFactory) -> Any:
     return export_encoder_onnx(model, tmp_path_factory.mktemp("encoder-onnx"))
 
 
-def checkpoint(path: Path, model: MultiHead) -> Path:
+def checkpoint(path: Path, model: MultiHead, **cfg: Any) -> Path:
     save_checkpoint(
         path,
         step=7,
         model=model,
         optimizer=None,
-        cfg={"pooling": "mean", "weights": {"value": 1.0, "blunder": 1.0, "result": 0.5}},
+        cfg={
+            "pooling": "mean",
+            "weights": {"value": 1.0, "blunder": 1.0, "result": 0.5},
+            **cfg,
+        },
         model_cfg=TOY.model_dump(),
     )
     return path
@@ -250,24 +254,26 @@ def test_the_command_line_exports_the_encoder(tmp_path: Path, model: MultiHead) 
 # --- parity on validation positions, never on random boards ------------------------------------
 
 
-def test_the_encoder_parity_refuses_to_invent_positions(tmp_path: Path, rukh_home: Path) -> None:
+def test_the_encoder_parity_refuses_to_invent_positions(
+    tmp_path: Path, rukh_home: Path, model: MultiHead
+) -> None:
     from rukh.data.labels import LabelsConfig
 
     items, source, warning = encoder_parity_positions(
-        LabelsConfig(positions_eval=str(tmp_path / "absent.parquet"))
+        model, LabelsConfig(positions_eval=str(tmp_path / "absent.parquet"))
     )
     assert items == [] and source == "none"
     assert warning is not None and "skipped rather than measured" in warning
 
 
-def test_the_encoder_parity_reads_the_held_out_labels(tmp_path: Path) -> None:
+def test_the_encoder_parity_reads_the_held_out_labels(tmp_path: Path, model: MultiHead) -> None:
     from helpers_labels import source_frame
     from rukh.data.labels import LabelsConfig
 
     source = tmp_path / "positions-eval.parquet"
     source_frame().write_parquet(source)
     cfg = LabelsConfig(positions_eval=str(source), val_fraction=0.999)
-    items, label, warning = encoder_parity_positions(cfg, n=5)
+    items, label, warning = encoder_parity_positions(model, cfg, n=5)
     assert label == "validation-labels" and warning is None
     assert len(items) == 5
     assert all(len(tokens) == SQUARE_TOKENS for tokens in items)
@@ -406,6 +412,25 @@ def test_publishing_the_encoder_stages_a_card_with_both_f1_values(
     vocab = json.loads((Path(result.folder) / VOCAB_PATH).read_text(encoding="utf-8"))
     assert vocab["scheme"] == "squares" and vocab["sequence"] == SQUARE_TOKENS
     assert vocab["tokens"][0] == "<pad>"
+    # This run had no `encoder_ckpt`, so the card must not claim a pretraining stage that did
+    # not happen; the claim is gated on the checkpoint the heads actually started from.
+    assert config["pretrained_from"] is None
+    assert "pretrained with masked move modeling" not in card
+    assert "not** pretrained" in card
+
+    pretrained = publish_model(
+        checkpoint(
+            tmp_path / "encoder-heads-mmm" / "best.pt",
+            encoder,
+            encoder_ckpt="checkpoints/encoder-mmm/best.pt",
+        ),
+        "chorcat/rukh-encoder-mmm",
+        ModelPublishConfig(),
+        dry_run=True,
+    )
+    card = Path(pretrained.card_path).read_text(encoding="utf-8")
+    assert "pretrained with masked move modeling" in card
+    assert "checkpoints/encoder-mmm/best.pt" in card
 
 
 def test_the_publish_command_accepts_an_encoder(
