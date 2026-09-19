@@ -1,3 +1,6 @@
+# Same as `greedy.yaml` except the Elo header. Reported alongside the 1800 row, never
+# instead of it: 1800 is what the published stages were measured at, and mixing the two
+# in one table would compare a model against a different question.
 # The sampling the acceptance bar is read at: near-deterministic (D-047). Temperature is worth
 # more than 200 Elo on the same weights, so every comparison between stages has to fix it, and
 # this file is that fixture -- it reproduces exactly what `small-greedy` and `medium-greedy` were
@@ -20,7 +23,7 @@ temperature: 0.05
 top_k: 1
 block: 200
 seed: 42
-header_elo: 1800   # the header every published number was measured at; keep it pinned
+header_elo: 2600   # what the model does when asked for its strong mode (D-064)
 out_dir: artifacts/eval
 web_results: null
 cache_db: artifacts/eval/cache-greedy.sqlite
