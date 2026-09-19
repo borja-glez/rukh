@@ -20,12 +20,15 @@ import torch
 from torch import nn
 
 from rukh.models import DecoderConfig, EncoderConfig, MoveDecoder, PositionEncoder
+from rukh.models.heads import HeadWeights, MultiHead
 
 BEST_NAME = "best.pt"
 TIED_HEAD = "lm_head.weight"
 """Tied to ``tokens.weight``; a published state dict leaves it out and it is re-tied on load."""
-TIED_HEADS = frozenset({TIED_HEAD, "mlm_head.weight"})
-"""Every tied head in the project: the decoder's and the encoder's masked-move head."""
+TIED_HEADS = frozenset({TIED_HEAD, "mlm_head.weight", "encoder.mlm_head.weight"})
+"""Every tied head in the project: the decoder's and the encoder's masked-move head.
+
+The last name is the same head seen from a ``MultiHead``, which holds the encoder as a child."""
 
 
 def step_name(step: int) -> str:
@@ -165,6 +168,39 @@ def load_encoder(
     model = PositionEncoder(EncoderConfig.model_validate(payload["model_cfg"]))
     load_state(model, payload["model_state"])
     return model.eval(), payload
+
+
+def load_heads(
+    path: Path, map_location: str | torch.device = "cpu"
+) -> tuple[MultiHead, dict[str, Any]]:
+    """Rebuild a fine-tuned ``MultiHead`` (encoder plus the three heads) from a checkpoint.
+
+    ``rukh.train.heads`` saves the whole ``MultiHead`` state under the *encoder's* ``model_cfg``,
+    because the heads have no shape of their own beyond ``d_model``; the pooling and the head
+    weights come from the run's config, which travels in the same payload.
+    """
+    payload = load_checkpoint(path, map_location=map_location)
+    run_cfg = payload.get("cfg") or {}
+    encoder = PositionEncoder(EncoderConfig.model_validate(payload["model_cfg"]))
+    pooling = run_cfg.get("pooling") or "mean"
+    if pooling not in ("cls", "mean"):
+        raise ValueError(f"{path} was trained with an unknown pooling {pooling!r}")
+    model = MultiHead(encoder, HeadWeights.model_validate(run_cfg.get("weights") or {}), pooling)
+    load_state(model, payload["model_state"])
+    return model.eval(), payload
+
+
+def checkpoint_kind(payload: Mapping[str, Any]) -> str:
+    """``"encoder"`` or ``"decoder"``: what kind of model a checkpoint describes.
+
+    Read off the weights rather than off a flag nobody wrote: a ``MultiHead`` keeps the encoder
+    as a child (``encoder.*``), a bare ``PositionEncoder`` is identified by the ``input`` field
+    only its config has, and everything else is the decoder.
+    """
+    state = payload.get("model_state") or {}
+    if any(str(name).startswith("encoder.") for name in state):
+        return "encoder"
+    return "encoder" if "input" in (payload.get("model_cfg") or {}) else "decoder"
 
 
 def restore(

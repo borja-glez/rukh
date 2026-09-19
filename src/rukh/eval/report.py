@@ -17,13 +17,14 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from rukh.eval.elo import EloResult
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from rukh.eval.encoder import EncoderResult
     from rukh.eval.suite import SuiteResult
 
 REPORT_NAME = "report.md"
@@ -58,6 +59,40 @@ class WebRow(BaseModel):
     run_id: str | None = None
 
 
+class EncoderWebRow(BaseModel):
+    """One row of the same table for a model that judges positions instead of playing them.
+
+    An encoder has no legality, no Elo and no puzzles, and a decoder has no blunder F1: forcing
+    the two into one schema would fill the table with columns that are structurally ``null``.
+    The rows share the key (``stage``) and nothing else, and this one says so with ``kind``; a
+    row without a ``kind`` is a decoder row, which is what every row written before M3 is.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage: str
+    kind: Literal["encoder"] = "encoder"
+    params: int
+    blunder_f1: float | None = None
+    """F1 of the blunder head on the held-out split."""
+    blunder_f1_heuristic: float | None = None
+    """F1 of the material baseline on the very same rows."""
+    blunder_f1_margin: float | None = None
+    """The difference above, in F1 points; ``GOAL.md`` asks for five."""
+    blunder_precision: float | None = None
+    blunder_recall: float | None = None
+    value_pearson: float | None = None
+    value_spearman: float | None = None
+    result_accuracy: float | None = None
+    positions: int = 0
+    date: str
+    run_id: str | None = None
+
+
+TableRow = WebRow | EncoderWebRow
+"""What ``upsert_row`` accepts: one row of the single results table, of either kind."""
+
+
 def row_of(result: SuiteResult) -> WebRow:
     """The table row a finished suite produces."""
     elo = result.elo
@@ -89,7 +124,29 @@ def row_of(result: SuiteResult) -> WebRow:
     )
 
 
-def upsert_row(path: Path, row: WebRow) -> list[dict[str, Any]]:
+def encoder_row_of(result: EncoderResult) -> EncoderWebRow:
+    """The table row a finished encoder evaluation produces."""
+    encoder = result.encoder_blunder
+    baseline = result.heuristic_blunder
+    value = result.encoder_value
+    return EncoderWebRow(
+        stage=result.stage,
+        params=result.params,
+        blunder_f1=encoder.f1 if encoder else None,
+        blunder_f1_heuristic=baseline.f1 if baseline else None,
+        blunder_f1_margin=result.f1_margin,
+        blunder_precision=encoder.precision if encoder else None,
+        blunder_recall=encoder.recall if encoder else None,
+        value_pearson=value.pearson if value else None,
+        value_spearman=value.spearman if value else None,
+        result_accuracy=result.result_accuracy,
+        positions=result.items,
+        date=result.date,
+        run_id=result.run_id,
+    )
+
+
+def upsert_row(path: Path, row: TableRow) -> list[dict[str, Any]]:
     """Insert or replace ``row`` in the shared results file and return every row."""
     path = Path(path)
     rows: list[dict[str, Any]] = []
@@ -277,22 +334,44 @@ class ReportPaths(BaseModel):
     web: str | None = None
 
 
+def write_report_files(
+    stage: str,
+    markdown_text: str,
+    payload: Any,
+    out_dir: Path,
+    web_results: Path | None,
+    row: TableRow,
+) -> ReportPaths:
+    """Write one stage's ``report.md`` and ``results.json`` and upsert its row for the web.
+
+    The two suites (the decoder's and the encoder's) measure different things and render
+    different reports, but they write them in the same place, in the same shape and into the
+    same table, so the part that is the same lives here once.
+    """
+    directory = Path(out_dir) / stage
+    directory.mkdir(parents=True, exist_ok=True)
+    markdown = directory / REPORT_NAME
+    markdown.write_text(markdown_text, encoding="utf-8", newline="\n")
+    results = directory / RESULTS_NAME
+    results.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+    )
+    web: str | None = None
+    if web_results is not None:
+        upsert_row(Path(web_results), row)
+        web = Path(web_results).as_posix()
+    return ReportPaths(markdown=markdown.as_posix(), results=results.as_posix(), web=web)
+
+
 def write_report(
     result: SuiteResult, out_dir: Path, web_results: Path | None = None
 ) -> ReportPaths:
     """Write ``report.md`` and ``results.json`` and upsert the shared web row."""
-    directory = Path(out_dir) / result.stage
-    directory.mkdir(parents=True, exist_ok=True)
-    markdown = directory / REPORT_NAME
-    markdown.write_text(render_markdown(result), encoding="utf-8", newline="\n")
-    results = directory / RESULTS_NAME
-    results.write_text(
-        result.model_dump_json(indent=2) + "\n",
-        encoding="utf-8",
-        newline="\n",
+    return write_report_files(
+        result.stage,
+        render_markdown(result),
+        json.loads(result.model_dump_json()),
+        Path(out_dir),
+        web_results,
+        row_of(result),
     )
-    web: str | None = None
-    if web_results is not None:
-        upsert_row(Path(web_results), row_of(result))
-        web = Path(web_results).as_posix()
-    return ReportPaths(markdown=markdown.as_posix(), results=results.as_posix(), web=web)

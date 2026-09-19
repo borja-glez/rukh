@@ -1,0 +1,24 @@
+# Encoder suite (docs/spec/02, component 2): blunder detection against the material baseline,
+# the correlation of the value head with Stockfish's `cp`, and the accuracy of the result head.
+# Everything is measured on the held-out split of `rukh.data.labels`, which is drawn by game.
+stage: null # defaults to the checkpoint's run directory
+split: val # never `train` for a published number
+positions: 10000 # 0 evaluates the whole split
+batch_size: 256
+threshold: 0.5 # probability above which the blunder logit counts as a blunder
+# The baseline of GOAL.md: material (1/3/3/5/9) plus mobility, one ply of captures ahead.
+mobility_weight: 0.05
+blunder_material: 1.0
+labels:
+  positions_eval: data/evals/positions-eval.parquet
+  out_dir: data/labels
+  value_scale: 400.0
+  blunder_cp: 100
+  val_fraction: 0.1
+  seed: 42
+seed: 42
+out_dir: artifacts/eval
+web_results: artifacts/web/results.json
+cache_db: artifacts/eval/cache.sqlite
+# device: null -> CUDA when it is available (rukh.train.pick_device)
+track: true

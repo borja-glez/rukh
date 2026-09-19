@@ -32,6 +32,13 @@ train_app = typer.Typer(
     invoke_without_command=True,
 )
 app.add_typer(train_app, name="train")
+eval_app = typer.Typer(
+    help="Evaluate a model: the decoder by default, a subcommand for the encoder.",
+    invoke_without_command=True,
+)
+app.add_typer(eval_app, name="eval")
+encoder_app = typer.Typer(help="Encoder utilities: position embeddings.", no_args_is_help=True)
+app.add_typer(encoder_app, name="encoder")
 
 
 def _version_callback(value: bool) -> None:
@@ -541,12 +548,13 @@ def play_cmd(
     typer.echo(f"illegal:  {sum(r.illegal_proposals for r in results)} proposals")
 
 
-@app.command("eval")
+@eval_app.callback(invoke_without_command=True)
 def eval_cmd(
+    ctx: typer.Context,
     model: Annotated[
-        str,
+        str | None,
         typer.Option("--model", help="Checkpoint path or Hub id (owner/name) to evaluate."),
-    ],
+    ] = None,
     suite: Annotated[str, typer.Option("--suite", help="Suite name: full or quick.")] = "full",
     config: Annotated[
         Path | None,
@@ -566,11 +574,20 @@ def eval_cmd(
     ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
 ) -> None:
-    """Measure legality, next-move accuracy, puzzles and Elo, and write the report."""
+    """Measure legality, next-move accuracy, puzzles and Elo, and write the report.
+
+    ``rukh eval --model ...`` is the decoder, exactly as it always was; the subcommands
+    evaluate the other models (``rukh eval encoder``).
+    """
     from rukh.eval import load_suite, run_suite
     from rukh.eval.report import elo_line
     from rukh.eval.suite import SUITES, is_hub_id
 
+    if ctx.invoked_subcommand is not None:
+        return
+    if model is None:
+        typer.echo("error: --model is required (see rukh eval --help)", err=True)
+        raise typer.Exit(code=2)
     if suite not in SUITES:
         typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
         raise typer.Exit(code=2)
@@ -601,6 +618,78 @@ def eval_cmd(
         typer.echo(f"puzzles:  {result.puzzles.rate:.4f} solved")
     if result.elo:
         typer.echo(f"elo:      {elo_line(result.elo)} over {result.elo.games} games")
+    for note in result.notes:
+        typer.echo(f"note:     {note}")
+    typer.echo(f"report:   {report.markdown}")
+    typer.echo(f"results:  {report.results}")
+    if report.web:
+        typer.echo(f"table:    {report.web}")
+
+
+@eval_app.command("encoder")
+def eval_encoder_cmd(
+    model: Annotated[
+        Path,
+        typer.Option(
+            "--model", exists=True, dir_okay=False, readable=True, help="Fine-tuned checkpoint."
+        ),
+    ],
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Suite YAML override."
+        ),
+    ] = None,
+    stage: Annotated[
+        str | None, typer.Option("--stage", help="Row name in the results table.")
+    ] = None,
+    device: Annotated[
+        str | None,
+        typer.Option("--device", help="Where to run: cuda, cpu... (default: the training device)."),
+    ] = None,
+    no_cache: Annotated[
+        bool, typer.Option("--no-cache", help="Recompute every baseline verdict.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Measure the encoder's heads against the labels and the material baseline."""
+    from rukh.eval.encoder import load_encoder_suite, run_encoder_suite
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_encoder_suite(config)
+    if stage is not None:
+        cfg = cfg.model_copy(update={"stage": stage})
+    try:
+        result, report = run_encoder_suite(model, cfg, use_cache=not no_cache, device=device)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(f"stage:    {result.stage} ({result.params:,} parameters)")
+    typer.echo(
+        f"items:    {result.items} positions, {result.blunder_items} with a blunder label "
+        f"on {result.device}"
+    )
+    for measured in (result.encoder_blunder, result.heuristic_blunder):
+        if measured is not None:
+            typer.echo(
+                f"blunder:  {measured.name:<9} P {measured.precision:.4f}  "
+                f"R {measured.recall:.4f}  F1 {measured.f1:.4f}"
+            )
+    if result.f1_margin is not None:
+        verdict = "meets the bar" if result.meets_goal else "below the bar"
+        typer.echo(f"margin:   {result.f1_margin:+.1f} F1 points over the baseline ({verdict})")
+    if result.encoder_value is not None:
+        typer.echo(
+            f"value:    pearson {result.encoder_value.pearson}  "
+            f"spearman {result.encoder_value.spearman}"
+        )
+    if result.result_accuracy is not None:
+        typer.echo(f"result:   {result.result_accuracy:.4f} accuracy")
+    for point in result.label_curve:
+        typer.echo(f"curve:    {point.fraction:>5.0%} of the labels ({point.train_labels} rows)")
     for note in result.notes:
         typer.echo(f"note:     {note}")
     typer.echo(f"report:   {report.markdown}")
