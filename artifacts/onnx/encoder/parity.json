@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "kind": "encoder",
+  "measures": "the blunder decision at p >= 0.5",
+  "positions": 1000,
+  "source": "validation-labels",
+  "exporter": "dynamo",
+  "rukh_version": "0.0.1",
+  "warning": null,
+  "precisions": {
+    "fp32": {
+      "file": "model.onnx",
+      "agreement": 1.0,
+      "max_abs_value_delta": 2.566725015640259e-06,
+      "max_abs_blunder_delta": 2.8312206268310547e-07
+    },
+    "fp16": {
+      "file": "model-fp16.onnx",
+      "agreement": 1.0,
+      "max_abs_value_delta": 0.002493828535079956,
+      "max_abs_blunder_delta": 0.00048488378524780273
+    },
+    "int8": {
+      "file": "model-int8.onnx",
+      "agreement": 1.0,
+      "max_abs_value_delta": 0.13458502292633057,
+      "max_abs_blunder_delta": 0.0055537596344947815
+    }
+  }
+}

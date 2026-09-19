@@ -1,26 +1,26 @@
 {
-  "updated_at": "2026-09-19T10:07:53+00:00",
+  "updated_at": "2026-09-19T14:18:31+00:00",
   "rows": [
     {
       "stage": "encoder",
       "kind": "encoder",
       "params": 15054725,
-      "blunder_f1": 0.17910447761194032,
+      "blunder_f1": 0.18037974683544303,
       "blunder_f1_fixed": 0.0,
-      "blunder_threshold": 0.12799979746341705,
+      "blunder_threshold": 0.06630505621433258,
       "blunder_f1_heuristic": 0.08869356771873753,
-      "blunder_f1_margin": 9.04109098932028,
-      "blunder_precision": 0.15706806282722513,
-      "blunder_recall": 0.20833333333333334,
-      "blunder_roc_auc": 0.738046707116673,
-      "blunder_average_precision": 0.1089508136478408,
+      "blunder_f1_margin": 9.16861791167055,
+      "blunder_precision": 0.1168032786885246,
+      "blunder_recall": 0.3958333333333333,
+      "blunder_roc_auc": 0.7399763778283402,
+      "blunder_average_precision": 0.11238339400134797,
       "blunder_base_rate": 0.037166241781832816,
-      "value_pearson": 0.4422122986429701,
-      "value_spearman": 0.40725355214256076,
-      "result_accuracy": 0.4986,
+      "value_pearson": 0.6475570593054291,
+      "value_spearman": 0.5204635884268994,
+      "result_accuracy": 0.5003,
       "positions": 10000,
       "date": "2026-09-19",
-      "run_id": "7c35d092468042fba4683a281706871a"
+      "run_id": "804ae7e551a246d5a98dbfbc963ac5c7"
     },
     {
       "stage": "encoder-squares",

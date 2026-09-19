@@ -798,3 +798,32 @@ Evidencia obtenida por el controlador, no por subagentes:
   nada de paridad (ausencia significa "no comprobado", que no es "comprobado y perfecto").
 - **Si está mal:** quitar `parity.json` del `upload_folder` deja las cifras sin respaldo
   comprobable; volver a un solo punto de operación exige fijar el muestreo en toda la tabla.
+
+### D-061 · Se publica el encoder afinado con `last-n`, no el `full`
+- **Qué:** `chorcat/rukh-encoder` lleva los pesos del afinado `last-n` (últimos dos bloques y la
+  norma final), no los del completo. Medido sobre el mismo conjunto: F1 de error 0,1804 frente a
+  0,1791, margen +9,2 frente a +9,0, ROC AUC 0,740 frente a 0,738 y, sobre todo, correlación de
+  valor **Spearman 0,520 frente a 0,407** (Pearson 0,648 frente a 0,442).
+- **Por qué:** al preparar la publicación se iba a subir el checkpoint de `last-n` con las métricas
+  del `full`, que son de otro modelo. Se evaluó el que se publica y resultó ser además el mejor,
+  coherente con D-057.
+- **Si está mal:** el criterio de correlación sigue sin cumplirse (0,52 frente a 0,80), y la card
+  lo dice.
+
+## Publicación en Hugging Face (2026-09-19)
+
+Once repos en `chorcat`, todos con card en inglés:
+
+| Modelos | Tamaño | Datasets | Filas |
+|---|---|---|---|
+| `rukh-tokenizer` | 0,4 MB | `rukh-games-1800` | 5 896 388 |
+| `rukh-tiny` | 61,5 MB | `rukh-games-elite` | 541 085 |
+| `rukh-small` | 434,9 MB | `rukh-elo-bins` | 423 829 |
+| `rukh-medium` | 1 275,4 MB | `rukh-positions-eval` | 488 159 |
+| `rukh-encoder` | 169,9 MB | `rukh-puzzles-split` | 312 000 |
+| | | `rukh-pairs-dpo` | 13 887 |
+
+Cada modelo lleva pesos en `safetensors`, los tres ONNX y `onnx/parity.json` con la medición de
+fidelidad. Paridad de la jugada elegida: `small` fp16 99,80 % e int8 95,40 %; `tiny` 99,80 % y
+96,10 %; `medium` **100 %** y 96,50 %; el encoder, 100 % en las tres precisiones sobre la decisión
+de error.

@@ -1,0 +1,33 @@
+{
+  "architectures": [
+    "PositionEncoder"
+  ],
+  "model_type": "rukh-position-encoder",
+  "library_name": "rukh",
+  "rukh_version": "0.0.1",
+  "stage": "encoder",
+  "step": 3000,
+  "params": 15054725,
+  "tokenizer": "moves",
+  "vocab_hash": null,
+  "data_manifest_sha": null,
+  "git_sha": "cb84867f1c101c80cb1b64a1d1dda8d24d7c44e0",
+  "heads": [
+    "value",
+    "blunder",
+    "result"
+  ],
+  "pooling": "mean",
+  "pretrained_from": "checkpoints/encoder-mmm-20260919-093554//best.pt",
+  "input": "moves",
+  "vocab_size": 2030,
+  "square_vocab": 47,
+  "n_layer": 8,
+  "n_head": 6,
+  "d_model": 384,
+  "d_ff": null,
+  "block": 200,
+  "dropout": 0.1,
+  "pos": "learned",
+  "tie_embeddings": true
+}
