@@ -850,10 +850,15 @@ Evidencia obtenida por el controlador, no por subagentes:
   **6 676 794 partidas**) y se suma al entrenamiento por `extra_train_parquets`. Nunca a la
   validación, que sigue siendo las 100 000 partidas congeladas de 2025-02.
 - **Por qué:** la sonda de condicionamiento mostró que el eje de Elo está comprimido, no muerto:
-  dentro del rango entrenado las distribuciones distan 0,004-0,047 nats (frente a 0,39 contra una
-  cabecera por debajo del suelo del corpus) y forzar una cabecera alta *empeora* la predicción
-  (50,93 % con `<1800>` contra 50,07 % con `<2800>`). La causa es la composición: solo el **3,4 %**
-  de nuestras partidas tiene a las blancas en 2400+. En la base de élite es el **93,6 %**.
+  dentro del rango entrenado las distribuciones distan 0,004-0,047 nats, frente a 0,39 contra una
+  cabecera por debajo del suelo del corpus. La causa es la composición: solo el **3,4 %** de
+  nuestras partidas tiene a las blancas en 2400+. En la base de élite es el **93,6 %**.
+- **Corrección a la primera lectura:** se dijo que forzar una cabecera alta *empeora* la predicción
+  (50,93 % con `<1800>` contra 50,07 % con `<2800>`). Eso se midió contra continuaciones de
+  jugadores de 1800-2100, así que medía lo contrario de lo que parecía. Sobre `data/uci-strong`
+  (partidas de 2200+) la curva **se invierte y hace pico en `<2200>`**, la banda real de esas
+  partidas: 41,70 → 41,89 → **42,20** → 41,95 → 41,64 % para 1800/2000/2200/2400/2800. El
+  condicionamiento funciona en la dirección correcta; lo que falla es la magnitud.
 - **Además resuelve la palanca de datos:** Hugging Face está devolviendo HTTP 429 a las descargas
   de meses nuevos y `database.nikonoel.fr` es otro servidor, así que esta vía no depende de aquella.
 - **Calidad verificada, no supuesta:** 88,4 jugadas de media (frente a ~77 del corpus general) y
