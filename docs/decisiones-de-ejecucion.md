@@ -1067,6 +1067,34 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Si está mal:** el hueco train/val de `medium-v4` es +0,0667, parecido al +0,0603 que en v1
   señalaba memorización, así que 1,68 B tokens tampoco sobran para 115 M de parámetros.
 
+### D-073 · Modelo final: `medium-v4` + DPO, 1529 Elo, los dos criterios cumplidos
+- **Medido** con la escalera corregida (D-070) y muestreo determinista:
+
+  | Modelo | Elo | IC 95 % | legal argmax | top-1 | puzles |
+  |---|---|---|---|---|---|
+  | `small` v1 (publicado) | 1359 | 1293-1429 | 99,40 % | 51,10 % | 22,07 % |
+  | `small` v2 | 1407 | 1344-1462 | 99,30 % | 51,80 % | 26,93 % |
+  | `small` v3 | 1425 | 1367-1485 | 99,10 % | 52,40 % | 26,73 % |
+  | `small` v3 + DPO | 1460 | 1401-1517 | 98,90 % | 53,20 % | 27,87 % |
+  | `medium-v4` | 1504 | 1446-1558 | 99,80 % | 54,40 % | 37,50 % |
+  | **`medium-v4` + DPO** | **1529** | **1470-1583** | **99,80 %** | 53,40 % | **38,77 %** |
+
+- **Listón de Elo ≥ 1200: cumplido con el intervalo entero por encima.** Legalidad ≥ 99 %:
+  cumplida con 99,80 %, la más alta del proyecto.
+- **DPO no cuesta legalidad cuando hay margen.** El 98,90 % de `small` v3 + DPO (D-071) no era un
+  defecto de DPO sino falta de holgura en 39 M parámetros: sobre `medium-v4` la legalidad se queda
+  clavada en 99,80 % antes y después, y los +25 Elo salen gratis. `nll_weight` 0,5 y `lr` 2e-6 en
+  los dos casos.
+- **El coste real de DPO es el top-1** (54,40 → 53,40 %), que es lo esperado: deja de imitar la
+  continuación humana para preferir la mejor jugada. Los puzles, que sí miden calidad, suben
+  (37,50 → 38,77 %).
+- **Reparto de los +170 Elo del día** (1359 → 1529): recuperar el mes de validación +48, corpus de
+  19 M partidas con élite +18, capacidad ya justificada por los datos +79, DPO +25, y
+  condicionamiento por Elo **0**.
+- **Si está mal:** los intervalos de `medium-v4` y `medium-v4` + DPO se solapan (1446-1558 frente a
+  1470-1583), así que los +25 de DPO no están separados del ruido por sí solos; lo que los sostiene
+  es que top-1 baja y puzles suben a la vez, que es la firma esperada y no la del azar.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
