@@ -845,6 +845,28 @@ Evidencia obtenida por el controlador, no por subagentes:
   vez y cacheado. `navigator.gpu` se consulta de forma síncrona porque `parseQuery` lo es; si
   existe pero no da adaptador, el worker cae a WASM por su cuenta y reporta el backend real.
 
+### D-064 · 24 meses de la Lichess Elite Database entran en el corpus de entrenamiento
+- **Qué:** `data/elite` pasa de 2 meses (541 085 partidas) a **24** (2023-09 a 2025-08,
+  **6 676 794 partidas**) y se suma al entrenamiento por `extra_train_parquets`. Nunca a la
+  validación, que sigue siendo las 100 000 partidas congeladas de 2025-02.
+- **Por qué:** la sonda de condicionamiento mostró que el eje de Elo está comprimido, no muerto:
+  dentro del rango entrenado las distribuciones distan 0,004-0,047 nats (frente a 0,39 contra una
+  cabecera por debajo del suelo del corpus) y forzar una cabecera alta *empeora* la predicción
+  (50,93 % con `<1800>` contra 50,07 % con `<2800>`). La causa es la composición: solo el **3,4 %**
+  de nuestras partidas tiene a las blancas en 2400+. En la base de élite es el **93,6 %**.
+- **Además resuelve la palanca de datos:** Hugging Face está devolviendo HTTP 429 a las descargas
+  de meses nuevos y `database.nikonoel.fr` es otro servidor, así que esta vía no depende de aquella.
+- **Calidad verificada, no supuesta:** 88,4 jugadas de media (frente a ~77 del corpus general) y
+  **solo el 0,5 %** de las partidas con menos de 180 s de base, así que la base de élite viene
+  prácticamente sin bullet y es coherente con nuestro filtro `min_base_seconds: 180`.
+- **Cuidado al leer la pérdida:** el entrenamiento deja de parecerse a la validación, que es 53 %
+  sub-2000. Se añade `data/uci-strong` (10 230 partidas de 2200+ **dentro** de las 100 000
+  congeladas, nunca entrenadas por ninguna corrida) para tener una pérdida comparable sobre juego
+  fuerte, y el Elo se mide con partidas en vez de inferirse.
+- **Si está mal:** el modelo dedicaría capacidad a imitar un juego que el listón no premia; se
+  vería como Elo estancado pese a mejor pérdida sobre `uci-strong`, y la alternativa sería usar
+  élite solo como afinado final y no en el preentrenamiento.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
