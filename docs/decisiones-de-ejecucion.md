@@ -1042,6 +1042,31 @@ Evidencia obtenida por el controlador, no por subagentes:
   es la preferencia, no la posición. Si el efecto fuese memorización, no se vería en puzles de un
   conjunto distinto, y ahí también sube (26,73 → 27,87 %).
 
+### D-072 · `medium` con datos suficientes: 1504 Elo y la mejor legalidad del proyecto
+- **Medido** (escalera corregida de D-070, muestreo determinista):
+
+  | Modelo | Par. | Tokens únicos | Elo | IC 95 % | legal argmax | top-1 | puzles |
+  |---|---|---|---|---|---|---|---|
+  | `small` v1 | 39 M | 240 M | 1359 | 1293-1429 | 99,40 % | 51,10 % | 22,07 % |
+  | `medium` v1 | 115 M | 240 M | — | — | — | 52,31 % | — |
+  | `small` v2 | 39 M | 471 M | 1407 | 1344-1462 | 99,30 % | 51,80 % | 26,93 % |
+  | `small` v3 | 39 M | 1 095 M | 1425 | 1367-1485 | 99,10 % | 52,40 % | 26,73 % |
+  | `small` v3 + DPO | 39 M | 1 095 M | 1460 | 1401-1517 | 98,90 % | 53,20 % | 27,87 % |
+  | **`medium-v4`** | 115 M | 1 681 M | **1504** | **1446-1558** | **99,80 %** | **54,40 %** | **37,50 %** |
+
+- **Los dos criterios cumplidos con holgura:** Elo 1504 con el intervalo entero por encima de
+  1200, y legalidad 99,80 %, la más alta de cualquier etapa del proyecto.
+- **El diagnóstico de la legalidad estaba equivocado.** Se leyó la serie 99,40 → 99,30 → 99,10 %
+  como una tendencia a vigilar. No lo era: era un modelo de 39 M estirándose sobre un corpus
+  creciente. Con capacidad suficiente, fuerza y legalidad suben juntas.
+- **Los puzles pasan de 22,07 % a 37,50 %**, un 70 % relativo, que es donde más se ve la mejora
+  real de juego: `medium-v4` en juego fuerte mide 1,3242 de pérdida frente a los 1,4537 de v3.
+- **Contra el `medium` original:** misma arquitectura, mismos 115 M de parámetros, 1,4782 de
+  pérdida con 240 M de tokens repetidos 4,3 veces frente a **1,3733** con 1 681 M y 1,46 épocas.
+  No era la arquitectura.
+- **Si está mal:** el hueco train/val de `medium-v4` es +0,0667, parecido al +0,0603 que en v1
+  señalaba memorización, así que 1,68 B tokens tampoco sobran para 115 M de parámetros.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
