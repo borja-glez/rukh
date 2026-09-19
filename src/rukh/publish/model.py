@@ -53,6 +53,22 @@ TORCH_NAME = "pytorch_model.bin"
 VOCAB_PATH = "tokenizer/vocab.json"
 ONNX_DIR = "onnx"
 ONNX_FILES = ("model-fp16.onnx", "model-int8.onnx", "model.onnx")
+PARITY_NAME = "parity.json"
+"""What ``rukh export`` leaves beside the ONNX files; it is copied and quoted, not recomputed."""
+PARITY_BAR = 0.999
+"""The parity ``docs/spec/02`` asks of an exported file: the same decision on 99.9 % of them."""
+PARITY_DELTAS = ("max_abs_logit_delta", "max_abs_value_delta")
+"""The worst-drift key of each kind of parity, in the order the card looks for one."""
+PRECISIONS = ("fp32", "fp16", "int8")
+"""The order the precisions appear in the card: the reference first, then what is derived."""
+PARITY_SOURCES = {
+    "validation": "validation",
+    "validation-labels": "held-out labelled",
+    "random-walk": "random legal walk",
+}
+"""How ``parity.json`` names the population it measured, in English a reader can weigh."""
+GREEDY_SUFFIX = "-greedy"
+"""How the second sampling point of one checkpoint is named (``small`` / ``small-greedy``)."""
 REPO_TYPE = "model"
 ARCHITECTURES = {"decoder": "MoveDecoder", "encoder": "PositionEncoder"}
 MODEL_TYPES = {"decoder": "rukh-move-decoder", "encoder": "rukh-position-encoder"}
@@ -165,6 +181,33 @@ def read_eval(stage: str, cfg: ModelPublishConfig) -> dict[str, Any] | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except ValueError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def counterpart_stage(stage: str) -> str:
+    """The stage that holds the same checkpoint at the other sampling setting (D-047).
+
+    The Elo of a decoder is a property of the pair model+sampling, so the suite is run twice on
+    one checkpoint and the two runs are stored side by side under ``<stage>`` and
+    ``<stage>-greedy``. This is how the card finds the one it is not publishing.
+    """
+    return stage[: -len(GREEDY_SUFFIX)] if stage.endswith(GREEDY_SUFFIX) else stage + GREEDY_SUFFIX
+
+
+def read_parity(folder: Path) -> dict[str, Any] | None:
+    """The ``parity.json`` ``rukh export`` wrote next to the ONNX files, if it is there.
+
+    Absent means "never measured" and the card says nothing about parity, which is the honest
+    reading: a card that quietly omitted a bad number would be worse than one with no number.
+    """
+    path = Path(folder) / ONNX_DIR / PARITY_NAME
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        log.warning("%s is not readable JSON: the card goes out without the parity", path)
         return None
     return payload if isinstance(payload, dict) else None
 
@@ -303,7 +346,12 @@ def write_vocab(folder: Path, kind: str, scheme: str) -> str:
 
 
 def copy_onnx(onnx_dir: Path | None, folder: Path) -> list[str]:
-    """Copy the exported ONNX files into ``onnx/`` and return what was copied."""
+    """Copy the exported ONNX files into ``onnx/`` and return what was copied.
+
+    ``parity.json`` travels with them when the export measured parity. It is small, it is the
+    evidence behind the agreement figures the card quotes, and a released file whose fidelity
+    nobody can check is a claim rather than a measurement, so it is published too.
+    """
     if onnx_dir is None:
         return []
     source = Path(onnx_dir)
@@ -319,6 +367,9 @@ def copy_onnx(onnx_dir: Path | None, folder: Path) -> list[str]:
             copied.append(f"{ONNX_DIR}/{name}")
     if not copied:
         raise FileNotFoundError(f"{source} holds none of {', '.join(ONNX_FILES)}")
+    if (source / PARITY_NAME).is_file():
+        shutil.copy2(source / PARITY_NAME, target / PARITY_NAME)
+        copied.append(f"{ONNX_DIR}/{PARITY_NAME}")
     return copied
 
 
@@ -348,6 +399,174 @@ def _elo_cell(elo: dict[str, Any]) -> str:
     return f"{elo['elo']:.0f} (no interval)"
 
 
+def _drift(entry: dict[str, Any]) -> str:
+    """The worst drift one precision showed, whichever output it was measured on."""
+    for key in PARITY_DELTAS:
+        if entry.get(key) is not None:
+            return f"{float(entry[key]):.3g}"
+    return "n/a"
+
+
+def parity_context(payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The measured parity of the published ONNX files, as the card shows it.
+
+    Every figure comes from ``parity.json``; nothing is recomputed here and nothing is assumed.
+    ``None`` when there is no such file, so a card without the measurement stays silent about it
+    rather than implying the files were checked.
+    """
+    precisions = (payload or {}).get("precisions")
+    if not isinstance(precisions, dict) or payload is None:
+        return None
+    rows: list[dict[str, Any]] = []
+    for name in PRECISIONS:
+        entry = precisions.get(name)
+        if not isinstance(entry, dict) or entry.get("agreement") is None:
+            continue
+        rate = float(entry["agreement"])
+        rows.append(
+            {
+                "precision": name,
+                "file": str(entry.get("file") or "n/a"),
+                "rate": rate,
+                "agreement": _percent(rate),
+                "disagreement": _percent(1.0 - rate),
+                "one_in": None if rate >= 1.0 else round(1.0 / (1.0 - rate)),
+                "drift": _drift(entry),
+                "met": rate >= PARITY_BAR,
+            }
+        )
+    if not rows:
+        return None
+    return {
+        "rows": rows,
+        "below": [row for row in rows if not row["met"]],
+        "perfect": all(row["rate"] >= 1.0 for row in rows),
+        "positions": payload.get("positions"),
+        "source": PARITY_SOURCES.get(str(payload.get("source")), str(payload.get("source"))),
+        "measures": payload.get("measures"),
+        "exporter": payload.get("exporter"),
+        "bar": _percent(PARITY_BAR),
+        "warning": payload.get("warning"),
+    }
+
+
+def acceptance_bars(evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """The decoder's two bars from ``GOAL.md``, each against the value that was measured.
+
+    A bar whose metric is missing is left out of the list entirely: "not met" and "not measured"
+    are different statements, and only one of them would be true.
+    """
+    from rukh.eval.suite import GOAL_ELO, GOAL_LEGALITY
+
+    measured = evaluation or {}
+    argmax = measured.get("legality_argmax") or {}
+    elo = measured.get("elo") or {}
+    bars: list[dict[str, Any]] = []
+    rate = argmax.get("rate")
+    if rate is not None:
+        bars.append(
+            {
+                "id": "legality",
+                "name": "Legality without the mask, argmax",
+                "target": f"at least {GOAL_LEGALITY * 100:.0f} %",
+                "measured": _percent(rate),
+                "met": float(rate) >= GOAL_LEGALITY,
+            }
+        )
+    rating = elo.get("elo")
+    if rating is not None:
+        bars.append(
+            {
+                "id": "elo",
+                "name": "Estimated Elo",
+                "target": f"at least {GOAL_ELO:.0f}",
+                "measured": _elo_cell(elo),
+                "met": float(rating) >= GOAL_ELO,
+            }
+        )
+    return bars
+
+
+def encoder_acceptance_bars(evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """The encoder's two bars from ``GOAL.md``, read on the same metrics the harness reads.
+
+    The value bar is read on **Spearman** and not on Pearson, for the reason
+    ``rukh.eval.encoder.GOAL_VALUE_CORRELATION`` spells out; the card must not be able to pass a
+    criterion the evaluation fails by picking the friendlier of the two correlations.
+    """
+    from rukh.eval.encoder import GOAL_MARGIN, GOAL_VALUE_CORRELATION
+
+    measured = evaluation or {}
+    bars: list[dict[str, Any]] = []
+    margin = measured.get("f1_margin")
+    if margin is not None:
+        bars.append(
+            {
+                "id": "blunder",
+                "name": "Blunder F1 over the material baseline",
+                "target": f"at least +{GOAL_MARGIN:.0f} F1 points",
+                "measured": f"{float(margin):+.1f} F1 points",
+                "met": float(margin) >= GOAL_MARGIN,
+            }
+        )
+    spearman = (measured.get("encoder_value") or {}).get("spearman")
+    if spearman is not None:
+        bars.append(
+            {
+                "id": "value",
+                "name": "Value vs Stockfish cp, Spearman",
+                "target": f"at least {GOAL_VALUE_CORRELATION:.2f}",
+                "measured": _ratio(spearman),
+                "met": float(spearman) >= GOAL_VALUE_CORRELATION,
+            }
+        )
+    return bars
+
+
+def _operating_point(evaluation: dict[str, Any] | None) -> dict[str, Any] | None:
+    """One (Elo, sampling) pair: the rating and the setting the games were played at."""
+    measured = evaluation or {}
+    elo = measured.get("elo") or {}
+    if elo.get("elo") is None:
+        return None
+    config = measured.get("config") or {}
+    sampled = measured.get("legality_sampled") or {}
+    temperature = config.get("temperature", sampled.get("temperature"))
+    if temperature is None:
+        return None
+    top_k = config.get("top_k", sampled.get("top_k"))
+    tail = "" if top_k is None else f", top-k {int(top_k)}"
+    return {
+        "stage": measured.get("stage"),
+        "elo": f"{float(elo['elo']):.0f}",
+        "cell": _elo_cell(elo),
+        "temperature": float(temperature),
+        "setting": f"temperature {float(temperature):g}{tail}",
+    }
+
+
+def sampling_context(
+    evaluation: dict[str, Any] | None, counterpart: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """The same weights at a second sampling setting, when one was measured (D-047).
+
+    Two evaluations describe one model only when they ran on the same tensors, so the checkpoint
+    hashes have to match: without that check the card would compare two models and call the
+    difference a property of the sampling.
+    """
+    here = _operating_point(evaluation)
+    there = _operating_point(counterpart)
+    sha = (evaluation or {}).get("model_sha")
+    if here is None or there is None or not sha:
+        return None
+    if (counterpart or {}).get("model_sha") != sha:
+        return None
+    if here["temperature"] == there["temperature"]:
+        return None
+    strong, varied = sorted((here, there), key=lambda point: float(point["temperature"]))
+    return {"model_sha": str(sha)[:12], "strong": strong, "varied": varied, "published": here}
+
+
 def card_context(
     repo_id: str,
     stage: str,
@@ -356,6 +575,8 @@ def card_context(
     evaluation: dict[str, Any] | None,
     run: RunSummary | None,
     files: list[str],
+    parity: dict[str, Any] | None = None,
+    counterpart: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Everything the Jinja card needs, with every absent metric spelled ``n/a``."""
     elo = (evaluation or {}).get("elo") or {}
@@ -392,6 +613,9 @@ def card_context(
         "config": config,
         "config_json": json.dumps(config, indent=2, ensure_ascii=False),
         "metrics": metrics,
+        "bars": acceptance_bars(evaluation),
+        "parity": parity_context(parity),
+        "sampling": sampling_context(evaluation, counterpart),
         "puzzle_bands": bands,
         "evaluated_on": (evaluation or {}).get("date"),
         "suite": (evaluation or {}).get("suite"),
@@ -415,6 +639,7 @@ def encoder_card_context(
     evaluation: dict[str, Any] | None,
     run: RunSummary | None,
     files: list[str],
+    parity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Everything the encoder card needs: its metrics, the baseline's, and the input scheme."""
     from rukh.eval.encoder import base_rate_caveat, sentence
@@ -473,6 +698,8 @@ def encoder_card_context(
         "pretrained_from": config.get("pretrained_from"),
         "heads": list(config.get("heads", ENCODER_HEADS)),
         "metrics": metrics,
+        "bars": encoder_acceptance_bars(evaluation),
+        "parity": parity_context(parity),
         "curve": curve,
         "positions": measured.get("items"),
         "blunder_items": measured.get("blunder_items"),
@@ -536,13 +763,28 @@ def publish_model(
 
     run = read_run(run_id, run_name=ckpt.parent.name)
     evaluation = read_eval(name, cfg)
+    measured_parity = read_parity(folder)
     card = (
         render_card(
-            encoder_card_context(repo_id, name, cfg, config, evaluation, run, files),
+            encoder_card_context(
+                repo_id, name, cfg, config, evaluation, run, files, measured_parity
+            ),
             ENCODER_CARD_TEMPLATE,
         )
         if kind == "encoder"
-        else render_card(card_context(repo_id, name, cfg, config, evaluation, run, files))
+        else render_card(
+            card_context(
+                repo_id,
+                name,
+                cfg,
+                config,
+                evaluation,
+                run,
+                files,
+                measured_parity,
+                read_eval(counterpart_stage(name), cfg),
+            )
+        )
     )
     card_path = folder / README_NAME
     card_path.write_text(card, encoding="utf-8", newline="\n")

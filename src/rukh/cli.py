@@ -817,6 +817,8 @@ def export_cmd(
             f"{heads.positions} {bundle.parity_source} positions "
             f"(max |delta value| {heads.max_abs_value_delta:.4g})"
         )
+    if bundle.parity_path:
+        typer.echo(f"parity:   {bundle.parity_path}")
     if bundle.parity_warning:
         typer.echo(f"warning:  {bundle.parity_warning}")
 

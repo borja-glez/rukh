@@ -765,3 +765,36 @@ Evidencia obtenida por el controlador, no por subagentes:
   local pasaba porque la tabla no desbordaba a ese ancho; el runner sí la desbordó. Es un fallo de
   accesibilidad real, no una prueba quisquillosa.
 - **Si está mal:** quitar el `tabindex` devuelve la violación.
+
+### D-060 · Las model cards publican los listones y la paridad de la cuantización
+- **Qué:** las dos plantillas de card (`model.md.jinja`, `encoder.md.jinja`) ganan tres bloques:
+  - **Listones de aceptación**: una tabla con los criterios de `GOAL.md` (decoder: legalidad sin
+    máscara por argmax ≥ 99 % y Elo ≥ 1200; encoder: F1 de error ≥ heurística + 5 puntos y
+    correlación valor↔cp ≥ 0,80) frente a lo medido, con veredicto "met"/"not met". El veredicto se
+    calcula con las constantes del propio harness (`GOAL_LEGALITY` y `GOAL_ELO` nuevas en
+    `rukh.eval.suite`; `GOAL_MARGIN` y `GOAL_VALUE_CORRELATION` ya existían en `rukh.eval.encoder`),
+    nunca se escribe a mano, y un listón cuya métrica falta **se omite** en vez de darse por
+    fallado. Cuando uno no se cumple, la card lo dice además **en prosa** con el motivo del
+    registro: D-054 para el Elo (5,9 M partidas frente a 16 M, y `medium` con el triple de
+    parámetros solo compró 84 Elo: el cuello son los datos) y D-056 para el valor (4 000 pasos de
+    afinado y 9,8 % de cobertura de etiquetas).
+  - **Paridad de la cuantización**: `rukh export` escribe ahora `parity.json` junto a los ficheros
+    ONNX (acuerdo y deriva máxima por precisión, número de posiciones, de qué población salieron y
+    qué exportador las produjo) y `rukh publish model` lo copia al repositorio y lo cita. La card
+    del decoder dice que int8 cambia la jugada elegida en el 4,6 % de las posiciones (D-049) y que
+    por tanto un móvil en WASM juega contra un modelo medibemente distinto del de la tabla; la del
+    encoder dice que sus tres precisiones coinciden en el 100 % de las decisiones de error, que es
+    el contraste que hace legible el número del decoder.
+  - **El muestreo forma parte de la cifra** (D-047): el decoder publica los dos puntos de operación
+    del mismo checkpoint (1007 Elo casi determinista, 785 a temperatura 0,6). El segundo se lee de
+    `artifacts/eval/<stage>-greedy/results.json` y solo se publica si el `model_sha` de las dos
+    tiradas coincide: si no, serían dos modelos y la diferencia no sería del muestreo.
+- **Por qué:** `GOAL.md` manda documentar la cifra tal cual, y el registro y las lecciones ya lo
+  dicen; la card era el único sitio donde un lector no podía saber qué listón se cumplía. Publicar
+  "1007 Elo" sin decir que el objetivo eran 1200, o servir `model-int8.onnx` sin decir cuánto se
+  aleja del checkpoint, es contar la mitad de la medición.
+- **Detalles:** ningún número se escribe en la plantilla; todos salen del contexto de la card, de
+  `parity.json` o de las entradas del registro citadas arriba. Sin `parity.json` la card no dice
+  nada de paridad (ausencia significa "no comprobado", que no es "comprobado y perfecto").
+- **Si está mal:** quitar `parity.json` del `upload_folder` deja las cifras sin respaldo
+  comprobable; volver a un solo punto de operación exige fijar el muestreo en toda la tabla.

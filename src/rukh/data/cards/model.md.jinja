@@ -57,6 +57,47 @@ different questions:
   with the mask switched off. It is always the lower of the two.
 
 The demo masks illegal moves before sampling, so it never plays one.
+{%- if bars %}
+
+### Acceptance bars
+
+The project set these two bars for the decoder in `GOAL.md` before any of this was trained. This
+is where the release stands against them, and it is the same table whether the answer is
+flattering or not.
+
+| Bar | Target | Measured | Verdict |
+|---|---|---|---|
+{%- for bar in bars %}
+| {{ bar.name }} | {{ bar.target }} | {{ bar.measured }} | {{ "met" if bar.met else "**not met**" }} |
+{%- endfor %}
+{%- for bar in bars if not bar.met %}
+{% if bar.id == "elo" %}
+**The Elo bar is not met**, and the reason is the corpus rather than the recipe: this model was
+trained on 5.9 M games, against the 16 M of the reference work it is measured against, and the
+`medium` stage with three times the parameters and the same data bought only 84 more Elo, with
+overlapping intervals. The constraint is data, not capacity, so the honest fix is more months of
+Lichess and not more layers.
+{%- elif bar.id == "legality" %}
+**The legality bar is not met**: without the legality mask the weights propose an illegal move
+more often than one time in a hundred. The demo masks before sampling and therefore never plays
+one, but the bar is about the weights and the weights do not clear it.
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- if sampling %}
+
+### An Elo belongs to the pair model+sampling
+
+The same weights (`{{ sampling.model_sha }}`) measure **{{ sampling.strong.elo }} Elo** at
+{{ sampling.strong.setting }} and **{{ sampling.varied.elo }} Elo** at {{ sampling.varied.setting }}.
+Nothing about the tensors changed between the two runs; only the way a move is drawn from them
+did. A rating is therefore a property of the pair model+sampling and not of the file you
+download, and any table that compares stages has to fix the sampling first.
+
+The results above are the {{ sampling.published.setting }} point. The demo samples for variety
+rather than always playing its best move, so what a player meets over the board is the weaker of
+the two numbers.
+{%- endif %}
 {% if notes %}
 How to read these numbers:
 
@@ -89,6 +130,36 @@ loading (`model.lm_head.weight = model.tokens.weight`); `rukh` does it in the co
 The ONNX graph returns only the logits of the **last** step, `(batch, vocab)`: that is all the
 demo needs and it keeps the output tensor two hundred times smaller. `model-fp16.onnx` is for
 WebGPU and `model-int8.onnx` for the WASM fallback.
+{% if parity %}
+### How faithful the ONNX files are
+
+Every exported file was run against the PyTorch checkpoint on {{ parity.positions }}
+{{ parity.source }} positions, comparing {{ parity.measures }}. `onnx/parity.json` in this
+repository is that measurement, as the exporter wrote it.
+
+| File | Same move as PyTorch | Worst logit drift |
+|---|---|---|
+{%- for row in parity.rows %}
+| `{{ row.file }}` ({{ row.precision }}) | {{ row.agreement }} | {{ row.drift }} |
+{%- endfor %}
+
+The bar the project set itself is {{ parity.bar }}.
+{%- if parity.below %}
+{%- for row in parity.below %}
+
+`{{ row.file }}` does not reach it: it picks a different move in {{ row.disagreement }} of
+positions, roughly one in {{ row.one_in }}.
+{%- if row.precision == "int8" %} That is the file the WASM fallback loads, so a phone on the
+int8 build is playing a measurably different model from the one in the results table above: the
+weights are the same, the arithmetic is not.
+{%- endif %}
+{%- endfor %}
+
+{%- else %}
+Every file clears it, so the browser plays the model the results table describes, whichever
+backend it ends up on.
+{%- endif %}
+{%- endif %}
 {%- else %}
 This release carries the PyTorch weights only; the ONNX files the browser demo loads are built
 with `rukh export --ckpt <checkpoint> --out <dir> --fp16 --int8`.

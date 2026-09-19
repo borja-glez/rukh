@@ -22,6 +22,7 @@ from rukh.export import (
     BLUNDER_OUTPUT,
     ENCODER_OUTPUTS,
     INPUT_NAME,
+    PARITY_NAME,
     VALUE_OUTPUT,
     EncoderHeads,
     embed_positions,
@@ -208,6 +209,16 @@ def test_export_all_measures_parity_on_the_held_out_labels(
     assert bundle.heads_parity["fp32"].agreement == 1.0
     assert bundle.heads_parity["fp32"].max_abs_value_delta < 1e-4
     assert bundle.heads_parity["fp32"].positions == 8
+
+    written = tmp_path / "onnx" / PARITY_NAME
+    assert bundle.parity_path == written.as_posix()
+    payload = json.loads(written.read_text(encoding="utf-8"))
+    assert payload["kind"] == "encoder"
+    assert payload["measures"] == "the blunder decision at p >= 0.5"
+    assert payload["source"] == "validation-labels" and payload["positions"] == 8
+    assert set(payload["precisions"]) == {"fp32", "int8"}
+    assert payload["precisions"]["int8"]["file"] == "model-int8.onnx"
+    assert payload["precisions"]["fp32"]["max_abs_blunder_delta"] is not None
 
 
 def test_an_unknown_kind_is_an_error(tmp_path: Path, model: MultiHead) -> None:
@@ -457,3 +468,72 @@ def test_the_publish_command_accepts_an_encoder(
     assert invocation.exit_code == 0, invocation.output
     assert "chorcat/rukh-encoder (model, encoder)" in invocation.output
     assert "dry-run" in invocation.output
+
+
+def test_the_encoder_card_states_its_bars_and_the_parity_of_the_three_precisions(
+    tmp_path: Path, rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One bar met and one not, and the parity that makes the decoder's number legible."""
+    import importlib
+
+    from rukh.export import PARITY_NAME
+
+    model_module = importlib.import_module("rukh.publish.model")
+    monkeypatch.setattr(model_module, "read_run", lambda *args, **kwargs: None)
+    torch.manual_seed(0)
+    encoder = MultiHead(PositionEncoder(TOY)).eval()
+    evaluation = {
+        "stage": "encoder",
+        "date": "2026-09-19",
+        "items": 10_000,
+        "blunder_items": 7_453,
+        "encoder_blunder": {"name": "encoder", "f1": 0.179, "precision": 0.157, "recall": 0.208},
+        "heuristic_blunder": {"name": "heuristic", "f1": 0.089},
+        "encoder_value": {"name": "encoder", "pearson": 0.442, "spearman": 0.407},
+        "f1_margin": 9.0,
+        "result_accuracy": 0.499,
+    }
+    results = rukh_home / "artifacts" / "eval" / "encoder" / "results.json"
+    results.parent.mkdir(parents=True, exist_ok=True)
+    results.write_text(json.dumps(evaluation), encoding="utf-8")
+    onnx_dir = tmp_path / "onnx"
+    onnx_dir.mkdir()
+    (onnx_dir / "model-int8.onnx").write_bytes(b"int8")
+    (onnx_dir / PARITY_NAME).write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "kind": "encoder",
+                "measures": "the blunder decision at p >= 0.5",
+                "positions": 1_000,
+                "source": "validation-labels",
+                "exporter": "dynamo",
+                "precisions": {
+                    "fp32": {"file": "model.onnx", "agreement": 1.0, "max_abs_value_delta": 2e-06},
+                    "int8": {
+                        "file": "model-int8.onnx",
+                        "agreement": 1.0,
+                        "max_abs_value_delta": 0.03,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = publish_model(
+        checkpoint(tmp_path / "encoder-heads" / "best.pt", encoder),
+        "chorcat/rukh-encoder",
+        ModelPublishConfig(),
+        onnx_dir=onnx_dir,
+        dry_run=True,
+    )
+    card = Path(result.card_path).read_text(encoding="utf-8")
+    assert "### Acceptance bars" in card
+    assert "material baseline | at least +5 F1 points | +9.0 F1 points | met |" in card
+    assert "| Value vs Stockfish cp, Spearman | at least 0.80 | 0.407 | **not met** |" in card
+    assert "**The value bar is not met.**" in card
+    assert "4 000 steps" in card and "9.8 %" in card
+    assert "1000\nheld-out labelled positions" in card
+    assert "| `model-int8.onnx` (int8) | 100.0 % | 0.03 |" in card
+    assert "Every precision, int8 included, makes the same call" in card

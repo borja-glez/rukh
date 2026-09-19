@@ -16,14 +16,18 @@ from rukh.cli import app
 from rukh.models import DecoderConfig, MoveDecoder
 from rukh.publish import (
     CONFIG_NAME,
+    PARITY_NAME,
     README_NAME,
     SAFETENSORS_NAME,
     TORCH_NAME,
     VOCAB_PATH,
     ModelPublishConfig,
     RunSummary,
+    acceptance_bars,
     card_context,
     copy_onnx,
+    counterpart_stage,
+    parity_context,
     publish_model,
     publish_state,
     read_eval,
@@ -48,6 +52,8 @@ EVAL = {
     "stage": "tiny",
     "suite": "quick",
     "date": "2026-09-19",
+    "model_sha": "same-weights",
+    "config": {"temperature": 0.6, "top_k": 20},
     "legality_argmax": {
         "positions": 1000,
         "legal": 987,
@@ -85,6 +91,29 @@ EVAL = {
         "elo_lower": None,
         "elo_upper": None,
     },
+}
+
+
+PARITY = {
+    "version": 1,
+    "kind": "decoder",
+    "measures": "the argmax move",
+    "positions": 1000,
+    "source": "validation",
+    "exporter": "dynamo",
+    "warning": None,
+    "precisions": {
+        "fp32": {"file": "model.onnx", "agreement": 1.0, "max_abs_logit_delta": 1.2e-07},
+        "fp16": {"file": "model-fp16.onnx", "agreement": 0.998, "max_abs_logit_delta": 0.02},
+        "int8": {"file": "model-int8.onnx", "agreement": 0.954, "max_abs_logit_delta": 1.4},
+    },
+}
+GREEDY = {
+    **EVAL,
+    "stage": "tiny-greedy",
+    "model_sha": "same-weights",
+    "config": {"temperature": 0.05, "top_k": 1},
+    "elo": {**EVAL["elo"], "elo": 1007.0},
 }
 
 
@@ -136,6 +165,7 @@ def onnx_dir(tmp_path: Path) -> Path:
     directory.mkdir()
     (directory / "model-fp16.onnx").write_bytes(b"fp16")
     (directory / "model-int8.onnx").write_bytes(b"int8")
+    (directory / PARITY_NAME).write_text(json.dumps(PARITY), encoding="utf-8")
     return directory
 
 
@@ -358,3 +388,143 @@ def test_the_cli_reports_a_missing_onnx_directory(
     )
     assert result.exit_code == 1
     assert "holds none of" in result.output
+
+
+def test_the_card_puts_every_acceptance_bar_next_to_what_was_measured() -> None:
+    """The bars are the project's own, from ``GOAL.md``, and the verdict is computed here."""
+    text = render_card(
+        card_context(
+            "chorcat/rukh-tiny", "tiny", ModelPublishConfig(), {"params": 1}, EVAL, RUN, []
+        )
+    )
+    assert "### Acceptance bars" in text
+    assert "| Legality without the mask, argmax | at least 99 % | 98.7 % | **not met** |" in text
+    assert "| Estimated Elo | at least 1200 | 1234 (95 % CI 1174-1294) | met |" in text
+    assert "**The legality bar is not met**" in text
+    assert "**The Elo bar is not met**" not in text
+
+
+def test_a_bar_that_is_not_met_is_said_in_words_with_its_reason() -> None:
+    """A table cell is not an explanation: the card has to say why, not only that."""
+    short = {**EVAL, "elo": {**EVAL["elo"], "elo": 1007.0}}
+    text = render_card(
+        card_context(
+            "chorcat/rukh-tiny", "tiny", ModelPublishConfig(), {"params": 1}, short, RUN, []
+        )
+    )
+    assert "**The Elo bar is not met**" in text
+    assert "5.9 M games" in text and "16 M" in text
+    assert "84 more Elo" in text
+    assert "data, not capacity" in text
+
+
+def test_the_bars_are_omitted_rather_than_guessed_when_nothing_was_measured() -> None:
+    assert acceptance_bars(None) == []
+    assert acceptance_bars({"elo": {"elo": 1300.0}}) == [
+        {
+            "id": "elo",
+            "name": "Estimated Elo",
+            "target": "at least 1200",
+            "measured": "1300 (no interval)",
+            "met": True,
+        }
+    ]
+    text = render_card(
+        card_context(
+            "chorcat/rukh-tiny", "tiny", ModelPublishConfig(), {"params": 1}, None, None, []
+        )
+    )
+    assert "### Acceptance bars" not in text
+
+
+def test_the_card_gives_the_measured_quantization_parity_and_what_it_means() -> None:
+    text = render_card(
+        card_context(
+            "chorcat/rukh-tiny",
+            "tiny",
+            ModelPublishConfig(),
+            {"params": 1},
+            EVAL,
+            RUN,
+            ["onnx/model.onnx"],
+            PARITY,
+        )
+    )
+    assert "1000\nvalidation positions" in text
+    assert "| `model.onnx` (fp32) | 100.0 % | 1.2e-07 |" in text
+    assert "| `model-int8.onnx` (int8) | 95.4 % | 1.4 |" in text
+    assert "it picks a different move in 4.6 % of\npositions, roughly one in 22" in text
+    assert "the WASM fallback loads" in text
+    assert "`onnx/parity.json`" in text
+
+
+def test_a_card_without_a_parity_file_says_nothing_about_parity() -> None:
+    assert parity_context(None) is None
+    assert parity_context({"precisions": {}}) is None
+    text = render_card(
+        card_context(
+            "chorcat/rukh-tiny",
+            "tiny",
+            ModelPublishConfig(),
+            {"params": 1},
+            EVAL,
+            RUN,
+            ["onnx/model.onnx"],
+        )
+    )
+    assert "How faithful the ONNX files are" not in text
+
+
+def test_the_card_states_that_an_elo_belongs_to_the_pair_model_and_sampling() -> None:
+    """D-047: one checkpoint, two sampling settings, two ratings more than 200 points apart."""
+    text = render_card(
+        card_context(
+            "chorcat/rukh-tiny",
+            "tiny",
+            ModelPublishConfig(),
+            {"params": 1},
+            EVAL,
+            RUN,
+            [],
+            None,
+            GREEDY,
+        )
+    )
+    assert "### An Elo belongs to the pair model+sampling" in text
+    assert "**1007 Elo** at\ntemperature 0.05, top-k 1" in text
+    assert "**1234 Elo** at temperature 0.6, top-k 20" in text
+    assert "temperature 0.6, top-k 20 point" in text  # the table's own operating point
+
+
+def test_two_evaluations_of_different_weights_are_never_called_the_same_model() -> None:
+    other = {**GREEDY, "model_sha": "other-weights"}
+    text = render_card(
+        card_context(
+            "chorcat/rukh-tiny",
+            "tiny",
+            ModelPublishConfig(),
+            {"params": 1},
+            EVAL,
+            RUN,
+            [],
+            None,
+            other,
+        )
+    )
+    assert "An Elo belongs to the pair" not in text
+
+
+def test_the_counterpart_stage_is_the_other_sampling_point() -> None:
+    assert counterpart_stage("small") == "small-greedy"
+    assert counterpart_stage("small-greedy") == "small"
+
+
+def test_the_parity_file_is_published_with_the_onnx_files(
+    rukh_home: Path, checkpoint: Path, api: FakeApi, no_mlflow: None, onnx_dir: Path
+) -> None:
+    """It is small, it is the evidence behind the card's numbers, so it goes to the Hub too."""
+    result = publish_model(checkpoint, REPO, ModelPublishConfig(), onnx_dir=onnx_dir, dry_run=True)
+    assert f"onnx/{PARITY_NAME}" in result.files
+    assert (Path(result.folder) / "onnx" / PARITY_NAME).is_file()
+    card = Path(result.card_path).read_text(encoding="utf-8")
+    assert "| `model-int8.onnx` (int8) | 95.4 % |" in card

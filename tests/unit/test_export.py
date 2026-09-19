@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
 
@@ -356,3 +357,68 @@ def test_the_quantized_files_still_agree_with_pytorch(
     half = to_fp16(Path(exported.path))
     result = parity(model, Path(half.path), prefixes[:20])
     assert result.agreement >= 0.9
+
+
+@requires_onnx
+def test_the_export_writes_the_parity_it_measured_next_to_the_files(tmp_path: Path) -> None:
+    """The parity is evidence, so it is written down and not only printed.
+
+    Without this file the publisher cannot quote an agreement without repeating a claim from a
+    console log, which is exactly how a number stops being a measurement.
+    """
+    from rukh.export import PARITY_NAME, PARITY_VERSION, export_all
+    from rukh.train import save_checkpoint
+
+    torch.manual_seed(0)
+    ckpt = tmp_path / "run" / "best.pt"
+    save_checkpoint(
+        ckpt,
+        step=1,
+        model=MoveDecoder(TOY),
+        optimizer=None,
+        cfg={},
+        model_cfg=TOY.model_dump(),
+        vocab_hash="vocab-sha",
+        git_sha="git-sha",
+    )
+    bundle = export_all(
+        ckpt,
+        tmp_path / "onnx",
+        seq_len=SEQ_LEN,
+        fp16=True,
+        int8=True,
+        check_parity=True,
+        positions=8,
+        games=tmp_path / "no-such-games.parquet",
+    )
+    written = tmp_path / "onnx" / PARITY_NAME
+    assert bundle.parity_path == written.as_posix()
+    payload = json.loads(written.read_text(encoding="utf-8"))
+    assert payload["version"] == PARITY_VERSION
+    assert payload["kind"] == "decoder"
+    assert payload["measures"] == "the argmax move"
+    assert payload["positions"] == 8
+    assert payload["source"] == "random-walk"  # there is no validation parquet under tmp_path
+    assert payload["warning"] and "random legal walks" in payload["warning"]
+    assert payload["exporter"] == bundle.onnx.exporter
+    assert set(payload["precisions"]) == {"fp32", "fp16", "int8"}
+    assert payload["precisions"]["int8"]["file"] == "model-int8.onnx"
+    for name, entry in payload["precisions"].items():
+        assert entry["agreement"] == bundle.parity[name].agreement
+        assert entry["max_abs_logit_delta"] == bundle.parity[name].max_abs_logit_delta
+
+
+@requires_onnx
+def test_an_export_that_checked_nothing_writes_no_parity_file(tmp_path: Path) -> None:
+    """No file means "not checked", which a card must never read as "checked and perfect"."""
+    from rukh.export import PARITY_NAME, export_all
+    from rukh.train import save_checkpoint
+
+    torch.manual_seed(0)
+    ckpt = tmp_path / "run" / "best.pt"
+    save_checkpoint(
+        ckpt, step=1, model=MoveDecoder(TOY), optimizer=None, cfg={}, model_cfg=TOY.model_dump()
+    )
+    bundle = export_all(ckpt, tmp_path / "onnx", seq_len=SEQ_LEN, check_parity=False)
+    assert bundle.parity_path is None
+    assert not (tmp_path / "onnx" / PARITY_NAME).exists()

@@ -4,14 +4,21 @@
 files the two browser backends need, and check every file it produced against PyTorch. It
 exports two kinds of model - the decoder's next move and the encoder's ``value`` and ``blunder``
 heads - through the same path, with one wrapper and one parity function each.
+
+The parity is not only printed: it is written to ``parity.json`` next to the ONNX files, so that
+whoever publishes the model can quote the measurement instead of repeating the claim. The file
+travels with the ONNX files to the Hub, because a number nobody can check is not evidence.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from rukh import __version__
 from rukh.data.labels import LabelsConfig
 from rukh.export.embed import EmbedResult, embed_positions, fen4
 from rukh.export.onnx import (
@@ -59,6 +66,18 @@ from rukh.export.quantize import (
 KINDS = ("decoder", "encoder")
 """What ``rukh export --kind`` accepts."""
 
+PARITY_NAME = "parity.json"
+"""Where ``export_all`` records the parity it measured, next to the files it measured."""
+
+PARITY_VERSION = 1
+"""Schema of ``parity.json``; a reader that does not know this number should not trust the rest."""
+
+PARITY_MEASURES = {
+    "decoder": "the argmax move",
+    "encoder": "the blunder decision at p >= 0.5",
+}
+"""What ``agreement`` counts for each kind of model, spelled out for whoever reads the file."""
+
 
 class ExportBundle(BaseModel):
     """Everything one ``rukh export`` produced."""
@@ -76,6 +95,59 @@ class ExportBundle(BaseModel):
     """``validation`` (the positions of ``docs/spec/02`` §6), ``random-walk``, or, for the
     encoder, ``validation-labels``."""
     parity_warning: str | None = None
+    parity_path: str | None = None
+    """``parity.json``, written next to the ONNX files when parity was measured."""
+
+
+def parity_payload(bundle: ExportBundle, files: dict[str, str]) -> dict[str, Any]:
+    """The parity of one export as ``parity.json`` records it.
+
+    One entry per precision, each naming the file it was measured on, so that a card can quote
+    the number for the very file it is telling the reader to download. The population is part of
+    the record: an agreement measured on random legal walks is not the same claim as one measured
+    on validation positions, and the difference is exactly what ``parity_source`` carries.
+    """
+    kind = bundle.onnx.kind
+    measured: dict[str, Any] = dict(bundle.heads_parity or bundle.parity)
+    precisions: dict[str, dict[str, float | str]] = {}
+    for name, result in measured.items():
+        entry: dict[str, float | str] = {
+            "file": Path(files[name]).name,
+            "agreement": result.agreement,
+        }
+        if isinstance(result, EncoderParityResult):
+            entry["max_abs_value_delta"] = result.max_abs_value_delta
+            entry["max_abs_blunder_delta"] = result.max_abs_blunder_delta
+        else:
+            entry["max_abs_logit_delta"] = result.max_abs_logit_delta
+        precisions[name] = entry
+    first = next(iter(measured.values()))
+    return {
+        "version": PARITY_VERSION,
+        "kind": kind,
+        "measures": PARITY_MEASURES[kind],
+        "positions": first.positions,
+        "source": bundle.parity_source,
+        "exporter": bundle.onnx.exporter,
+        "rukh_version": __version__,
+        "warning": bundle.parity_warning,
+        "precisions": precisions,
+    }
+
+
+def write_parity(bundle: ExportBundle, files: dict[str, str], out: Path) -> str | None:
+    """Write ``parity.json`` beside the ONNX files; ``None`` when nothing was measured.
+
+    Nothing measured means nothing written: an absent file says "not checked", which is the one
+    thing a card must never confuse with "checked and perfect".
+    """
+    if not (bundle.parity or bundle.heads_parity):
+        return None
+    path = target_path(out).parent / PARITY_NAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(parity_payload(bundle, files), indent=2, ensure_ascii=False) + "\n"
+    path.write_text(payload, encoding="utf-8", newline="\n")
+    return path.as_posix()
 
 
 def _quantize(bundle: ExportBundle, fp16: bool, int8: bool) -> dict[str, str]:
@@ -139,6 +211,7 @@ def export_all(
         bundle.parity = {
             name: parity(model, Path(path), prefixes, n=positions) for name, path in checks.items()
         }
+        bundle.parity_path = write_parity(bundle, checks, out)
     return bundle
 
 
@@ -168,6 +241,7 @@ def _export_encoder(
                 name: encoder_parity(model, Path(path), items, n=positions)
                 for name, path in checks.items()
             }
+            bundle.parity_path = write_parity(bundle, checks, out)
     return bundle
 
 
@@ -182,6 +256,9 @@ __all__ = [
     "KINDS",
     "MODEL_NAME",
     "OUTPUT_NAME",
+    "PARITY_MEASURES",
+    "PARITY_NAME",
+    "PARITY_VERSION",
     "QUANTIZED_OPS",
     "VALUE_OUTPUT",
     "EmbedResult",
@@ -202,6 +279,7 @@ __all__ = [
     "fen4",
     "label_positions",
     "parity",
+    "parity_payload",
     "parity_positions",
     "quantize_int8",
     "random_prefixes",
@@ -213,4 +291,5 @@ __all__ = [
     "validation_prefixes",
     "verify_dynamic_seq",
     "write_metadata",
+    "write_parity",
 ]

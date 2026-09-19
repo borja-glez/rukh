@@ -43,6 +43,14 @@ from rukh.tokenize.uci_vocab import UciTokenizer
 log = logging.getLogger(__name__)
 
 SUITES = ("full", "quick")
+GOAL_LEGALITY = 0.99
+"""The first acceptance criterion of ``GOAL.md`` for the decoder: legal moves without the mask.
+
+Read on ``legality_argmax``, never on ``legality_sampled``: the bar is a property of the weights,
+and the sampled rate is a property of the weights *and* of the temperature they were drawn at.
+"""
+GOAL_ELO = 1200.0
+"""The second: at least 1200 estimated Elo, with its interval, against the Stockfish ladder."""
 HUB_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+$")
 HUB_WEIGHTS = ("model.safetensors", "pytorch_model.bin")
 ELO_CAVEAT = (
