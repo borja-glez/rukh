@@ -918,6 +918,21 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Si está mal:** la sonda mide distribuciones, no fuerza. Que el eje se ensanche no garantiza
   Elo; eso se comprueba con partidas y es lo que decide qué cabecera sirve la demo.
 
+### D-067 · `PackedDataset` mandaba su índice entero a cada worker y eso rompió a los 19 M
+- **Síntoma:** `medium-v4` murió al arrancar con `UnpicklingError: pickle data was truncated`,
+  antes del primer paso, sobre el corpus de 18 942 740 partidas. Las mismas configuraciones
+  funcionaban con 12 473 182.
+- **Causa:** `starts` es un `int64` por partida y se cargaba en memoria. Los workers del
+  `DataLoader` se lanzan con *spawn* en Windows, así que el dataset se serializa una vez por
+  worker: **95 MB con 12,5 M partidas, 145 MB con 18,9 M**, y a 145 MB la tubería se corta.
+- **Arreglo:** `__getstate__` excluye `tokens` y `starts`, y `__setstate__` los remapea desde
+  disco en el worker; `starts` pasa además a `mmap_mode="r"`. El pickle del dataset real baja de
+  **145 MB a 0,5 KB** y las ventanas son idénticas tras el viaje (comprobado sobre el índice
+  1 234 567 del corpus v4).
+- **Por qué importa más allá del susto:** era un techo de escalado silencioso. Cualquiera que
+  ampliara el corpus se lo habría encontrado, y el mensaje de error no señala a los datos.
+- **Si está mal:** el coste es reabrir dos memmaps por worker al arrancar, una vez por época.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

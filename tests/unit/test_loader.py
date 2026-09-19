@@ -77,3 +77,25 @@ def test_thousand_samples_in_range(pack_dir: Path) -> None:
         x, y = ds[int(i)]
         assert int(x.max()) < 2030 and int(y.max()) < 2030
         assert int(x.min()) >= 0 and int(y.min()) >= 0
+
+
+def test_dataset_pickles_without_carrying_its_arrays(pack_dir: Path) -> None:
+    """A pickled dataset ships paths, not data, and still reads the same windows.
+
+    DataLoader workers are spawned on Windows, so the dataset crosses a pickle once per worker.
+    `starts` is one int64 per game, which reached 145 MB at 18.9 M games and killed the spawn
+    with `UnpicklingError: pickle data was truncated`. The arrays must be reopened in the worker.
+    """
+    import pickle
+
+    dataset = PackedDataset(pack_dir, block=32)
+
+    state = dataset.__getstate__()
+    assert "tokens" not in state and "starts" not in state
+
+    revived = pickle.loads(pickle.dumps(dataset))
+    assert len(revived) == len(dataset)
+    for index in (0, len(dataset) // 2, len(dataset) - 1):
+        x, y = dataset[index]
+        rx, ry = revived[index]
+        assert torch.equal(x, rx) and torch.equal(y, ry)
