@@ -953,6 +953,31 @@ Evidencia obtenida por el controlador, no por subagentes:
   resultado que quede a menos de ~15 Elo del listón hay que repetirlo con la máquina parada antes
   de declararlo cumplido.
 
+### D-069 · El condicionamiento alto no da Elo, aunque el eje funcione
+- **Medido** con la suite completa (160 partidas, muestreo determinista, `configs/eval/greedy*.yaml`):
+
+  | Etapa | Elo | IC 95 % | legal argmax | top-1 | puzles |
+  |---|---|---|---|---|---|
+  | `small` v1 @1800 | 1007 | 920-1101 | 99,40 % | 51,10 % | 22,07 % |
+  | `small` v2 @1800 | 1070 | 975-1167 | 99,30 % | 51,80 % | **26,93 %** |
+  | `small` v3 @1800 | **1095** | 1006-1188 | 99,10 % | **52,40 %** | 26,73 % |
+  | `small` v3 @2600 | 1058 | 974-1175 | 99,10 % | 52,40 % | 26,73 % |
+
+- **Pedirle a v3 que juegue a 2600 no mejora nada**: 1058 frente a 1095, con intervalos muy
+  solapados. La prueba de 32 partidas había dado 0,703 contra 0,609 a favor de `<2600>`; era
+  ruido, y con 160 partidas se cae.
+- **El eje sí funciona** (D-066: KL 2,4 veces mayor, +0,88 puntos de top-1 sobre juego fuerte).
+  Lo que no ocurre es la traducción a fuerza: imitar las elecciones de un 2400 no gana partidas
+  sin búsqueda táctica. Sirve para el hito de P4 «juega como 1500/2000/2400», no para el listón
+  de Elo.
+- **La pendiente pérdida→Elo estaba sobreestimada.** Se predijo +105 Elo para v2 con 2132
+  Elo/nat; lo medido son +63 sobre 0,0494 nats, o sea ~1275 Elo/nat. Llegar a 1200 desde 1007
+  exige ~0,151 nats, no 0,09.
+- **Vigilar:** la legalidad sin máscara baja monótonamente (99,40 → 99,30 → 99,10 %). Sigue sobre
+  el listón del 99 % pero el margen se adelgaza corrida a corrida.
+- **Los puzles suben mucho más que el Elo**: 22,07 → 26,93 %, y por bandas +8,7 puntos en
+  1000-1500 frente a +1,1 en 2000+.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
