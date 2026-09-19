@@ -20,73 +20,73 @@
       "pct_le_max_len": 7.77
     },
     "bpe": {
-      "vocab_size": 600,
-      "mean": 109.12,
-      "p50": 101.0,
-      "p95": 200.0,
-      "pct_le_max_len": 95.06
+      "vocab_size": 4096,
+      "mean": 68.05,
+      "p50": 62.0,
+      "p95": 129.0,
+      "pct_le_max_len": 99.84
     }
   },
   "bpe_longest_tokens": [
     {
-      "token": "e2e4c7c6d2d4d7d5b1c3d5e4c3e4",
-      "id": 465,
-      "length": 28,
-      "moves": 7
+      "token": "e2e4c7c5g1f3d7d6d2d4c5d4f3d4g8f6b1c3a7a6",
+      "id": 1694,
+      "length": 40,
+      "moves": 10
     },
     {
-      "token": "e2e4c7c6d2d4d7d5",
-      "id": 441,
-      "length": 16,
-      "moves": 4
+      "token": "e2e4e7e6d2d4d7d5e4e5c7c5c2c3b8c6g1f3d8b6",
+      "id": 4078,
+      "length": 40,
+      "moves": 10
     },
     {
-      "token": "e2e4e7e5g1f3b8c6",
-      "id": 463,
-      "length": 16,
-      "moves": 4
+      "token": "e2e4c7c5g1f3d7d6d2d4c5d4f3d4g8f6b1c3",
+      "id": 1214,
+      "length": 36,
+      "moves": 9
     },
     {
-      "token": "e2e4e7e5g1f3",
-      "id": 294,
-      "length": 12,
-      "moves": 3
+      "token": "e2e4e7e6d2d4d7d5e4e5c7c5c2c3b8c6g1f3",
+      "id": 2398,
+      "length": 36,
+      "moves": 9
     },
     {
-      "token": "c7c6d2d4d7d5",
-      "id": 439,
-      "length": 12,
-      "moves": 3
+      "token": "e2e4c7c5g1f3b8c6d2d4c5d4f3d4g8f6b1c3",
+      "id": 3037,
+      "length": 36,
+      "moves": 9
     },
     {
-      "token": "b1c3d5e4c3e4",
-      "id": 464,
-      "length": 12,
-      "moves": 3
+      "token": "e2e4c7c5g1f3b8c6d2d4c5d4f3d4e7e5d4b5",
+      "id": 3790,
+      "length": 36,
+      "moves": 9
     },
     {
-      "token": "g1f3h7h6g5",
-      "id": 436,
-      "length": 10,
-      "moves": 2
+      "token": "e2e4e7e5g1f3b8c6f1c4g8f6f3g5d7d5e4d5",
+      "id": 3933,
+      "length": 36,
+      "moves": 9
     },
     {
-      "token": "b1c3d5e4c3",
-      "id": 437,
-      "length": 10,
-      "moves": 2
+      "token": "d2d4g8f6c2c4g7g6b1c3f8g7e2e4d7d6",
+      "id": 2781,
+      "length": 32,
+      "moves": 8
     },
     {
-      "token": "f3c7c6f4e5",
-      "id": 515,
-      "length": 10,
-      "moves": 2
+      "token": "e2e4e7e6g1f3d7d5e4d5e6d5d2d4g8f6",
+      "id": 3304,
+      "length": 32,
+      "moves": 8
     },
     {
-      "token": "d2d4d7d5",
-      "id": 153,
-      "length": 8,
-      "moves": 2
+      "token": "e2e4c7c6g1f3d7d5e4d5c6d5d2d4b8c6",
+      "id": 3533,
+      "length": 32,
+      "moves": 8
     }
   ]
 }

@@ -565,3 +565,42 @@ Evidencia obtenida por el controlador, no por subagentes:
   una etiqueta. Hay test de regresión.
 - **Si está mal:** los nombres de los tramos en el informe y en `results.json` no cambian; solo
   cambia cómo se llaman en MLflow.
+
+## P2 · Resultados reales del decoder (2026-09-19)
+
+### D-047 · La temperatura de muestreo vale más de 200 puntos de Elo
+- **Qué:** el mismo checkpoint de `small` mide **785 Elo (IC 680-896)** con la configuración por
+  defecto de la suite (temperatura 0,6, top-k 20) y **1007 Elo (IC 920-1101)** con muestreo casi
+  determinista (temperatura 0,05, top-k 1). La legalidad sin máscara no cambia (99,40 % por argmax)
+  pero la muestreada sube de 99,00 % a 99,40 %.
+- **Por qué importa:** la cifra de Elo no es una propiedad del modelo sino del par modelo+muestreo.
+  Cualquier tabla que compare etapas tiene que fijar el muestreo, y la demo (que juega a 0,6 para
+  ser variada) es entre 200 y 250 Elo más débil que el mismo modelo jugando a lo seguro.
+- **Decisión:** la tabla publica las dos filas (`small` y `small-greedy`) y la model card explica
+  la diferencia. El valor de referencia para el criterio de aceptación es el determinista.
+- **Si está mal:** rehacer la tabla con un único muestreo fijado y documentado.
+
+### D-048 · `small` no alcanza los 1200 Elo: se documenta y se escala a `medium`
+- **Qué:** `small` (38 971 392 parámetros, 20 000 pasos, 1 024 M tokens, 42 minutos en la 5090)
+  mide 1007 Elo determinista, 99,40 % de legalidad sin máscara, 51,1 % de top-1 y 79,4 % de top-3.
+  Cumple el listón de legalidad (≥ 99 %) y no el de Elo (≥ 1200).
+- **Por qué:** el recorte son 5,9 M partidas frente a las 16 M con las que Karvonen llegó a ~1300
+  Elo con 50M parámetros. La pérdida de validación seguía bajando (1,52) al terminar, así que no
+  está saturado.
+- **Decisión:** `docs/spec/08` autoriza "más pasos, más meses o `medium`". Se lanza `medium`
+  (115 120 128 parámetros, misma receta y mismo presupuesto de tokens, ~2 h) para saber si el
+  cuello es capacidad o datos. Las dos cifras se publican tal cual.
+- **Si está mal:** la alternativa es descargar más meses (unas 4 h por mes con la configuración
+  actual) y reentrenar `small`.
+
+### D-049 · La cuantización a int8 cambia la jugada elegida en el 4,6 % de las posiciones
+- **Qué:** paridad del export sobre 1 000 posiciones de validación: fp32 **100 %**, fp16
+  **99,80 %**, int8 **95,40 %**. El criterio del spec es ≥ 99,9 %.
+- **Por qué importa:** la demo sirve `small-int8` (43,5 MB) por defecto en móvil y con
+  `saveData`, así que un usuario de móvil juega contra un modelo medibemente distinto del que
+  aparece en la tabla. fp16 (78,8 MB) se queda a una décima del listón.
+- **Decisión pendiente de Borja:** o se acepta int8 como "modelo de móvil" con su propia fila en
+  la tabla y un aviso en la demo, o se sirve fp16 a todo el mundo y se asume la descarga de 79 MB.
+  Hasta decidirlo, la demo no se publica con int8 por defecto.
+- **Si está mal:** cuantización por canal o dejar en fp32 las capas sensibles subiría la paridad a
+  costa de tamaño.
