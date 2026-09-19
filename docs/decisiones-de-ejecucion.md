@@ -867,6 +867,28 @@ Evidencia obtenida por el controlador, no por subagentes:
   vería como Elo estancado pese a mejor pérdida sobre `uci-strong`, y la alternativa sería usar
   élite solo como afinado final y no en el preentrenamiento.
 
+### D-065 · Recuperar el mes de validación vale más que triplicar los parámetros
+- **Medido** (misma receta, mismo muestreo, misma validación congelada):
+
+  | Corrida | Parámetros | Tokens únicos | Pasos | val/loss | top-1 | hueco train/val |
+  |---|---|---|---|---|---|---|
+  | `small` v1 | 38 971 392 | 240 068 954 | 20 000 | 1,5197 | 51,20 % | **+0,0603** |
+  | `medium` v1 | 115 120 128 | 240 068 954 | 20 000 | 1,4782 | 52,31 % | — |
+  | **`small` v2** | 38 971 392 | 470 650 377 | 28 000 | **1,4703** | **52,49 %** | **+0,0242** |
+
+- **`small` con 39 M de parámetros bate a `medium` con 115 M** en las dos validaciones (general
+  1,4703 frente a 1,4782; fuerte 1,4652 frente a 1,4880). Confirma D-054 con una medida directa:
+  el cuello eran los datos, y la capacidad extra de `medium` se estaba gastando en memorizar un
+  corpus repetido 4,3 veces.
+- **El hueco train/val cae a la mitad** (0,0603 → 0,0242), que es justo lo que predice el
+  diagnóstico de repetición: menos épocas sobre el mismo material, menos memorización.
+- **Traducción a Elo:** −0,0494 nats × 2132 Elo/nat ≈ **+105 Elo** (~1112 estimado). Sigue corto
+  del listón de 1200, así que la palanca de datos no se agota aquí.
+- **Nota:** v2 es el primer modelo que predice mejor el juego de 2200+ (1,4652) que el promedio
+  del corpus (1,4703); v1 y `medium` iban al revés.
+- **Si está mal:** el Elo se mide con partidas, no con la recta; la estimación de +105 solo sirve
+  para decidir si merece la pena seguir, y se sustituye por la medición en cuanto haya CPU libre.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
