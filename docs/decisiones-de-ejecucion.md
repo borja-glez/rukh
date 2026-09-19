@@ -755,3 +755,13 @@ Evidencia obtenida por el controlador, no por subagentes:
   y tumbaron la primera CI de `main`. Reproducido con `FORCE_COLOR=1`.
 - **Si está mal:** para comprobar el texto renderizado hay `plain()` en el mismo `conftest`, que
   quita los escapes.
+
+### D-059 · Las tablas con desplazamiento llevan `tabindex` y nombre
+- **Qué:** los diez envoltorios `.table-wrap` de las lecciones y los dos de los componentes
+  (`ResultsTable`, `TokenizerStats`) pasan a `tabindex="0"` con `role="region"` y `aria-label`, más
+  un anillo de foco visible.
+- **Por qué:** axe lo marcó como `scrollable-region-focusable` (impacto **serio**) en la CI de
+  `main`: una caja que se desplaza solo con el ratón deja fuera a quien navega con teclado. En
+  local pasaba porque la tabla no desbordaba a ese ancho; el runner sí la desbordó. Es un fallo de
+  accesibilidad real, no una prueba quisquillosa.
+- **Si está mal:** quitar el `tabindex` devuelve la violación.
