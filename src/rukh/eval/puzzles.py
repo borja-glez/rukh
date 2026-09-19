@@ -6,10 +6,13 @@ they are simply pushed; every move at an odd index is the model's turn and must 
 A wrong move ends the attempt, and ``correct`` records how far down the line it got, which is
 what makes a partially solved puzzle distinguishable from a first-move miss.
 
-The model only ever sees the moves of the puzzle line, never the game that produced the
-position: a move-sequence model cannot be handed a FEN. The header is a fixed Elo pair, so the
-prompt looks like the start of a game between two players of that strength. It is a handicap the
-number has to be read with, not a bug.
+A move-sequence model cannot be handed a FEN, so what it is prompted with is the only question
+that matters here. With ``prefix_uci`` in the parquet (``rukh data puzzles`` with ``with_games``)
+the prompt is the real game up to the puzzle position, headed by ``<bos>`` and the two Elo tokens
+of the players, exactly as training encodes a game: ``game-prefix``. Without it the only thing
+left is the puzzle line itself starting from ``<bos>``, a token sequence that is not a game and
+does not start from the initial position: ``line-only``, kept so an old parquet still evaluates,
+and recorded in the result because the two numbers are not comparable.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from pathlib import Path
 from typing import Protocol
 
 import chess
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from rukh.eval.cache import EvalCache
 from rukh.eval.legality import header
@@ -28,7 +31,13 @@ from rukh.models import MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer
 
 PUZZLE_COLUMNS = ["puzzle_id", "fen", "moves", "rating", "band", "split"]
+PREFIX_COLUMNS = ["prefix_uci", "white_elo", "black_elo"]
+"""Columns of the with-games parquet; absent from a parquet built by the puzzle-only source."""
 HEADER_ELO = 1800
+"""Elo written in the header when the players' own ratings are not in the parquet."""
+GAME_PREFIX = "game-prefix"
+LINE_ONLY = "line-only"
+MIXED = "mixed"
 SUITE = "puzzles"
 
 
@@ -42,6 +51,15 @@ class PuzzleItem(BaseModel):
     moves: list[str]
     rating: int
     band: str
+    prefix: list[str] = Field(default_factory=list)
+    """The real game's moves up to ``fen``, empty when the parquet does not carry them."""
+    white_elo: int | None = None
+    black_elo: int | None = None
+
+    @property
+    def prompt_style(self) -> str:
+        """``game-prefix`` when there is a real game to prompt with, else ``line-only``."""
+        return GAME_PREFIX if self.prefix else LINE_ONLY
 
 
 class MoveSource(Protocol):
@@ -77,6 +95,21 @@ class PuzzleAttempt(BaseModel):
     """Model moves played correctly before the first mistake (or the whole line)."""
     total: int
     """Model moves the line asks for."""
+    prompt_style: str = LINE_ONLY
+    """How the model was prompted; the default is what every attempt cached before P3 used."""
+
+
+def start_history(tok: UciTokenizer, item: PuzzleItem, header_elo: int = HEADER_ELO) -> list[int]:
+    """The ids the model sees before its first move: header, then the real game if there is one.
+
+    The header is the ``<bos> <wXXXX> <bXXXX>`` of ``rukh.infer.sampler.prompt_ids``, with the
+    players' own ratings when the parquet carries them; ``header_elo`` stands in otherwise.
+    """
+    white = item.white_elo if item.white_elo is not None else header_elo
+    black = item.black_elo if item.black_elo is not None else header_elo
+    history = header(tok, white, black)
+    history.extend(tok.vocab.get(uci, tok.unk_id) for uci in item.prefix)
+    return history
 
 
 def solve_puzzle(
@@ -86,9 +119,13 @@ def solve_puzzle(
     header_elo: int = HEADER_ELO,
     block: int = 200,
 ) -> PuzzleAttempt:
-    """Play the puzzle line; stop at the first move that is not the expected one."""
+    """Play the puzzle line; stop at the first move that is not the expected one.
+
+    The board comes from the puzzle's FEN, which is authoritative; the prefix only builds the
+    token history, because that is all a move-sequence model reads.
+    """
     board = chess.Board(item.fen)
-    history = header(tok, header_elo, header_elo)
+    history = start_history(tok, item, header_elo)
     expected = [uci for index, uci in enumerate(item.moves) if index % 2 == 1]
     correct = 0
     for index, uci in enumerate(item.moves):
@@ -107,6 +144,7 @@ def solve_puzzle(
         solved=correct == len(expected) and bool(expected),
         correct=correct,
         total=len(expected),
+        prompt_style=item.prompt_style,
     )
 
 
@@ -130,6 +168,8 @@ class PuzzleResult(BaseModel):
     solved: int
     rate: float
     bands: list[BandPuzzles]
+    prompt_style: str = LINE_ONLY
+    """``game-prefix``, ``line-only`` or ``mixed``: what the model was actually asked."""
 
     def by_band(self) -> dict[str, float]:
         return {band.band: band.rate for band in self.bands}
@@ -147,8 +187,11 @@ def run_puzzles(
     for item in items:
         cached = cache.get(SUITE, item.puzzle_id) if cache is not None else None
         if cached is not None:
-            attempts.append(PuzzleAttempt.model_validate(cached))
-            continue
+            attempt = PuzzleAttempt.model_validate(cached)
+            # An attempt played with the other prompt answers a different question.
+            if attempt.prompt_style == item.prompt_style:
+                attempts.append(attempt)
+                continue
         attempt = solve_puzzle(source, tok, item, header_elo=header_elo)
         if cache is not None:
             cache.put(SUITE, item.puzzle_id, attempt.model_dump())
@@ -164,7 +207,9 @@ def summarize(attempts: Sequence[PuzzleAttempt]) -> PuzzleResult:
         counts[attempt.band] = counts.get(attempt.band, 0) + 1
         solved[attempt.band] = solved.get(attempt.band, 0) + int(attempt.solved)
     total = sum(counts.values())
+    styles = {attempt.prompt_style for attempt in attempts}
     return PuzzleResult(
+        prompt_style=styles.pop() if len(styles) == 1 else (MIXED if styles else LINE_ONLY),
         attempted=total,
         solved=sum(solved.values()),
         rate=sum(solved.values()) / total if total else 0.0,
@@ -181,15 +226,13 @@ def summarize(attempts: Sequence[PuzzleAttempt]) -> PuzzleResult:
 
 
 def load_puzzles(path: Path, per_band: int, seed: int = 0, split: str = "test") -> list[PuzzleItem]:
-    """Read up to ``per_band`` puzzles of the given split from the P1 puzzle parquet."""
+    """Read up to ``per_band`` puzzles of the given split, with the game prefix when it is there."""
     import polars as pl
 
-    frame = (
-        pl.scan_parquet(Path(path).as_posix())
-        .select(PUZZLE_COLUMNS)
-        .filter(pl.col("split") == split)
-        .collect()
-    )
+    scan = pl.scan_parquet(Path(path).as_posix())
+    present = set(scan.collect_schema().names())
+    columns = PUZZLE_COLUMNS + [name for name in PREFIX_COLUMNS if name in present]
+    frame = scan.select(columns).filter(pl.col("split") == split).collect()
     items: list[PuzzleItem] = []
     for band in sorted(frame["band"].unique().to_list()):
         rows = (
@@ -197,14 +240,23 @@ def load_puzzles(path: Path, per_band: int, seed: int = 0, split: str = "test") 
             .sample(n=min(per_band, frame.filter(pl.col("band") == band).height), seed=seed)
             .rows(named=True)
         )
-        items.extend(
-            PuzzleItem(
-                puzzle_id=str(row["puzzle_id"]),
-                fen=str(row["fen"]),
-                moves=str(row["moves"]).split(),
-                rating=int(row["rating"]),
-                band=str(row["band"]),
-            )
-            for row in rows
-        )
+        items.extend(_item(row) for row in rows)
     return items
+
+
+def _item(row: dict[str, object]) -> PuzzleItem:
+    """One parquet row as a ``PuzzleItem``; the prefix columns are optional."""
+    return PuzzleItem(
+        puzzle_id=str(row["puzzle_id"]),
+        fen=str(row["fen"]),
+        moves=str(row["moves"]).split(),
+        rating=int(row["rating"]),  # type: ignore[arg-type]
+        band=str(row["band"]),
+        prefix=str(row.get("prefix_uci") or "").split(),
+        white_elo=_elo(row.get("white_elo")),
+        black_elo=_elo(row.get("black_elo")),
+    )
+
+
+def _elo(value: object) -> int | None:
+    return int(value) if isinstance(value, int | float) else None

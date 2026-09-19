@@ -35,7 +35,9 @@ evals:
   positions: data/positions/positions.parquet
   out_dir: data/evals
 puzzles:
-  dataset: Lichess/chess-puzzles
+  with_games: true
+  dataset: Lichess/chess-puzzles-with-games
+  puzzles_only_dataset: Lichess/chess-puzzles
   remote_glob: "hf://datasets/{dataset}/**/*.parquet"
   out_dir: data/puzzles
   max_rating_deviation: 100

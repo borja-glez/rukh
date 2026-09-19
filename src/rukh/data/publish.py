@@ -178,7 +178,8 @@ DATASETS: dict[str, DatasetSpec] = {
             description=(
                 "Lichess puzzles with rating deviation <= 100 and at least 100 plays, banded by "
                 "difficulty (1000-1500, 1500-2000, 2000+) and split into test and train by a "
-                "seeded hash of the puzzle id, for tactical evaluation and fine-tuning."
+                "seeded hash of the puzzle id, each with the moves of the game it came from, "
+                "for tactical evaluation and fine-tuning."
             ),
             columns=[
                 ("puzzle_id", "Lichess puzzle id"),
@@ -188,8 +189,12 @@ DATASETS: dict[str, DatasetSpec] = {
                 ("themes", "Lichess theme tags"),
                 ("band", "`1000-1500`, `1500-2000` or `2000+`"),
                 ("split", "`test` or `train`"),
+                ("prefix_uci", "the real game's UCI moves up to `fen`, space-separated"),
+                ("prefix_plies", "number of moves in `prefix_uci`"),
+                ("white_elo", "rating of White in that game"),
+                ("black_elo", "rating of Black in that game"),
             ],
-            source="`Lichess/chess-puzzles` on the Hugging Face Hub",
+            source="`Lichess/chess-puzzles-with-games` on the Hugging Face Hub",
             source_datasets=["original"],
             task_categories=["text-generation", "question-answering"],
             tags=["puzzles"],

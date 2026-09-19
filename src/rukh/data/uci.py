@@ -80,16 +80,21 @@ def clean_movetext(movetext: str) -> str:
     return " ".join(text.split())
 
 
+def san_tokens(movetext: str) -> Iterator[str]:
+    """The playable SAN tokens of a movetext: cleaned, without the ``!?`` annotations."""
+    for token in clean_movetext(movetext).split():
+        san = _ANNOTATION_RE.sub("", token)
+        if san:
+            yield san
+
+
 def san_to_uci(movetext: str) -> tuple[str, int] | None:
     """Replay the cleaned SAN with python-chess; ``None`` when any move is illegal."""
     import chess
 
     board = chess.Board()
     moves: list[str] = []
-    for san in clean_movetext(movetext).split():
-        san = _ANNOTATION_RE.sub("", san)
-        if not san:
-            continue
+    for san in san_tokens(movetext):
         try:
             move = board.parse_san(san)
         except ValueError:

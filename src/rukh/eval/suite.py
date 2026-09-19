@@ -28,7 +28,13 @@ from rukh.eval.accuracy import AccuracyResult, accuracy
 from rukh.eval.cache import EvalCache, config_sha, file_sha
 from rukh.eval.elo import DEFAULT_RUNGS, EloResult, EloRung, estimate, play_rungs
 from rukh.eval.legality import LegalityResult, legality, sample_positions
-from rukh.eval.puzzles import PuzzleResult, load_puzzles, model_source, run_puzzles
+from rukh.eval.puzzles import (
+    GAME_PREFIX,
+    PuzzleResult,
+    load_puzzles,
+    model_source,
+    run_puzzles,
+)
 from rukh.eval.report import ReportPaths, write_report
 from rukh.infer import SampleConfig
 from rukh.models import DecoderConfig
@@ -43,6 +49,12 @@ ELO_CAVEAT = (
     "the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal "
     "``Skill Level`` anchors rather than measured ratings, and Stockfish plays at {move_time:g} s "
     "per move, far below any setting ``UCI_Elo`` is calibrated for"
+)
+PUZZLE_PROMPT_NOTE = (
+    "the puzzle parquet has no ``prefix_uci``, so every puzzle was prompted with its own "
+    "solution line after ``<bos>``: a token sequence that is no game and does not start from "
+    "the initial position. The rate is a floor, not a measurement, and is not comparable with a "
+    "run scored from the real game prefix (rebuild the parquet with ``rukh data puzzles``)"
 )
 LEGALITY_DEFINITIONS = (
     "legality_argmax is the share of validation positions where the single most likely token is "
@@ -354,6 +366,8 @@ def evaluate(
                 puzzle_path, cfg.puzzles_per_band, seed=cfg.seed, split=cfg.puzzle_split
             )
             result.puzzles = run_puzzles(model_source(model, tok), tok, items, cache=cache)
+            if result.puzzles.prompt_style != GAME_PREFIX:
+                notes.append(PUZZLE_PROMPT_NOTE)
         else:
             notes.append(f"puzzles not found at {puzzle_path}: puzzle suite skipped")
         result.elo = _elo(model, tok, cfg, cache, notes)

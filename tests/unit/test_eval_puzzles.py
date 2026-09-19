@@ -8,7 +8,10 @@ import chess
 import pytest
 import torch
 
+from rukh.eval.cache import EvalCache
 from rukh.eval.puzzles import (
+    GAME_PREFIX,
+    LINE_ONLY,
     PuzzleAttempt,
     PuzzleItem,
     load_puzzles,
@@ -18,7 +21,7 @@ from rukh.eval.puzzles import (
     summarize,
 )
 from rukh.models import DecoderConfig, MoveDecoder
-from rukh.tokenize.uci_vocab import UciTokenizer
+from rukh.tokenize.uci_vocab import UciTokenizer, elo_token
 
 pytestmark = pytest.mark.unit
 
@@ -31,6 +34,18 @@ TWO_MOVE_LINE = PuzzleItem(
     rating=1600,
     band="1500-2000",
 )
+# The same puzzle with the game it came from: 1. e4 e5 2. Nf3 Nc6, then 3. Bb5 a6.
+WITH_PREFIX = PuzzleItem(
+    puzzle_id="ruy",
+    fen="r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+    moves=["f1b5", "a7a6"],
+    rating=1600,
+    band="1500-2000",
+    prefix=["e2e4", "e7e5", "g1f3", "b8c6"],
+    white_elo=1912,
+    black_elo=1755,
+)
+NO_PREFIX = WITH_PREFIX.model_copy(update={"prefix": [], "white_elo": None, "black_elo": None})
 
 
 @pytest.fixture(scope="module")
@@ -152,3 +167,88 @@ def test_load_puzzles_reads_the_test_split_band_by_band(tmp_path: Path) -> None:
     items = load_puzzles(path, per_band=1, seed=0)
     assert sorted(item.band for item in items) == ["1000-1500", "1500-2000"]
     assert all(item.moves == ["e2e4", "e7e5"] for item in items)
+    # A parquet built before the with-games source has no prefix: the fallback, flagged as such.
+    assert all(item.prompt_style == LINE_ONLY for item in items)
+
+
+def test_the_prompt_is_the_header_then_the_real_game_moves(tok: UciTokenizer) -> None:
+    seen: list[list[int]] = []
+
+    def choose(board: chess.Board, history: list[int]) -> chess.Move | None:
+        seen.append(list(history))
+        return chess.Move.from_uci("a7a6")
+
+    solve_puzzle(choose, tok, WITH_PREFIX)
+    expected = [
+        tok.bos_id,
+        tok.vocab[elo_token(1912, "w")],
+        tok.vocab[elo_token(1755, "b")],
+        *(tok.vocab[uci] for uci in ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5"]),
+    ]
+    assert seen == [expected]
+
+
+def test_a_puzzle_with_a_prefix_is_scored_exactly_as_before(tok: UciTokenizer) -> None:
+    solved = solve_puzzle(scripted(["a7a6"]), tok, WITH_PREFIX)
+    assert (solved.solved, solved.correct, solved.total) == (True, 1, 1)
+    assert solved.prompt_style == GAME_PREFIX
+    missed = solve_puzzle(scripted(["h7h6"]), tok, WITH_PREFIX)
+    assert (missed.solved, missed.correct, missed.total) == (False, 0, 1)
+
+
+def test_without_a_prefix_the_old_prompt_is_used_and_flagged(tok: UciTokenizer) -> None:
+    """The fallback: header plus the puzzle line only, and the result says so."""
+    seen: list[list[int]] = []
+
+    def choose(board: chess.Board, history: list[int]) -> chess.Move | None:
+        seen.append(list(history))
+        return chess.Move.from_uci("a7a6")
+
+    attempt = solve_puzzle(choose, tok, NO_PREFIX)
+    assert attempt.solved is True
+    assert attempt.prompt_style == LINE_ONLY
+    assert seen == [[tok.bos_id, tok.vocab["<w1800>"], tok.vocab["<b1800>"], tok.vocab["f1b5"]]]
+    assert run_puzzles(scripted(["a7a6"]), tok, [NO_PREFIX]).prompt_style == LINE_ONLY
+
+
+def test_the_result_records_the_prompt_style(tok: UciTokenizer) -> None:
+    result = run_puzzles(scripted(["a7a6"]), tok, [WITH_PREFIX])
+    assert result.prompt_style == GAME_PREFIX
+    mixed = run_puzzles(scripted(["a7a6", "a7a6"]), tok, [WITH_PREFIX, NO_PREFIX])
+    assert mixed.prompt_style == "mixed"
+
+
+def test_an_attempt_cached_with_the_other_prompt_is_not_reused(
+    tok: UciTokenizer, tmp_path: Path
+) -> None:
+    """The 1.07 % of the line-only runs must not survive in the cache as a game-prefix number."""
+    with EvalCache(tmp_path / "cache.sqlite", "sha") as cache:
+        assert run_puzzles(scripted(["h7h6"]), tok, [NO_PREFIX], cache=cache).solved == 0
+        again = run_puzzles(scripted(["a7a6"]), tok, [WITH_PREFIX], cache=cache)
+    assert (again.solved, again.prompt_style) == (1, GAME_PREFIX)
+
+
+def test_load_puzzles_reads_the_prefix_columns_when_they_are_there(tmp_path: Path) -> None:
+    import polars as pl
+
+    frame = pl.DataFrame(
+        {
+            "puzzle_id": ["a"],
+            "fen": [chess.STARTING_FEN],
+            "moves": ["e2e4 e7e5"],
+            "rating": [1200],
+            "band": ["1000-1500"],
+            "split": ["test"],
+            "themes": [["mate"]],
+            "prefix_uci": ["d2d4 d7d5"],
+            "prefix_plies": [2],
+            "white_elo": [1912],
+            "black_elo": [1755],
+        }
+    )
+    path = tmp_path / "puzzles.parquet"
+    frame.write_parquet(path)
+    item = load_puzzles(path, per_band=1, seed=0)[0]
+    assert item.prefix == ["d2d4", "d7d5"]
+    assert (item.white_elo, item.black_elo) == (1912, 1755)
+    assert item.prompt_style == GAME_PREFIX

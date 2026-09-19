@@ -273,6 +273,8 @@ def render_markdown(result: SuiteResult) -> str:
             [
                 "## Puzzles by difficulty band",
                 "",
+                f"Prompt: {result.puzzles.prompt_style}.",
+                "",
                 "| Band | Attempted | Solved | Rate |",
                 "|---|---:|---:|---:|",
             ]
