@@ -186,6 +186,16 @@ def _elo(
     return estimate(records, samples=cfg.bootstrap, seed=cfg.seed)
 
 
+def _metric_name(*parts: str) -> str:
+    """A metric name MLflow will accept.
+
+    Band names carry characters MLflow rejects outright (`<1800`, `2600+`), and it raises at the
+    very end of a suite that has already played every game, so the whole run is lost to a label.
+    Only alphanumerics, `_`, `-`, `.`, ` ` and `/` survive; everything else becomes `_`.
+    """
+    return "/".join(re.sub(r"[^A-Za-z0-9_.\- ]", "_", part) for part in parts)
+
+
 def _metrics(result: SuiteResult) -> dict[str, float]:
     """Flat metrics for MLflow (only what was actually measured)."""
     metrics: dict[str, float] = {}
@@ -197,12 +207,12 @@ def _metrics(result: SuiteResult) -> dict[str, float]:
         metrics["top1"] = result.accuracy.top1
         metrics["top3"] = result.accuracy.top3
         for band in result.accuracy.bands:
-            metrics[f"top1/{band.band}"] = band.top1
-            metrics[f"top3/{band.band}"] = band.top3
+            metrics[_metric_name("top1", band.band)] = band.top1
+            metrics[_metric_name("top3", band.band)] = band.top3
     if result.puzzles is not None:
         metrics["puzzles"] = result.puzzles.rate
         for band in result.puzzles.bands:
-            metrics[f"puzzles/{band.band}"] = band.rate
+            metrics[_metric_name("puzzles", band.band)] = band.rate
     if result.elo is not None:
         metrics["elo"] = result.elo.elo
         if result.elo.ci_low is not None and result.elo.ci_high is not None:

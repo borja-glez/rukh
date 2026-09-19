@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import string
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from typer.testing import CliRunner
 from rukh.cli import app
 from rukh.eval.suite import (
     EvalConfig,
+    _metric_name,
     config_path,
     evaluate,
     hub_checkpoint,
@@ -179,3 +181,17 @@ def test_a_hub_repository_becomes_a_checkpoint(
     assert out.name == "chorcat__rukh-tiny.pt"
     result = evaluate(out, quick_config(rukh_home), suite="quick", device="cpu")
     assert result.params == MoveDecoder(TOY).num_params(non_embedding=False)
+
+
+def test_metric_names_survive_mlflow_validation() -> None:
+    """MLflow rejects `+` and `<`, and it raises after every game has been played.
+
+    The `2600+` and `<1800` bands used to take a whole evaluation down with them at the logging
+    step, hours of Stockfish games included.
+    """
+    assert _metric_name("top1", "2600+") == "top1/2600_"
+    assert _metric_name("top3", "<1800") == "top3/_1800"
+    assert _metric_name("puzzles", "1000-1500") == "puzzles/1000-1500"
+    allowed = set(string.ascii_letters + string.digits + "_-. /")
+    for band in ("<1800", "1800-2000", "2600+"):
+        assert set(_metric_name("top1", band)) <= allowed

@@ -1,30 +1,30 @@
 {
   "source": {
     "games": "games.parquet",
-    "n_games": 20,
+    "n_games": 20000,
     "max_len": 200
   },
   "schemes": {
     "uci": {
       "vocab_size": 2030,
-      "mean": 87.25,
-      "p50": 82.5,
-      "p95": 182.1,
-      "pct_le_max_len": 95.0
+      "mean": 80.64,
+      "p50": 76.0,
+      "p95": 139.0,
+      "pct_le_max_len": 99.8
     },
     "san": {
       "vocab_size": 35,
-      "mean": 464.9,
-      "p50": 439.0,
-      "p95": 1007.25,
-      "pct_le_max_len": 20.0
+      "mean": 422.44,
+      "p50": 393.0,
+      "p95": 754.0,
+      "pct_le_max_len": 7.77
     },
     "bpe": {
       "vocab_size": 600,
-      "mean": 99.2,
-      "p50": 91.0,
-      "p95": 221.4,
-      "pct_le_max_len": 90.0
+      "mean": 109.12,
+      "p50": 101.0,
+      "p95": 200.0,
+      "pct_le_max_len": 95.06
     }
   },
   "bpe_longest_tokens": [

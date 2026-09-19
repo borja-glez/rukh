@@ -554,3 +554,14 @@ Evidencia obtenida por el controlador, no por subagentes:
   ficheros. `ruff` necesita saberlo: `known-first-party` incluye `helpers_labels`.
 - **Si está mal:** la alternativa es añadir `__init__.py` a `tests/` y `tests/unit/` y volver al
   import con puntos.
+
+### D-046 · Los nombres de métrica se saneaan antes de llegar a MLflow
+- **Qué:** `_metric_name()` en `src/rukh/eval/suite.py` sustituye por `_` cualquier carácter que
+  MLflow no acepta. Los tramos de Elo se llaman `<1800` y `2600+`, y MLflow solo admite
+  alfanuméricos, `_`, `-`, `.`, espacio y `/`.
+- **Por qué:** la primera evaluación real de `tiny` murió con
+  `MlflowException: Invalid value "top1/2600+"` **después** de haber jugado todas las partidas
+  contra Stockfish. La excepción llega al final del todo, así que se pierde el trabajo entero por
+  una etiqueta. Hay test de regresión.
+- **Si está mal:** los nombres de los tramos en el informe y en `results.json` no cambian; solo
+  cambia cómo se llaman en MLflow.
