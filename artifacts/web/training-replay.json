@@ -1,0 +1,133 @@
+{
+ "schema": "rukh-training-replay/1",
+ "steps": [
+  {
+   "step": 1000,
+   "train_loss": 2.6531,
+   "val_loss": 2.6279,
+   "val_top1": 0.3341
+  },
+  {
+   "step": 2000,
+   "train_loss": 2.1282,
+   "val_loss": 2.1136,
+   "val_top1": 0.3988
+  },
+  {
+   "step": 3000,
+   "train_loss": 1.9318,
+   "val_loss": 1.9374,
+   "val_top1": 0.4266
+  },
+  {
+   "step": 4000,
+   "train_loss": 1.8418,
+   "val_loss": 1.8426,
+   "val_top1": 0.4436
+  },
+  {
+   "step": 5000,
+   "train_loss": 1.7787,
+   "val_loss": 1.7822,
+   "val_top1": 0.456
+  },
+  {
+   "step": 6000,
+   "train_loss": 1.7301,
+   "val_loss": 1.7372,
+   "val_top1": 0.4644
+  },
+  {
+   "step": 7000,
+   "train_loss": 1.6764,
+   "val_loss": 1.702,
+   "val_top1": 0.4717
+  },
+  {
+   "step": 8000,
+   "train_loss": 1.656,
+   "val_loss": 1.6727,
+   "val_top1": 0.4778
+  },
+  {
+   "step": 9000,
+   "train_loss": 1.6115,
+   "val_loss": 1.6459,
+   "val_top1": 0.4844
+  },
+  {
+   "step": 10000,
+   "train_loss": 1.6074,
+   "val_loss": 1.6279,
+   "val_top1": 0.4884
+  },
+  {
+   "step": 11000,
+   "train_loss": 1.5647,
+   "val_loss": 1.6085,
+   "val_top1": 0.4928
+  },
+  {
+   "step": 12000,
+   "train_loss": 1.5538,
+   "val_loss": 1.5919,
+   "val_top1": 0.4964
+  },
+  {
+   "step": 13000,
+   "train_loss": 1.5396,
+   "val_loss": 1.5787,
+   "val_top1": 0.4981
+  },
+  {
+   "step": 14000,
+   "train_loss": 1.5042,
+   "val_loss": 1.5641,
+   "val_top1": 0.5019
+  },
+  {
+   "step": 15000,
+   "train_loss": 1.5073,
+   "val_loss": 1.5528,
+   "val_top1": 0.5045
+  },
+  {
+   "step": 16000,
+   "train_loss": 1.4912,
+   "val_loss": 1.5424,
+   "val_top1": 0.5069
+  },
+  {
+   "step": 17000,
+   "train_loss": 1.4845,
+   "val_loss": 1.5332,
+   "val_top1": 0.5087
+  },
+  {
+   "step": 18000,
+   "train_loss": 1.4712,
+   "val_loss": 1.5275,
+   "val_top1": 0.5101
+  },
+  {
+   "step": 19000,
+   "train_loss": 1.4786,
+   "val_loss": 1.5226,
+   "val_top1": 0.5113
+  },
+  {
+   "step": 20000,
+   "train_loss": 1.4594,
+   "val_loss": 1.5197,
+   "val_top1": 0.512
+  }
+ ],
+ "meta": {
+  "run": "small-20260919-062911",
+  "run_id": "7b0217a900b348e583bb5889cde4918e",
+  "preset": "small",
+  "max_steps": "20000",
+  "checkpoints": "E:/work/ai/chess-lm/rukh/checkpoints/small-20260919-062911",
+  "generated": "2026-09-19T08:27:35+00:00"
+ }
+}

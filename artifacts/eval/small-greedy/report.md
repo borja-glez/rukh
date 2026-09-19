@@ -16,7 +16,7 @@
 | Legality without the mask, sampled (T=0.05, top-k 1) | 99.4 % |
 | Top-1 next move | 51.1 % |
 | Top-3 next move | 79.4 % |
-| Puzzles solved | 1.1 % |
+| Puzzles solved | 22.1 % |
 | Estimated Elo | 1007 (95 % CI 920-1101) |
 | Mean centipawn loss | n/a |
 | Opening diversity | n/a |
@@ -42,11 +42,13 @@ Two rates, because they answer different questions. **argmax** is the share of v
 
 ## Puzzles by difficulty band
 
+Prompt: game-prefix.
+
 | Band | Attempted | Solved | Rate |
 |---|---:|---:|---:|
-| 1000-1500 | 2000 | 22 | 1.1 % |
-| 1500-2000 | 2000 | 27 | 1.4 % |
-| 2000+ | 2000 | 15 | 0.8 % |
+| 1000-1500 | 2000 | 694 | 34.7 % |
+| 1500-2000 | 2000 | 423 | 21.1 % |
+| 2000+ | 2000 | 207 | 10.3 % |
 
 ## Games against Stockfish
 
