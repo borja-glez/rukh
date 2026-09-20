@@ -5,7 +5,7 @@
 - Weights SHA-256: `98e05fcdfa2d1619ba33294e2d7f775c677b898e947b570ec2633de0e824b85e`
 - Parameters: 115,120,128
 - Device: `cuda`
-- Date: 2026-09-19
+- Date: 2026-09-20
 - MLflow run: not tracked
 
 ## Headline
@@ -19,7 +19,28 @@
 | Puzzles solved | 37.5 % |
 | Estimated Elo | 1504 (95 % CI 1446-1558) |
 | Mean centipawn loss | n/a |
-| Opening diversity | n/a |
+| Opening diversity | 1.000 |
+
+## Opening diversity
+
+200 self-play openings of 12 plies, drawn at temperature 1.0 with top-k 20. **Not** the suite's sampling: at the near-deterministic setting every stage plays one single opening and scores 0, which measures the sampler and not the weights (D-047).
+
+| Metric | Value |
+|---|---:|
+| Distinct opening lines | 200 of 200 |
+| Line entropy | 7.644 bits of 7.644 |
+| Normalised | 1.000 |
+| First-move entropy (no sampling) | 1.769 bits |
+
+Most played lines:
+
+| Line | Games |
+|---|---:|
+| `d2d4 g8f6 g1f3 d7d5 e2e3 c8f5 f1d3 f5g4 c2c3 b8d7 b1d2 e7e5` | 1 |
+| `e2e4 d7d5 e4d5 g8f6 g1f3 f6d5 f1e2 b8c6 e1g1 c8f5 d2d3 e7e5` | 1 |
+| `d2d4 g8f6 g1f3 g7g6 g2g3 f8g7 f1g2 e8g8 e1g1 d7d6 c2c4 b8d7` | 1 |
+| `g1f3 a7a6 d2d3 b7b5 c2c3 c8b7 b1d2 c7c5 g2g3 e7e6 f1g2 f8e7` | 1 |
+| `e2e4 e7e6 d2d4 d7d5 e4d5 e6d5 f1d3 c7c6 g1f3 g8f6 d1e2 f8e7` | 1 |
 
 ## Legality
 

@@ -189,7 +189,40 @@
     "elo_upper": null
   },
   "delta_cp": null,
-  "diversity": null,
+  "diversity": 1.0,
+  "diversity_detail": {
+    "games": 200,
+    "plies": 12,
+    "distinct_lines": 200,
+    "entropy_bits": 7.643856189774724,
+    "max_entropy_bits": 7.643856189774724,
+    "normalised": 1.0,
+    "first_move_entropy_bits": 1.7213783009984367,
+    "temperature": 1.0,
+    "top_k": 20,
+    "top_lines": [
+      [
+        "d2d4 g8f6 g1f3 d7d5 c2c4 d5c4 b1c3 c8g4 e2e3 c7c6 f1c4 e7e6",
+        1
+      ],
+      [
+        "e2e4 d7d5 e4d5 g8f6 g1f3 f6d5 f1e2 b8c6 e1g1 c8f5 d2d3 e7e5",
+        1
+      ],
+      [
+        "d2d4 g8f6 g1f3 g7g6 e2e3 f8g7 f1e2 e8g8 e1g1 d7d6 b2b3 b8d7",
+        1
+      ],
+      [
+        "g1f3 a7a6 d2d3 b7b5 e2e4 c8b7 g2g3 c7c5 f1g2 e7e6 e1g1 f8e7",
+        1
+      ],
+      [
+        "e2e4 e7e6 d2d4 d7d5 e4d5 e6d5 g1f3 c8g4 f1e2 g8f6 c1g5 f8d6",
+        1
+      ]
+    ]
+  },
   "notes": [
     "legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.",
     "the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for",
@@ -204,6 +237,7 @@
     "accuracy_positions": 1000,
     "position_pool": 20000,
     "puzzles_per_band": 2000,
+    "force_header": false,
     "header_elo": 1800,
     "elo_games": 20,
     "elo_rungs": [
@@ -259,12 +293,16 @@
     "elo_move_time": 0.1,
     "elo_max_plies": null,
     "bootstrap": 500,
+    "diversity_games": 200,
+    "diversity_plies": 12,
+    "diversity_temperature": 1.0,
+    "diversity_top_k": 20,
     "temperature": 0.05,
     "top_k": 1,
     "block": 200,
     "seed": 42,
     "out_dir": "artifacts/eval",
-    "web_results": null,
+    "web_results": "artifacts/web/results.json",
     "cache_db": "artifacts/eval/cache-greedy.sqlite",
     "device": null,
     "track": false

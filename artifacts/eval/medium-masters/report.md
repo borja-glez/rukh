@@ -1,9 +1,9 @@
-# Evaluation of `small-v3-greedy`
+# Evaluation of `medium-masters`
 
 - Suite: `full`
-- Checkpoint: `checkpoints/small-v3-20260919-160710/best.pt`
-- Weights SHA-256: `3104796b3e7fa43383d8c43924f06d32db7b9e6cd2352d2ee6c8b62cfaf36247`
-- Parameters: 38,971,392
+- Checkpoint: `checkpoints/medium-masters-20260920-154035/step-3800.pt`
+- Weights SHA-256: `41adcf286008ef471301bcef5f1131b64ce705afbf3857f4b5501202bd4bf684`
+- Parameters: 115,120,128
 - Device: `cuda`
 - Date: 2026-09-20
 - MLflow run: not tracked
@@ -12,12 +12,12 @@
 
 | Metric | Value |
 |---|---|
-| Legality without the mask, argmax | 99.1 % |
-| Legality without the mask, sampled (T=0.05, top-k 1) | 99.1 % |
-| Top-1 next move | 52.4 % |
-| Top-3 next move | 80.5 % |
-| Puzzles solved | 26.7 % |
-| Estimated Elo | 1365 (95 % CI 1293-1423) |
+| Legality without the mask, argmax | 99.7 % |
+| Legality without the mask, sampled (T=0.05, top-k 1) | 99.7 % |
+| Top-1 next move | 54.9 % |
+| Top-3 next move | 82.3 % |
+| Puzzles solved | 38.0 % |
+| Estimated Elo | 1583 (95 % CI 1525-1641) |
 | Mean centipawn loss | n/a |
 | Opening diversity | 1.000 |
 
@@ -30,17 +30,17 @@
 | Distinct opening lines | 200 of 200 |
 | Line entropy | 7.644 bits of 7.644 |
 | Normalised | 1.000 |
-| First-move entropy (no sampling) | 1.639 bits |
+| First-move entropy (no sampling) | 1.885 bits |
 
 Most played lines:
 
 | Line | Games |
 |---|---:|
-| `d2d4 g8f6 g1f3 d7d5 e2e3 c8f5 f1d3 f5g4 c2c3 c7c6 b1d2 e7e6` | 1 |
-| `e2e4 d7d5 e4d5 g8f6 b1c3 f6d5 c3d5 d8d5 g1f3 b8c6 d2d3 e7e5` | 1 |
-| `d2d4 g8f6 g1f3 g7g6 e2e3 f8g7 f1e2 e8g8 e1g1 d7d6 b2b3 b8d7` | 1 |
-| `g1f3 a7a6 d2d3 b7b5 c2c3 c8b7 b1d2 c7c5 e2e4 e7e6 f1e2 f8e7` | 1 |
-| `e2e4 e7e6 d2d4 d7d5 e4d5 d8d5 c2c4 d5d8 g1f3 g8f6 c1g5 f8e7` | 1 |
+| `d2d4 g8f6 g1f3 d7d5 g2g3 c8f5 f1g2 e7e6 e1g1 c7c5 c2c4 d5c4` | 1 |
+| `e2e4 d7d5 e4d5 g8f6 g1f3 f6d5 f1e2 b8c6 e1g1 c8f5 d2d3 e7e5` | 1 |
+| `d2d4 g8f6 g1f3 g7g6 g2g3 f8g7 f1g2 e8g8 e1g1 d7d6 c2c4 b8d7` | 1 |
+| `g1f3 a7a6 g2g3 b7b5 f1g2 c8b7 e1g1 c7c5 d2d3 e7e6 f3h4 b7g2` | 1 |
+| `e2e4 e7e6 d2d4 d7d5 e4d5 d8d5 g1f3 g8f6 c2c4 d5e4 d1e2 f8b4` | 1 |
 
 ## Legality
 
@@ -48,17 +48,17 @@ Two rates, because they answer different questions. **argmax** is the share of v
 
 | Definition | Positions | Legal | Rate |
 |---|---:|---:|---:|
-| argmax | 1000 | 991 | 99.1 % |
-| sampled | 1000 | 991 | 99.1 % |
+| argmax | 1000 | 997 | 99.7 % |
+| sampled | 1000 | 997 | 99.7 % |
 
 ## Next-move accuracy by Elo band
 
 | Band | Positions | Top-1 | Top-3 |
 |---|---:|---:|---:|
-| 1800-2000 | 543 | 52.5 % | 79.7 % |
-| 2000-2200 | 328 | 50.6 % | 82.0 % |
-| 2200-2400 | 97 | 59.8 % | 80.4 % |
-| 2400-2600 | 28 | 42.9 % | 75.0 % |
+| 1800-2000 | 543 | 52.3 % | 80.8 % |
+| 2000-2200 | 328 | 56.7 % | 83.2 % |
+| 2200-2400 | 97 | 60.8 % | 85.6 % |
+| 2400-2600 | 28 | 60.7 % | 85.7 % |
 | 2600+ | 4 | 75.0 % | 100.0 % |
 
 ## Puzzles by difficulty band
@@ -67,27 +67,27 @@ Prompt: game-prefix.
 
 | Band | Attempted | Solved | Rate |
 |---|---:|---:|---:|
-| 1000-1500 | 2000 | 820 | 41.0 % |
-| 1500-2000 | 2000 | 540 | 27.0 % |
-| 2000+ | 2000 | 244 | 12.2 % |
+| 1000-1500 | 2000 | 1163 | 58.1 % |
+| 1500-2000 | 2000 | 774 | 38.7 % |
+| 2000+ | 2000 | 342 | 17.1 % |
 
 ## Games against Stockfish
 
 | Rung | Opponent Elo | Games | W | D | L | Score | Cut | Adjudicated |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| uci-1320 | 1320 | 20 | 8 | 1 | 11 | 0.425 | 1 | 1 |
-| skill-0 | 1381 | 20 | 13 | 0 | 7 | 0.650 | 0 | 0 |
-| skill-1 | 1467 | 20 | 5 | 2 | 13 | 0.300 | 1 | 1 |
-| uci-1500 | 1500 | 20 | 4 | 0 | 16 | 0.200 | 0 | 0 |
-| skill-2 | 1589 | 20 | 5 | 2 | 13 | 0.300 | 1 | 1 |
-| skill-3 | 1678 | 20 | 4 | 1 | 15 | 0.225 | 0 | 0 |
-| uci-1800 | 1800 | 20 | 0 | 1 | 19 | 0.025 | 0 | 0 |
-| uci-2000 | 2000 | 20 | 1 | 0 | 19 | 0.050 | 0 | 0 |
+| uci-1320 | 1320 | 20 | 15 | 1 | 4 | 0.775 | 0 | 0 |
+| skill-0 | 1381 | 20 | 16 | 1 | 3 | 0.825 | 0 | 0 |
+| skill-1 | 1467 | 20 | 12 | 4 | 4 | 0.700 | 0 | 0 |
+| uci-1500 | 1500 | 20 | 10 | 3 | 7 | 0.575 | 0 | 0 |
+| skill-2 | 1589 | 20 | 7 | 1 | 12 | 0.375 | 0 | 0 |
+| skill-3 | 1678 | 20 | 5 | 4 | 11 | 0.350 | 1 | 1 |
+| uci-1800 | 1800 | 20 | 4 | 3 | 13 | 0.275 | 0 | 0 |
+| uci-2000 | 2000 | 20 | 2 | 2 | 16 | 0.150 | 0 | 0 |
 
-3 of 160 games hit the context limit; 3 of those were adjudicated on the final position (shallow engine analysis, or the material count when no engine was available) rather than scored as draws.
+1 of 160 games hit the context limit; 1 of those were adjudicated on the final position (shallow engine analysis, or the material count when no engine was available) rather than scored as draws.
 
 ## Notes
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
-- 3 of 160 games hit the context limit and were adjudicated (3 of them) instead of being scored as draws
+- 1 of 160 games hit the context limit and were adjudicated (1 of them) instead of being scored as draws

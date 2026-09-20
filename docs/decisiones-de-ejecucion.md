@@ -1684,6 +1684,35 @@ Evidencia obtenida por el controlador, no por subagentes:
   cuando no cambias nada. Aquí no hubo que montar nada: bastó con que dos caminos distintos
   midieran lo mismo sin querer.
 
+### D-108 · El módulo se reformula sobre lo medido, y el criterio se queda incumplido
+- **Decisión de Borja (2026-09-20):** «el valor del curso está en que cada módulo enseñe algo
+  cierto, no en aprobar el criterio que se escribió antes de medir». No se persigue el criterio 1
+  con más máquina; M4 se reformula sobre lo que el hito **sí** estableció.
+- **El título de la lección cambia** de «enseñarle a jugar peor» —que promete lo que no se
+  cumplió— a **«cambiar el estilo sin cambiar la fuerza»**, y la pregunta del módulo pasa a ser una
+  sola: *¿qué cambia un afinado y qué no?*
+- **Lo que el módulo enseña, con las mediciones que lo sostienen:**
+  - el afinado cambia el **comportamiento** de forma total y barata: 1,6 MB (0,34 % del modelo)
+    llevan `1. e4` del 59,64 % al 99,85 % sin coste medible en legalidad, top-1 ni puzles;
+  - ordena el **repertorio** a lo largo del eje sin jugar una partida: entropía monótona 6 de 6;
+  - y **no mueve la competencia**: ni el condicionado ni el de maestros separan su intervalo de Elo
+    del modelo del que salieron;
+  - más la mitad metodológica, que es la que se reutiliza: partidas necesarias (D-100), corrida de
+    control (D-106) y suelo de reproducibilidad (D-107).
+- **Por qué esto no es rebajar el listón:** el criterio se publica **incumplido**, con sus números y
+  su explicación, en `GOAL.md`, en el ledger y en la lección. Lo que se reformula es el **objetivo
+  docente**, no la medición. Y el resultado explica por qué M5 existe: si imitar mejor no da
+  táctica, hace falta otra herramienta —recompensas, DPO, GRPO—, que es exactamente el hito
+  siguiente.
+- **Lo que sí se mide antes de cerrar, porque es el mecanismo y no el criterio:** toda la suite
+  juega con `temperature: 0.05, top_k: 1`, es decir, **la moda** de la distribución. La diferencia
+  entre un 1200 y un 2400 no está en la moda —los dos hacen la recaptura obvia— sino en la cola.
+  La entropía de la primera jugada, que lee la distribución entera, es monótona; los puzles y el
+  Elo, que leen la moda, son planos. Así que se corre el barrido una vez a **temperatura 1,0 con
+  top-k 20** en `<w1200>` y `<w2400>`: si la brecha se abre, el eje controla la fuerza y lo que
+  faltaba era dejar de muestrear el pico; si sale plano, es un segundo nulo y la lección lo dice.
+  Una hora de máquina, y contesta una pregunta en vez de precisar un no.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
