@@ -15,3 +15,16 @@ Se limpia al cerrar cada hito; lo que entra en un plan sale de aquí.
 - **Asset de Stockfish para Linux** en `scripts/get_stockfish.py`: definido
   (`stockfish-ubuntu-x86-64-avx2.tar`) pero no ejecutado en CI; la CI no necesita el motor.
 - **OG por lección** en el curso (D-005), ver `docs/decisiones-de-ejecucion.md`.
+
+## Aplazado desde P4
+
+- **La clave del caché de evaluación es global y debería ser por suite.** `config_sha` mezcla
+  ajustes que solo afectan a los puzles (`puzzles_use_header`) con otros que solo afectan a las
+  partidas (`elo_games`, `rungs`, `elo_move_time`), así que cambiar uno invalida lo otro. Dos
+  consecuencias medidas en este hito: el barrido por condición no puede reutilizar sus partidas de
+  `@1800` para la evaluación canónica (doce minutos de Stockfish repetidos), y subir `elo_games` de
+  20 a 40 tira las veinte partidas ya jugadas aunque la partida `rung:index` sea exactamente la
+  misma —su semilla es `seed + index`, independiente del total—. **Cuándo:** P6, que es donde
+  `rukh eval nightly` va a reconstruir la tabla entera y donde el ahorro se nota. **Coste de
+  hacerlo:** invalida los 17 MB de `cache-greedy.sqlite` que ya tienen las etapas publicadas, así
+  que conviene hacerlo junto a una tirada completa y no a mitad de un hito.
