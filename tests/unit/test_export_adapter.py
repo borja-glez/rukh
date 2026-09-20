@@ -215,3 +215,25 @@ def test_the_quantized_files_still_take_the_adapter(tmp_path):
         without = session.run(None, {INPUT_NAME: idx, **zero_inputs(layout)})[0]
         with_adapter = session.run(None, {INPUT_NAME: idx, **feed})[0]
         assert np.abs(with_adapter - without).max() > 1e-3, quantized.kind
+
+
+def test_the_adapter_parity_takes_the_folder_a_run_wrote(tmp_path):
+    """`--adapter` names a training run's folder; `load_adapter` wants the weights file.
+
+    The translation used to be missing, so the export looked for `adapter_config.json` one level
+    above the run and died on a path nobody had written -- after fifteen minutes of exporting.
+    """
+    from rukh.export import adapter_file
+    from rukh.models.lora import ADAPTER_FILE, save_adapter
+
+    model = _with_lora(_toy())
+    run = tmp_path / "lora-e4-20260920-160133"
+    save_adapter(model, run / ADAPTER_FILE, LORA)
+
+    assert adapter_file(run) == run / ADAPTER_FILE
+    assert adapter_file(run / ADAPTER_FILE) == run / ADAPTER_FILE
+    # And the file it points at is the one `load_adapter` can actually read.
+    plain = _toy()
+    from rukh.models.lora import load_adapter
+
+    assert load_adapter(plain, adapter_file(run)).r == LORA.r

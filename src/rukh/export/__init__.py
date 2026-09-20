@@ -69,7 +69,13 @@ from rukh.export.quantize import (
     quantize_int8,
     to_fp16,
 )
-from rukh.models.lora import AdapterLayout, LoraConfig, adapter_layout, apply_lora
+from rukh.models.lora import (
+    ADAPTER_FILE,
+    AdapterLayout,
+    LoraConfig,
+    adapter_layout,
+    apply_lora,
+)
 
 KINDS = ("decoder", "encoder")
 """What ``rukh export --kind`` accepts."""
@@ -274,6 +280,18 @@ def export_all(
     return bundle
 
 
+def adapter_file(adapter: Path | str) -> Path:
+    """``adapter.safetensors`` inside a training run, or the file itself when given directly.
+
+    ``rukh export --adapter`` takes the *folder* a run wrote, because that is what a reader has in
+    front of them, while ``load_adapter`` takes the weights file and finds the config next to it.
+    Handing it the folder makes it look for ``adapter_config.json`` one level too high and fail on
+    a path nobody wrote, so the translation happens once and here.
+    """
+    path = Path(adapter)
+    return path / ADAPTER_FILE if path.is_dir() else path
+
+
 def _layout_of(ckpt: Path, lora: LoraConfig) -> AdapterLayout:
     """The shape of the adapters a checkpoint's adaptable graph accepts."""
     from rukh.train import load_model
@@ -295,7 +313,7 @@ def _adapter_parity(
     from rukh.train import load_model
 
     adapted, _payload = load_model(Path(ckpt))
-    load_adapter(adapted, Path(adapter))
+    load_adapter(adapted, adapter_file(adapter))
     feed = adaptable_inputs(adapted)
     return {
         name: parity(adapted, Path(path), prefixes, n=positions, extra=feed)
@@ -364,6 +382,7 @@ __all__ = [
     "encoder_parity",
     "encoder_parity_positions",
     "adaptable_inputs",
+    "adapter_file",
     "export_adaptable_onnx",
     "export_all",
     "export_encoder_onnx",
