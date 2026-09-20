@@ -1,0 +1,48 @@
+# The P4 corpus: the 1000-1799 band that `pipeline-v4.yaml` never had, converted and balanced.
+#
+# Only the steps P4 needs are configured. `uci` reads `data/raw-low` into its own `data/uci-low`
+# so `data/uci` keeps meaning "what the published models trained on"; `elo_bins` is the only step
+# that joins the two, and it is the step whose whole job is to teach the Elo header.
+duckdb:
+  memory_limit: 32GB
+  threads: 0
+uci:
+  raw_dir: data/raw-low
+  out_dir: data/uci-low
+  min_plies: 20
+  max_plies: 300
+  workers: 0
+elo_bins:
+  # Both halves of the axis, in bands of 200 Elo. 200 is a compromise: 100 would put the four
+  # club bands at the same resolution as the master ones and then starve them of games, and 400
+  # would blur "1500" and "1800" into one token's worth of meaning.
+  sources: [data/uci-low, data/uci]
+  out_dir: data/elo-bins-v2
+  bin_width: 200
+  min_bin: 1000
+  max_bin: 2600
+  # Flat by construction. The real corpus is a pyramid and that is exactly what teaches the model
+  # that `<w1500>` is rare rather than what it means; the manifest publishes what each band got,
+  # because the top ones cannot fill their quota and the lesson says so.
+  n_per_bin: 150000
+  seed: 42
+tokenize:
+  uci_dir: data/uci
+  out_dir: data/tokens-elo
+  artifacts_dir: artifacts/tokenizer
+  web_artifacts_dir: artifacts/web
+  fixture_pgn: tests/fixtures/games.pgn
+  # No months: the training split is the balanced sample and nothing else, so the fine-tune sees
+  # the flat distribution and not the pyramid it came from.
+  train_months: []
+  extra_train_parquets: ['data/elo-bins-v2/games.parquet']
+  val_month: '2025-02'
+  val_games: 100000
+  # The balanced sample is the whole training split: the rest of the validation month must not
+  # join it, or 2.85 M games of 1800+ play would flatten the very shape this corpus exists for.
+  val_remainder_trains: false
+  stats_games: data/uci/year=2025/month=01/games.parquet
+  bpe_vocab_size: 4096
+  bpe_train_games: 200000
+  stats_n_games: 20000
+  max_len: 200

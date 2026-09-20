@@ -1,0 +1,41 @@
+# `medium-v4` fine-tuned on the Elo-balanced corpus: the run that is supposed to make the dial real.
+#
+# The base is `medium-v4` and not `medium-v4 + DPO`. DPO taught the model to prefer the engine's
+# move over the human one; pouring 1.2 M games of imitation on top would partly undo that, and the
+# question this run answers is about the Elo header and nothing else. Whether the two compose is a
+# P5 question, asked after this one has an answer.
+#
+# `data/tokens-elo` is flat from `<w1000>` to `<w2400>` by construction (about 70-85 k games per
+# bin against the 20-to-1 pyramid a real corpus has). That flatness is the whole intervention: a
+# corpus shaped like Lichess teaches the model that `<w1500>` is *rare*, which is not the same
+# thing as what it means.
+#
+# 3 800 steps is 194.6 M tokens over a 95.7 M-token corpus: about two passes. Deliberately short
+# and at the spec's fine-tuning rate (1e-4, sixteen times below pretraining), because the risk
+# here is not underfitting the new corpus -- it is forgetting the strong play that 1.68 B tokens
+# bought. The measurement that decides whether that happened is the `<w2400>` row of the sweep
+# against `medium-v4`'s own 1504.
+preset: medium
+init_from: checkpoints/medium-v4-20260919-174623/best.pt
+tokens_dir: data/tokens-elo/uci
+block: 200
+batch_size: 32
+grad_accum: 8 # 256 effective sequences of 200 tokens
+lr: 1.0e-4
+min_lr_ratio: 0.1
+warmup: 200
+max_steps: 3800
+weight_decay: 0.1
+betas: [0.9, 0.95]
+grad_clip: 1.0
+precision: bf16
+compile: true
+eval_every: 200
+eval_batches: 50
+ckpt_every: 500
+out_dir: checkpoints
+seed: 42
+run_name: medium-elo
+unique_run_name: true
+workers: 4
+log_every: 10
