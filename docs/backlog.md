@@ -50,3 +50,13 @@ Se limpia al cerrar cada hito; lo que entra en un plan sale de aquí.
   solo retira— y volver a correrlas con `--stage` cuesta su evaluación entera; además son
   mediciones de P3 y tirarlas es decisión de quien las hizo. **Cuándo:** con la reconstrucción de
   la tabla de P6, o antes si se vuelven a evaluar las cabezas por cualquier otro motivo.
+
+- **La escalera de Elo no es reproducible porque el rival va por tiempo.** Dos tiradas idénticas de
+  `medium-elo` a `<w1800>` dieron 1498 y 1558 (D-107): `chess.engine.Limit(time=0.1)` más
+  `UCI_LimitStrength` hacen que la semilla fije nuestro muestreo y no el suyo. El suelo de
+  reproducibilidad queda en unos 40 Elo de una sigma, que es más de lo que separa a las condiciones
+  contiguas de cualquier barrido. **La alternativa:** limitar por **nodos** en vez de por tiempo,
+  que además deja de depender de lo ocupada que esté la máquina. **Por qué se aplaza:** cambia el
+  rival, así que invalida todos los Elo publicados y obliga a recalibrar los ocho peldaños.
+  **Cuándo:** P6, junto con la reconstrucción de la tabla, y midiendo antes cuánto se estrecha de
+  verdad la reproducibilidad — que es el único motivo para pagar la recalibración.

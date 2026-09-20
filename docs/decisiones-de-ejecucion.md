@@ -1657,6 +1657,33 @@ Evidencia obtenida por el controlador, no por subagentes:
   modelo sin tratar. Si sube igual, la métrica no mide el tratamiento. Cuesta una hora de máquina y
   es la diferencia entre publicar un hallazgo y publicar un artefacto.
 
+### D-107 · La misma escalera, dos veces, con la misma semilla: 1498 y 1558
+- **Qué pasó:** `medium-elo` a `<w1800>` se midió dos veces por caminos distintos —la fila `@1800`
+  del barrido y la evaluación canónica— con **la misma** configuración en todo lo que afecta a las
+  partidas: mismos ocho peldaños, `elo_games: 20`, `elo_move_time: 0.1`, `seed: 42`, misma
+  temperatura, mismo `top_k`. Salió **0,4094 → 1498** en una y **0,4750 → 1558** en la otra.
+- **Por qué no es un fallo:** la semilla fija *nuestro* muestreo, no el de Stockfish. El rival juega
+  con un límite de **tiempo** (`chess.engine.Limit(time=0,1)`) y con `UCI_LimitStrength`, que además
+  aleatoriza a propósito para acertar el Elo pedido. Así que «las mismas 160 partidas» no son las
+  mismas partidas: son 160 partidas nuevas contra un rival que no se repite.
+- **Y el tamaño cuadra con la aritmética:** la diferencia de tasa es 0,0656 y el error típico de la
+  diferencia entre dos tiradas independientes de 160 partidas con `p ≈ 0,44` es
+  `sqrt(2 p (1-p) / 160) = 0,0555`. Son **1,18 σ**. Ruido de manual.
+- **Lo que esto significa para el hito:** el suelo de **reproducibilidad** del instrumento es de
+  unos 40 Elo de una sigma, es decir, unos ±80 al 95 %. Los pares contiguos del barrido están a 11,
+  40, 51 y 38 puntos. Están **por debajo de lo que el instrumento repite**, y eso no lo arregla
+  ninguna cantidad de partidas mientras el rival vaya por tiempo: lo arreglaría hacerlo
+  determinista (límite por **nodos** o por profundidad) y volver a calibrar la escalera. Es la misma
+  conclusión de D-100 vista desde el otro lado, y esta se puede enseñar con dos números.
+- **Qué se hace ahora:** nada en las mediciones —las dos son correctas y las dos se publican, cada
+  una diciendo de qué corrida sale—. La tabla única lleva la canónica (1558), que es la que
+  comparte suite con el resto de etapas; el barrido lleva la suya, que es la que comparte suite con
+  las otras cinco condiciones. Comparar **dentro** de una tirada es válido; comparar **entre**
+  tiradas es lo que este apunte existe para desaconsejar.
+- **La regla que deja:** antes de explicar una diferencia pequeña, mide cuánto se mueve tu montaje
+  cuando no cambias nada. Aquí no hubo que montar nada: bastó con que dos caminos distintos
+  midieran lo mismo sin querer.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
