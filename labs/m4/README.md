@@ -8,6 +8,7 @@ repository root.
 | `header_histogram.py` | a packed token stream | 1 · mirar el corpus antes de culpar al modelo |
 | `lora_check.py` | nothing (check 4 needs the `hf` extra) | 4 y 5 · LoRA a mano y la prueba contra `peft` |
 | `games_needed.py` | a sweep's `results.json` | 6 · ¿faltan partidas o no hay diferencia? |
+| `lora_spectrum.py` | a checkpoint and a trained adapter | 5 · el rango, medido con una SVD |
 
 Both are copies of the code the lesson shows, and both print the numbers the lesson quotes. If you
 edit one, edit the other.
@@ -71,3 +72,21 @@ Twenty-four thousand games is sixty hours of Stockfish to tighten an interval ar
 that is not there; two hundred and eighty-four is an hour. The two rows read the same on the
 report — "not separated" — and mean opposite things, which is the whole point of running this
 before deciding whether to re-run anything.
+
+## `lora_spectrum.py`
+
+"The correction has to pass through eight dimensions" is easy to write and easy to believe without
+checking. The check is one line of linear algebra: the singular values of `W` and of
+`delta W = (alpha / r) B A` for the same matrix.
+
+On the published `lora-e4`, over the query slice of `blocks.0.attn.qkv`:
+
+```
+  r = 8, alpha = 16, scale = 2.0
+  non-zero singular values: W 768, delta W 8
+  ||delta W||_F / ||W||_F = 0.0441
+  first singular values of delta W: [0.8338, 0.4277, 0.3592, 0.3211, 0.2811, 0.2302, 0.1991, 0.1774, 0.0, 0.0]
+```
+
+Eight, and the ninth is `0.0` rather than something small. It writes
+`artifacts/web/lora-spectrum.json`, which is what the lesson's `LoraSpectrum` figure draws.
