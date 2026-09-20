@@ -16,7 +16,7 @@ import torch
 from rukh.export.adapter import WEB_ADAPTER_FILE, WEB_ADAPTER_META
 from rukh.models import DecoderConfig, MoveDecoder
 from rukh.models.lora import ADAPTER_CONFIG, ADAPTER_FILE, LoraConfig, apply_lora, save_adapter
-from rukh.publish.adapter import AdapterEffect, adapter_params, publish_adapter
+from rukh.publish.adapter import AdapterCost, AdapterEffect, adapter_params, publish_adapter
 from rukh.publish.model import ModelPublishConfig
 
 pytestmark = pytest.mark.unit
@@ -85,8 +85,10 @@ def test_a_measured_adapter_publishes_what_it_changed_and_what_it_cost(
         first_move="e2e4",
         share_before=0.41,
         share_after=0.93,
-        elo_base=1504.0,
-        elo_adapted=1488.0,
+        cost=[
+            AdapterCost(metric="Legality without the mask", base=0.998, adapted=0.998),
+            AdapterCost(metric="Estimated Elo", base=1504.0, adapted=1488.0, unit="elo"),
+        ],
         entropy_before=1.7695,
         entropy_after=0.0209,
         train_games=200_000,

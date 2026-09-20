@@ -4,8 +4,26 @@
   "share_after": 0.9988288283348083,
   "entropy_before": 1.769469157122429,
   "entropy_after": 0.01601952259750735,
-  "elo_base": null,
-  "elo_adapted": null,
   "train_games": 200000,
-  "predicate": "split_part(uci, ' ', 1) = 'd2d4' AND white_elo >= 1800 AND black_elo >= 1800"
+  "predicate": "split_part(uci, ' ', 1) = 'd2d4' AND white_elo >= 1800 AND black_elo >= 1800",
+  "cost": [
+    {
+      "metric": "Legality without the mask, argmax",
+      "base": 0.998,
+      "adapted": 0.998,
+      "unit": "percent"
+    },
+    {
+      "metric": "Top-1 next move",
+      "base": 0.544,
+      "adapted": 0.551,
+      "unit": "percent"
+    },
+    {
+      "metric": "Puzzles solved",
+      "base": 0.375,
+      "adapted": 0.37266666666666665,
+      "unit": "percent"
+    }
+  ]
 }

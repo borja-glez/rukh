@@ -47,14 +47,15 @@ weights and two readings agree to the last decimal:
 Not measured yet.
 {%- endif %}
 
-{% if effect.elo_base is not none and effect.elo_adapted is not none -%}
-And what the style cost in strength, on the same Stockfish ladder as every other stage of the
-project:
+{% if cost -%}
+And what the style cost, on the same suite every other stage of the project is measured with --
+same validation positions, same puzzles, same seed:
 
-| | Elo |
-|---|---:|
-| `{{ base_repo }}` | {{ "%.0f"|format(effect.elo_base) }} |
-| with this adapter | {{ "%.0f"|format(effect.elo_adapted) }} |
+| | `{{ base_repo }}` | with this adapter |
+|---|---:|---:|
+{% for metric, before, after in cost -%}
+| {{ metric }} | {{ before }} | {{ after }} |
+{% endfor %}
 {%- endif %}
 
 ## How it was trained

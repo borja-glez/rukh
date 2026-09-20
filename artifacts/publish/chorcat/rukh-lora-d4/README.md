@@ -43,6 +43,14 @@ weights and two readings agree to the last decimal:
 | `chorcat/rukh-medium` | 26.68 % | 1.7695 bits |
 | with this adapter | 99.88 % | 0.0160 bits |
 
+And what the style cost, on the same suite every other stage of the project is measured with --
+same validation positions, same puzzles, same seed:
+
+| | `chorcat/rukh-medium` | with this adapter |
+|---|---:|---:|
+| Legality without the mask, argmax | 99.8 % | 99.8 % |
+| Top-1 next move | 54.4 % | 55.1 % |
+| Puzzles solved | 37.5 % | 37.3 % |
 
 
 ## How it was trained

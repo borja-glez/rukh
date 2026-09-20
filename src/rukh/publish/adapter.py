@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -36,10 +36,32 @@ from rukh.publish.model import README_NAME, ModelPublishConfig, _api, read_eval,
 
 log = logging.getLogger(__name__)
 
-__all__ = ["AdapterPublishResult", "publish_adapter", "publish_qwen_adapter"]
+__all__ = ["AdapterCost", "AdapterPublishResult", "publish_adapter", "publish_qwen_adapter"]
 
 REPO_TYPE = "model"
 ADAPTER_CARD_TEMPLATE = "adapter.md.jinja"
+
+
+class AdapterCost(BaseConfig):
+    """One metric read on the base model and on the adapted one: same suite, same seed.
+
+    The card's most important table, and the one an adapter published on its own would not have.
+    A style that changes the opening is easy; a style that changes the opening and nothing else
+    is the claim worth making, and it is only a claim if the "nothing else" is measured.
+    """
+
+    metric: str
+    base: float
+    adapted: float
+    unit: Literal["percent", "elo", "bits"] = "percent"
+
+    def render(self) -> tuple[str, str, str]:
+        """``(metric, base, adapted)`` as the card prints them."""
+        if self.unit == "percent":
+            return self.metric, f"{self.base * 100:.1f} %", f"{self.adapted * 100:.1f} %"
+        if self.unit == "elo":
+            return self.metric, f"{self.base:.0f}", f"{self.adapted:.0f}"
+        return self.metric, f"{self.base:.4f} bits", f"{self.adapted:.4f} bits"
 
 
 class AdapterEffect(BaseConfig):
@@ -56,8 +78,8 @@ class AdapterEffect(BaseConfig):
     something about the weights rather than about a draw. Counting self-play openings instead
     would answer the same question with sampling noise on top, which for a card is strictly
     worse: a published number that moves between runs invites the reader to average it."""
-    elo_base: float | None = None
-    elo_adapted: float | None = None
+    cost: list[AdapterCost] = []
+    """Every metric measured on both sides, in the order the card prints them."""
     entropy_before: float | None = None
     entropy_after: float | None = None
     """First-move entropy in bits, the same measurement in one number instead of one move."""
@@ -137,6 +159,7 @@ def publish_adapter(
             "params": params,
             "bytes": weights.stat().st_size,
             "effect": (effect or AdapterEffect()).model_dump(mode="json"),
+            "cost": [item.render() for item in (effect or AdapterEffect()).cost],
             "web_file": WEB_ADAPTER_FILE,
             "web_bytes": web.stat().st_size,
             "demo_url": cfg.demo_url,
