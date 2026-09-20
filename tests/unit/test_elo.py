@@ -312,3 +312,26 @@ def test_cache_key_separates_elo_headers() -> None:
     assert GameRecord(**base).item_id() == "uci-1320:7"
     assert GameRecord(**base, header_elo=2600).item_id() == "uci-1320:7:e2600"
     assert GameRecord(**base, header_elo=1800).item_id() == GameRecord(**base).item_id()
+
+
+def test_zero_games_plays_nothing_and_never_opens_an_engine() -> None:
+    """`elo_games: 0` is how a suite says "measure everything except the ladder".
+
+    It must not reach Stockfish at all: the style adapters of M4 are measured this way precisely
+    to avoid the hour the ladder costs, and a run that opened an engine and then played nothing
+    would still fail on a machine without one.
+    """
+    from rukh.eval import elo as module
+
+    def explode(*args: object, **kwargs: object) -> None:
+        raise AssertionError("zero games must not open an engine")
+
+    original = module.StockfishOpponent
+    module.StockfishOpponent = explode  # type: ignore[assignment]
+    try:
+        records = module.play_rungs(
+            None, UciTokenizer(), list(module.DEFAULT_RUNGS), 0, SampleConfig(), cache=None
+        )
+    finally:
+        module.StockfishOpponent = original  # type: ignore[assignment]
+    assert records == []
