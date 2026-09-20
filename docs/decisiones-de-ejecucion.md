@@ -1371,6 +1371,31 @@ Evidencia obtenida por el controlador, no por subagentes:
   muestreo y no depende de Stockfish. Si la escalera de Elo saliera ambigua, esto seguiría siendo
   evidencia de que la cabecera dejó de ser ruido.
 
+### D-092 · Un `<style>` de componente `.astro` no llega a una lección MDX, y nada avisa
+- **Qué pasó:** las tres figuras nuevas de M4 llevaban su CSS —incluidas las animaciones— en el
+  bloque `<style>` de su propio componente, que es lo que documenta Astro. Se construyeron sin
+  error, sin aviso y sin animación: en Chrome, `document.styleSheets` no contenía **ninguna** regla
+  de esos componentes, mientras que las de `global.css` sí estaban.
+- **Por qué no se había visto:** ninguna figura anterior del curso tenía `<style>`. Todas se
+  pintan con atributos SVG y tokens, así que el proyecto llevaba tres módulos sin tocar ese camino.
+- **Qué se hace:** el CSS de las figuras vive en `src/styles/global.css`, que es la misma regla que
+  ya seguían las islas (`.vb*`, `.tr*`). Y un e2e comprueba lo que un build verde no comprueba:
+  que cada figura tiene al menos un elemento con una animación corriendo.
+- **La clase de fallo:** silencioso y estético. No hay excepción que lo delate, y revisarlo en una
+  captura tampoco sirve si uno no sabe que debería moverse. La única defensa es una aserción sobre
+  `getComputedStyle(...).animationName`.
+
+### D-093 · Dos trampas de MDX que el navegador enseña y el build no
+- **Un `<Term>` al principio de línea parte el párrafo.** MDX trata una línea que empieza por `<`
+  como un bloque, así que cuando Prettier movió un `<Term>` al inicio de una línea, el párrafo que
+  lo contenía se convirtió en dos. Renderiza sin error y se lee como dos frases rotas. Hay un e2e
+  que falla si algún `<p>` de la prosa empieza en minúscula y no por código en línea.
+- **Las casillas de tarea son campos de formulario sin etiqueta.** Los `- [ ]` que se copiaron de
+  los documentos de plan renderizan como `<input type="checkbox">` sin `<label>`: **24 violaciones
+  críticas** de axe en una sola lección. Las lecciones de M2 y M3 no tienen ni una; usan viñetas.
+- **Los dos se detectaron en Chrome real**, no en `astro check` ni en el build, que pasaron los dos
+  en verde con la lección rota.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
