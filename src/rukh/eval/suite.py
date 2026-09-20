@@ -26,6 +26,7 @@ from rukh import paths
 from rukh.config import BaseConfig
 from rukh.eval.accuracy import AccuracyResult, accuracy
 from rukh.eval.cache import EvalCache, config_sha, file_sha
+from rukh.eval.diversity import DiversityResult, opening_diversity
 from rukh.eval.elo import DEFAULT_RUNGS, EloResult, EloRung, estimate, play_rungs
 from rukh.eval.legality import LegalityResult, legality, sample_positions
 from rukh.eval.puzzles import (
@@ -97,6 +98,14 @@ class EvalConfig(BaseConfig):
     elo_move_time: float = 0.1
     elo_max_plies: int | None = None
     bootstrap: int = 1_000
+    diversity_games: int = 200
+    """Self-play openings for the diversity metric; 0 switches it off."""
+    diversity_plies: int = 12
+    diversity_temperature: float = 1.0
+    """Read at its own temperature, not the suite's. The suite plays near-deterministically so
+    that stages are comparable (D-047), and at that setting a decoder plays one single opening
+    and the entropy is 0 for every model alike. Diversity only says something where there is a
+    choice to make, so it gets the temperature that leaves one."""
     temperature: float = 0.6
     top_k: int | None = 20
     block: int = 200
@@ -155,7 +164,10 @@ class SuiteResult(BaseModel):
     delta_cp: float | None = None
     """Mean centipawn loss; measured by a later milestone, ``null`` until then."""
     diversity: float | None = None
-    """Opening entropy over self-play games; measured by a later milestone."""
+    """Normalised opening entropy over self-play games, 0 (always the same) to 1 (never twice)."""
+    diversity_detail: DiversityResult | None = None
+    """The whole measurement: distinct lines, the analytic first-move entropy and the
+    temperature it was read at, which the normalised number alone would not carry."""
     notes: list[str] = []
     config: dict[str, Any] = {}
 
@@ -389,6 +401,20 @@ def evaluate(
                 notes.append(PUZZLE_PROMPT_NOTE)
         else:
             notes.append(f"puzzles not found at {puzzle_path}: puzzle suite skipped")
+        if cfg.diversity_games:
+            detail = opening_diversity(
+                model,
+                tok,
+                games=cfg.diversity_games,
+                plies=cfg.diversity_plies,
+                sampling=cfg.sampling().model_copy(
+                    update={"temperature": cfg.diversity_temperature}
+                ),
+                header_elo=cfg.header_elo,
+                seed=cfg.seed,
+            )
+            result.diversity_detail = detail
+            result.diversity = detail.normalised
         result.elo = _elo(model, tok, cfg, cache, notes)
         _elo_notes(result.elo, cfg, notes)
         result.notes = notes  # pydantic copied the list at construction time

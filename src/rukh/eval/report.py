@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from rukh.eval.diversity import DiversityResult
 from rukh.eval.elo import EloResult
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -55,6 +56,8 @@ class WebRow(BaseModel):
     elo_separated: bool = False
     delta_cp: float | None = None
     diversity: float | None = None
+    first_move_entropy: float | None = None
+    """The sampler-free half of the diversity measure; comparable across stages as-is."""
     date: str
     run_id: str | None = None
 
@@ -132,9 +135,49 @@ def row_of(result: SuiteResult) -> WebRow:
         elo_separated=bool(elo.separated) if elo else False,
         delta_cp=result.delta_cp,
         diversity=result.diversity,
+        first_move_entropy=(
+            result.diversity_detail.first_move_entropy_bits if result.diversity_detail else None
+        ),
         date=result.date,
         run_id=result.run_id,
     )
+
+
+def _diversity_section(detail: DiversityResult | None) -> list[str]:
+    """How varied the model's own openings are, and the two numbers that say it.
+
+    Split in two because they fail differently. The line entropy depends on the sampler -- at the
+    near-deterministic setting the stages are compared at, every decoder plays one opening and
+    scores 0 -- so it is read at its own temperature and always reported with it. The first-move
+    entropy has no sampler in it at all: it is the model's own distribution over the twenty legal
+    first moves, so it is the one to compare across stages.
+    """
+    if detail is None:
+        return []
+    top_k = "none" if detail.top_k is None else str(detail.top_k)
+    lines = [
+        "## Opening diversity",
+        "",
+        f"{detail.games} self-play openings of {detail.plies} plies, drawn at temperature "
+        f"{detail.temperature} with top-k {top_k}. **Not** the suite's sampling: at the "
+        "near-deterministic setting every stage plays one single opening and scores 0, which "
+        "measures the sampler and not the weights (D-047).",
+        "",
+        "| Metric | Value |",
+        "|---|---:|",
+        f"| Distinct opening lines | {detail.distinct_lines} of {detail.games} |",
+        f"| Line entropy | {detail.entropy_bits:.3f} bits of {detail.max_entropy_bits:.3f} |",
+        f"| Normalised | {detail.normalised:.3f} |",
+        f"| First-move entropy (no sampling) | {detail.first_move_entropy_bits:.3f} bits |",
+        "",
+        "Most played lines:",
+        "",
+        "| Line | Games |",
+        "|---|---:|",
+    ]
+    lines.extend(f"| `{line}` | {count} |" for line, count in detail.top_lines)
+    lines.append("")
+    return lines
 
 
 def encoder_row_of(result: EncoderResult) -> EncoderWebRow:
@@ -250,6 +293,7 @@ def render_markdown(result: SuiteResult) -> str:
             "",
         ]
     )
+    lines.extend(_diversity_section(result.diversity_detail))
 
     if result.legality_argmax is not None or result.legality_sampled is not None:
         lines.extend(

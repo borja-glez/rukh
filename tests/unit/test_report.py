@@ -158,6 +158,7 @@ def test_the_web_row_holds_the_columns_of_the_single_table() -> None:
         "elo_separated": False,
         "delta_cp": None,
         "diversity": None,
+        "first_move_entropy": None,
         "date": "2026-09-19",
         "run_id": "run-1",
     }
@@ -186,3 +187,36 @@ def test_a_corrupt_table_is_replaced_rather_than_crashing(tmp_path: Path) -> Non
     path.write_text("not json", encoding="utf-8")
     rows = upsert_row(path, WebRow(stage="tiny", params=1, date="2026-09-19"))
     assert [row["stage"] for row in rows] == ["tiny"]
+
+
+def test_the_diversity_section_names_the_temperature_it_was_read_at() -> None:
+    """The number is meaningless without it: at the suite's sampling every stage scores 0."""
+    from rukh.eval.diversity import DiversityResult
+
+    detail = DiversityResult(
+        games=200,
+        plies=12,
+        distinct_lines=137,
+        entropy_bits=6.4,
+        max_entropy_bits=7.643856189774724,
+        normalised=0.8372,
+        first_move_entropy_bits=1.85,
+        temperature=1.0,
+        top_k=20,
+        top_lines=[("e2e4 e7e5", 12), ("d2d4 d7d5", 9)],
+    )
+    markdown = render_markdown(
+        result().model_copy(update={"diversity": 0.8372, "diversity_detail": detail})
+    )
+    assert "## Opening diversity" in markdown
+    assert "temperature 1.0" in markdown
+    assert "| Distinct opening lines | 137 of 200 |" in markdown
+    assert "| First-move entropy (no sampling) | 1.850 bits |" in markdown
+    assert "| `e2e4 e7e5` | 12 |" in markdown
+    assert "| Opening diversity | 0.837 |" in markdown
+
+
+def test_a_stage_without_a_diversity_measurement_writes_no_section() -> None:
+    markdown = render_markdown(result())
+    assert "## Opening diversity" not in markdown
+    assert "| Opening diversity | n/a |" in markdown
