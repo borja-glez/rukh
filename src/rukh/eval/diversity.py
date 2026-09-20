@@ -81,7 +81,9 @@ def shannon_entropy(counts: dict[str, int] | Counter[str]) -> float:
     total = sum(counts.values())
     if total <= 0:
         return 0.0
-    return -sum((n / total) * math.log2(n / total) for n in counts.values() if n > 0)
+    bits = -sum((n / total) * math.log2(n / total) for n in counts.values() if n > 0)
+    # A single outcome gives `-1 * log2(1)`, which is negative zero and renders as "-0.000".
+    return 0.0 if bits == 0 else bits
 
 
 @torch.no_grad()

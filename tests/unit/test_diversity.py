@@ -196,3 +196,12 @@ def test_a_collapsed_repertoire_shows_up_as_a_share_near_one() -> None:
     probs = first_move_distribution(Narrow(base.cfg).eval(), tok)
     assert probs["d2d4"] == pytest.approx(1.0, abs=1e-6)
     assert probs["e2e4"] < 1e-6
+
+
+def test_a_single_outcome_is_zero_and_not_negative_zero() -> None:
+    """`-1 * log2(1)` is negative zero, and a report that prints "-0.000" looks like a bug."""
+    from rukh.eval.diversity import shannon_entropy
+
+    value = shannon_entropy(Counter({"a": 200}))
+    assert value == 0.0
+    assert f"{value:.3f}" == "0.000"

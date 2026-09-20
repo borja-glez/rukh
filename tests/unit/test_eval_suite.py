@@ -195,3 +195,25 @@ def test_metric_names_survive_mlflow_validation() -> None:
     allowed = set(string.ascii_letters + string.digits + "_-. /")
     for band in ("<1800", "1800-2000", "2600+"):
         assert set(_metric_name("top1", band)) <= allowed
+
+
+def test_diversity_gets_its_own_top_k_and_not_just_its_own_temperature() -> None:
+    """`top_k: 1` is argmax whatever the temperature says.
+
+    Overriding the temperature alone would produce something that looks like a diversity
+    measurement and is a second copy of the deterministic one: one line, entropy zero, for every
+    model alike.
+    """
+    from rukh.eval.suite import EvalConfig
+
+    cfg = EvalConfig(temperature=0.05, top_k=1, diversity_temperature=1.0, diversity_top_k=20)
+    assert cfg.sampling().top_k == 1  # what the Elo games and the puzzles read at
+    assert cfg.diversity_top_k == 20  # what the openings are drawn at
+
+
+def test_the_shipped_sweep_config_reads_diversity_where_there_is_a_choice(repo_root: Path) -> None:
+    from rukh.eval import load_suite
+
+    cfg = load_suite("full", repo_root / "configs" / "eval" / "greedy-sweep.yaml")
+    assert (cfg.temperature, cfg.top_k) == (0.05, 1)
+    assert (cfg.diversity_temperature, cfg.diversity_top_k) == (1.0, 20)

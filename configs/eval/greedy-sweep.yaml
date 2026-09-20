@@ -27,6 +27,7 @@ header_elo: 1800
 diversity_games: 200
 diversity_plies: 12
 diversity_temperature: 1.0
+diversity_top_k: 20
 out_dir: artifacts/eval
 web_results: null
 cache_db: artifacts/eval/cache-sweep.sqlite

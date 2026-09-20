@@ -112,6 +112,10 @@ class EvalConfig(BaseConfig):
     that stages are comparable (D-047), and at that setting a decoder plays one single opening
     and the entropy is 0 for every model alike. Diversity only says something where there is a
     choice to make, so it gets the temperature that leaves one."""
+    diversity_top_k: int | None = 20
+    """And its own top-k, for the same reason and a sharper one: the suite reads at ``top_k: 1``,
+    which is argmax whatever the temperature says. Overriding the temperature alone would look
+    like a diversity measurement and be a second copy of the deterministic one."""
     temperature: float = 0.6
     top_k: int | None = 20
     block: int = 200
@@ -425,7 +429,10 @@ def evaluate(
                 games=cfg.diversity_games,
                 plies=cfg.diversity_plies,
                 sampling=cfg.sampling().model_copy(
-                    update={"temperature": cfg.diversity_temperature}
+                    update={
+                        "temperature": cfg.diversity_temperature,
+                        "top_k": cfg.diversity_top_k,
+                    }
                 ),
                 header_elo=cfg.header_elo,
                 seed=cfg.seed,
