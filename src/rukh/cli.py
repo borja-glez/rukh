@@ -1190,6 +1190,75 @@ def publish_model_cmd(
         typer.echo(f"  {path}")
 
 
+@publish_app.command("adapter")
+def publish_adapter_cmd(
+    run_dir: Annotated[
+        Path,
+        typer.Option(
+            "--run", exists=True, file_okay=False, help="Training run folder with the adapter."
+        ),
+    ],
+    repo: Annotated[str, typer.Option("--repo", help="Hub repository, e.g. chorcat/rukh-lora-e4.")],
+    base: Annotated[
+        str, typer.Option("--base", help="Repository of the model this adapter mounts on.")
+    ],
+    stage: Annotated[str | None, typer.Option("--stage", help="Name of the adapter.")] = None,
+    effect: Annotated[
+        Path | None,
+        typer.Option(
+            "--effect",
+            exists=True,
+            dir_okay=False,
+            help="JSON with what the adapter changed (AdapterEffect).",
+        ),
+    ] = None,
+    n_layer: Annotated[int, typer.Option("--n-layer", help="Layers of the base model.")] = 16,
+    d_model: Annotated[int, typer.Option("--d-model", help="Width of the base model.")] = 768,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Stage the folder locally; touch no network.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Publish a LoRA adapter as its own repository, with the base model it needs to work.
+
+    An adapter is not a model: no weights, no ONNX, no vocabulary, and on its own it does nothing
+    at all. So the card leads with the base model, and the numbers it publishes are what the
+    adapter *changed* -- publishing it with the base model's Elo would be publishing somebody
+    else's number.
+    """
+    from rukh.publish.adapter import AdapterEffect, publish_adapter
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    measured = (
+        AdapterEffect.model_validate_json(effect.read_text(encoding="utf-8"))
+        if effect is not None
+        else None
+    )
+    try:
+        result = publish_adapter(
+            run_dir,
+            repo,
+            base,
+            stage=stage,
+            effect=measured,
+            base_config={"n_layer": n_layer, "d_model": d_model},
+            dry_run=dry_run,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(f"repo:     {result.repo_id}")
+    typer.echo(f"base:     {result.base_repo}")
+    typer.echo(f"mode:     {'dry-run (staged, nothing uploaded)' if dry_run else 'uploaded'}")
+    typer.echo(f"params:   {result.params:,} ({result.bytes / 1048576:.1f} MB)")
+    typer.echo(f"folder:   {result.folder}")
+    for path in result.files:
+        typer.echo(f"  {path}")
+
+
 @mlflow_app.command("ui")
 def mlflow_ui(
     host: Annotated[str, typer.Option("--host", help="Interface to bind.")] = "127.0.0.1",
