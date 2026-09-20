@@ -12,7 +12,7 @@ tags:
 # {{ repo_id }}
 
 A LoRA adapter for [`{{ base_repo }}`](https://huggingface.co/{{ base_repo }}). On its own it does
-nothing: it is {{ "{:,}".format(params) }} numbers ({{ "%.1f"|format(bytes / 1048576) }} MB) that
+nothing: it is {{ "{:,}".format(params) }} numbers ({{ "%.1f"|format(bytes / 1e6) }} MB) that
 correct that model's weights, and without them there is no model to correct.
 
 Written by hand rather than imported, as part of [Rukh]({{ repository_url }}), a course that builds
@@ -26,7 +26,7 @@ a chess language model end to end. How it works and why: [{{ course_url }}]({{ c
 | Scaling `alpha` | {{ lora.alpha }} ({{ lora.alpha }}/{{ lora.r }} applied to `B·A`) |
 | Adapted matrices | `{{ targets }}`, in every block |
 | Trainable parameters | {{ "{:,}".format(params) }} |
-| File size | {{ "%.1f"|format(bytes / 1048576) }} MB |
+| File size | {{ "%.1f"|format(bytes / 1e6) }} MB |
 
 The base weights never move. Everything outside `A` and `B` is frozen during training, which is
 what makes the file this small and what limits what it can learn: the correction has to pass

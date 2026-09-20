@@ -1292,7 +1292,7 @@ def publish_adapter_cmd(
     typer.echo(f"repo:     {result.repo_id}")
     typer.echo(f"base:     {result.base_repo}")
     typer.echo(f"mode:     {'dry-run (staged, nothing uploaded)' if dry_run else 'uploaded'}")
-    typer.echo(f"params:   {result.params:,} ({result.bytes / 1048576:.1f} MB)")
+    typer.echo(f"params:   {result.params:,} ({result.bytes / 1e6:.1f} MB)")
     typer.echo(f"folder:   {result.folder}")
     for path in result.files:
         typer.echo(f"  {path}")
@@ -1330,7 +1330,7 @@ def publish_qwen_cmd(
     typer.echo(f"repo:     {result.repo_id}")
     typer.echo(f"base:     {result.base_repo}")
     typer.echo(f"mode:     {'dry-run (card written, nothing uploaded)' if dry_run else 'uploaded'}")
-    typer.echo(f"trained:  {result.params:,} parameters ({result.bytes / 1048576:.1f} MB)")
+    typer.echo(f"trained:  {result.params:,} parameters ({result.bytes / 1e6:.1f} MB)")
     typer.echo(f"card:     {result.card_path}")
     for path in result.files:
         typer.echo(f"  {path}")

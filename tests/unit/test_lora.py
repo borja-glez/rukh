@@ -159,8 +159,8 @@ def test_the_adapter_is_a_rounding_error_next_to_the_published_model() -> None:
 
     The toy decoder of these tests is 39 k parameters and two thirds of that is the embedding
     table, so its ratio says nothing. `medium` is the size the claim is about: r=8 on query and
-    value across 16 layers of `d_model` 768 is 393 216 numbers, 0.34 % of 115 M, which is the
-    1.6 MB file the demo downloads instead of a second copy of the weights.
+    value across 16 layers of `d_model` 768 is 393 216 numbers, 0.34 % of 115 M -- 1 572 864 bytes,
+    the 1.6 MB file a reader downloads instead of a second copy of the weights.
     """
     cfg = LoraConfig(r=8, alpha=16, targets=("q", "v"))
     medium = preset("medium")
@@ -168,7 +168,7 @@ def test_the_adapter_is_a_rounding_error_next_to_the_published_model() -> None:
     published_params = 115_120_128  # `medium`, as every card and report of the project says
     assert adapter == 393_216
     assert adapter / published_params < 0.004
-    assert adapter * 4 / 1024**2 == pytest.approx(1.5, abs=0.1)  # MB in float32
+    assert adapter * 4 == 1_572_864  # bytes in float32: 1.6 MB, the size of the published file
 
 
 def test_gradients_reach_the_factors_and_nothing_else() -> None:
