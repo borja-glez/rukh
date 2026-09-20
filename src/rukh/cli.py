@@ -708,6 +708,67 @@ def eval_cmd(
         typer.echo(f"table:    {report.web}")
 
 
+@eval_app.command("qwen")
+def eval_qwen_cmd(
+    adapter: Annotated[
+        Path,
+        typer.Option(
+            "--adapter", exists=True, file_okay=False, help="Directory of the fine-tuned adapter."
+        ),
+    ],
+    suite: Annotated[str, typer.Option("--suite", help="Suite name: full or quick.")] = "full",
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Suite YAML override."
+        ),
+    ] = None,
+    stage: Annotated[str, typer.Option("--stage", help="Row name in the results table.")] = (
+        "qwen3-pgn-qlora"
+    ),
+    no_cache: Annotated[bool, typer.Option("--no-cache", help="Recompute everything.")] = False,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """Put a fine-tuned general model through the decoder's own suite.
+
+    Same positions, same puzzles, same Stockfish ladder. The one column this report has and the
+    decoder's does not is the breakdown of *how* its answers failed: a model writing SAN can write
+    something that is not a move, or a move two pieces could make, and neither is possible for a
+    vocabulary in which one token is one move.
+    """
+    from rukh.eval import load_suite
+    from rukh.eval.qwen_suite import run_qwen_suite
+    from rukh.eval.report import elo_line
+    from rukh.eval.suite import SUITES
+
+    if suite not in SUITES:
+        typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
+        raise typer.Exit(code=2)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_suite(suite, config)
+    try:
+        result, report = run_qwen_suite(
+            adapter, cfg, stage=stage, use_cache=not no_cache, device=device
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    stats = result.written
+    typer.echo(f"stage:    {result.stage} ({result.params:,} parameters)")
+    typer.echo(f"legal:    {stats.legal_rate:.4f} of {stats.asked} answers")
+    typer.echo(
+        f"failures: {stats.illegal} illegal, {stats.unparseable} not a move, "
+        f"{stats.ambiguous} ambiguous, {stats.empty} empty"
+    )
+    if result.top1 is not None:
+        typer.echo(f"accuracy: top1 {result.top1:.4f}")
+    if result.puzzles is not None:
+        typer.echo(f"puzzles:  {result.puzzles.rate:.4f} solved")
+    if result.elo is not None:
+        typer.echo(f"elo:      {elo_line(result.elo)} over {result.elo.games} games")
+    typer.echo(f"report:   {report.markdown}")
+
+
 @eval_app.command("sweep")
 def eval_sweep_cmd(
     model: Annotated[
