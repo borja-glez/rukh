@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -35,19 +36,39 @@ def _cfg(**overrides: object) -> FetchConfig:
     return FetchConfig(months=MONTHS, **overrides)  # type: ignore[arg-type]
 
 
-def _write_hive_source(rukh_home: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Write the fake rows under the real ``year=YYYY/month=MM`` layout; point ``_source`` at it."""
+def _write_hive_source(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch, shards: int = 1
+) -> list[Path]:
+    """Stand in for the Hub: ``shards`` local parquets, and no network anywhere in the run.
+
+    The fetch downloads a shard at a time now, so the two seams a test has to hold are the
+    listing (which shards exist) and the download (where one landed). Nothing else is faked: the
+    filter, the part files and the merge are the real ones.
+    """
     import duckdb
 
     from rukh.data import fetch as fetch_module
 
-    source_dir = rukh_home / "source" / "year=2025" / "month=01"
-    source_dir.mkdir(parents=True)
-    duckdb.sql(FAKE_ROWS).write_parquet((source_dir / "part-0.parquet").as_posix())
-    monkeypatch.setattr(
-        fetch_module, "_source", lambda cfg, month: (source_dir / "*.parquet").as_posix()
-    )
-    return source_dir
+    source_dir = rukh_home / "source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for index in range(shards):
+        path = source_dir / f"shard-{index}.parquet"
+        duckdb.sql(FAKE_ROWS).write_parquet(path.as_posix())
+        written.append(path)
+    names = [f"data/year=2025/month=01/train-{i:05d}.parquet" for i in range(shards)]
+    downloads = rukh_home / "downloads"
+    downloads.mkdir(exist_ok=True)
+
+    def fake_download(cfg: object, shard: str) -> Path:
+        """A download is a *copy*: the run deletes what it downloaded, and must not eat the Hub."""
+        target = downloads / Path(shard).name
+        shutil.copy(written[names.index(shard)], target)
+        return target
+
+    monkeypatch.setattr(fetch_module, "month_shards", lambda cfg, month: list(names))
+    monkeypatch.setattr(fetch_module, "_download", fake_download)
+    return written
 
 
 def _read_output(path: Path) -> tuple[list[str], list[tuple[object, ...]]]:
@@ -288,3 +309,87 @@ def test_run_drops_correspondence_games_instead_of_aborting(
     columns, rows = _read_output(rukh_home / "data" / "raw" / fetch_plan.out_paths[0])
     events = [row[columns.index("Event")] for row in rows]
     assert events == ["Rated Blitz game", "Rated Blitz game"]
+
+
+def test_the_limit_stops_the_download_not_only_the_result(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """For a slice of the rating range this is the difference between 8 shards and 72.
+
+    Each shard is about a gigabyte, so a limit that only trimmed the answer would still pay for
+    the whole month in bandwidth and in time.
+    """
+    from rukh.data import fetch as fetch_module
+
+    _write_hive_source(rukh_home, monkeypatch, shards=5)
+    asked: list[str] = []
+    real = fetch_module._download
+    monkeypatch.setattr(
+        fetch_module,
+        "_download",
+        lambda cfg, shard: (asked.append(shard), real(cfg, shard))[1],
+    )
+    run(FetchConfig(months=["2025-01"], limit=2))
+    assert len(asked) == 2  # one row survives the filter per shard; two shards is enough
+    counts = json.loads((rukh_home / "data" / "raw" / "manifest.json").read_text())["counts"]
+    assert counts == {"2025-01": 2}
+
+
+def test_an_interrupted_month_resumes_at_the_shard_it_stopped_on(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from rukh.data import fetch as fetch_module
+
+    _write_hive_source(rukh_home, monkeypatch, shards=3)
+    month_dir = rukh_home / "data" / "raw" / "year=2025" / "month=01"
+    parts = month_dir / "parts"
+    parts.mkdir(parents=True)
+    # What a run that died after its first shard leaves behind.
+    shutil.copy(rukh_home / "source" / "shard-0.parquet", parts / "part-00000.parquet")
+
+    asked: list[str] = []
+    real = fetch_module._download
+    monkeypatch.setattr(
+        fetch_module,
+        "_download",
+        lambda cfg, shard: (asked.append(shard), real(cfg, shard))[1],
+    )
+    run(FetchConfig(months=["2025-01"]))
+    assert [Path(name).name for name in asked] == ["train-00001.parquet", "train-00002.parquet"]
+    assert not parts.exists()  # the parts are cleaned up once the month is merged
+
+
+def test_a_downloaded_shard_is_deleted_once_it_has_been_filtered(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A month is 72 GB of shards and the filtered result is a few. Peak disk is one shard."""
+    _write_hive_source(rukh_home, monkeypatch, shards=3)
+    run(FetchConfig(months=["2025-01"]))
+    assert not list((rukh_home / "downloads").glob("*.parquet"))
+
+
+def test_keep_shards_leaves_them_for_a_second_pass(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_hive_source(rukh_home, monkeypatch, shards=2)
+    run(FetchConfig(months=["2025-01"], keep_shards=True))
+    assert len(list((rukh_home / "downloads").glob("*.parquet"))) == 2
+
+
+def test_a_month_the_dataset_does_not_have_says_so(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from rukh.data import fetch as fetch_module
+
+    monkeypatch.setattr(fetch_module, "month_shards", lambda cfg, month: [])
+    with pytest.raises(FileNotFoundError, match="no parquet shards"):
+        run(FetchConfig(months=["2025-01"]))
+
+
+def test_a_filter_that_keeps_nothing_is_an_error_not_an_empty_file(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty games.parquet downstream would look like a corpus, and it is a failed fetch."""
+    _write_hive_source(rukh_home, monkeypatch)
+    with pytest.raises(RuntimeError, match="passed the filter"):
+        run(FetchConfig(months=["2025-01"], min_elo=3000))
