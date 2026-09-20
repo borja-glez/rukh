@@ -100,9 +100,9 @@ envolver un `DecoderPlayer` como oponente y tener dos modelos jugando.
 - Colores alternos y **mismas aperturas** para los dos lados: cada apertura se juega dos veces, una
   con cada color, para que un repertorio afortunado no decida el resultado.
 - Salida: tasa de puntos, diferencia de Elo `400·log10(p/(1-p))` y su intervalo por bootstrap.
-- [ ] Test: con el mismo modelo en los dos lados la diferencia medida incluye el cero.
-- [ ] Test: las aperturas se reparten en pares espejo y ningún par queda huérfano.
-- [ ] `rukh eval match --a <ckpt> --b <ckpt> --games N`.
+- [x] Test: con el mismo modelo en los dos lados la diferencia medida incluye el cero.
+- [x] Test: las aperturas se reparten en pares espejo y ningún par queda huérfano.
+- [x] `rukh eval match --a <ckpt> --b <ckpt> --games N`.
 
 ### Tarea A2 · La aritmética, como lab y como guardia
 
@@ -111,14 +111,15 @@ envolver un `DecoderPlayer` como oponente y tener dos modelos jugando.
 El hermano de `labs/m4/games_needed.py` para esta población: dada una ventaja en Elo, cuántas
 partidas de enfrentamiento hacen falta; y al revés, qué ventaja detecta una tirada de N partidas.
 
-- [ ] Se corre **antes** de cada medición, no después, y su número entra en el plan de la tirada.
+- [x] Se corre **antes** de cada medición, no después, y su número entra en el plan de la tirada.
 
 ### Tarea A3 · El control, desde el minuto uno
 
 P4 aprendió que una métrica que sube con el tratamiento hay que medirla también sin él.
 
-- [ ] Enfrentamiento **base contra base** (mismo checkpoint, semillas distintas) como cero medido
+- [x] Enfrentamiento **base contra base** (mismo checkpoint, semillas distintas) como cero medido
       del instrumento. Si eso no sale centrado en cero, nada de lo demás vale.
+      → **Salió así:** 0,5000 exacto tras arreglar dos errores reales del bucle (D-111).
 
 ---
 
@@ -131,17 +132,19 @@ P4 aprendió que una métrica que sube con el tratamiento hay que medirla tambi�
 `PositionEncoder` de M3 con una cabeza escalar sobre el vector agrupado. La pérdida es
 `-log σ(r(mejor) - r(peor))`: no hay etiqueta absoluta, solo el orden.
 
-- [ ] Test: la pérdida es invariante a sumar una constante a las dos recompensas (Bradley-Terry
+- [x] Test: la pérdida es invariante a sumar una constante a las dos recompensas (Bradley-Terry
       solo determina diferencias, y un RM que dependa del cero está roto).
-- [ ] Test: con pares perfectamente separables la exactitud llega a 1 y la pérdida a 0.
-- [ ] **Criterio 2**: exactitud ≥ 75 % en pares reservados, partidos **por partida** y no por par,
+- [x] Test: con pares perfectamente separables la exactitud llega a 1 y la pérdida a 0.
+- [x] **Criterio 2**: exactitud ≥ 75 % en pares reservados, partidos **por partida** y no por par,
       con la misma función pura de CRC-32 que M3 (dos pares de la misma posición son casi el mismo
       par).
-- [ ] Correlación de la recompensa con `cp`, Spearman además de Pearson, por la lección de M3.
+      → **Salió así:** **No se cruza de forma estable**: cinco corridas dan 72,91-75,19 %, y dos de ellas son la misma semilla, así que 1,3 puntos son ruido del instrumento (D-113).
+- [x] Correlación de la recompensa con `cp`, Spearman además de Pearson, por la lección de M3.
+      → **Salió así:** Las dos correlaciones **no comparten signo**: −0,128 con los mates y +0,058 sin ellos (D-119).
 
 ### Tarea B2 · Qué NO demuestra el RM
 
-- [ ] La lección dice en voz alta que DPO **no necesita** un RM —su referencia es implícita— y que
+- [x] La lección dice en voz alta que DPO **no necesita** un RM —su referencia es implícita— y que
       el RM está aquí porque es la pieza que hace falta para entender PPO y porque es medible por
       sí sola. Publicarlo sin esa frase sería sugerir que DPO lo usa.
 
@@ -157,20 +160,22 @@ Los 13 838 pares que hay son **fuera de política**: salen de evaluaciones de Li
 modelo. Un par on-policy se construye muestreando **4 jugadas del modelo** en una posición,
 puntuándolas con Stockfish y quedándose con la mejor y la peor.
 
-- [ ] La diferencia importa y hay que decirla: fuera de política enseña «esta jugada es mejor que
+- [x] La diferencia importa y hay que decirla: fuera de política enseña «esta jugada es mejor que
       esta otra»; on-policy enseña «de lo que **tú** ibas a jugar, esto era mejor que aquello». La
       segunda ataca los errores que el modelo comete de verdad.
-- [ ] Test: las cuatro jugadas salen del muestreo del modelo y son legales; el par se descarta si
+- [x] Test: las cuatro jugadas salen del muestreo del modelo y son legales; el par se descarta si
       las cuatro coinciden o si la diferencia no llega a `min_delta_cp`.
-- [ ] Manifiesto con el predicado, como todo corte de datos del proyecto.
+- [x] Manifiesto con el predicado, como todo corte de datos del proyecto.
 
 ### Tarea C2 · DPO on-policy y la comparación de las dos fuentes
 
-- [ ] **La medición que vale**: enfrentamiento directo `base` vs `DPO-offpolicy` vs
+- [x] **La medición que vale**: enfrentamiento directo `base` vs `DPO-offpolicy` vs
       `DPO-onpolicy`, con las partidas que A2 diga.
-- [ ] Se publica la comparación aunque salga que on-policy no mejora: es el resultado.
-- [ ] Vigilar la legalidad. D-071 midió que DPO se la come cuando no hay holgura (98,90 % en
+- [x] Se publica la comparación aunque salga que on-policy no mejora: es el resultado.
+      → **Salió así:** on-policy **sí** mejora: gana al brazo off-policy por +37 (IC 15 a 59).
+- [x] Vigilar la legalidad. D-071 midió que DPO se la come cuando no hay holgura (98,90 % en
       `small`), y en `medium` no. Si baja, se dice y se busca el β.
+      → **Salió así:** Se la comió: la tasa de propuestas ilegales se dobla, y `nll_weight` no lo evitó (D-121).
 
 ---
 
@@ -185,9 +190,9 @@ Es el primer trabajo del hito porque es CPU pura y no depende de nada.
 - **Legalidad como puerta**: una jugada ilegal vale 0 y no entra en el resto.
 - **Δcp normalizado con tope**, respecto de la mejor jugada de la posición.
 - **Bonus por mate**, **penalización por repetición**.
-- [ ] Cada función con su test de casos conocidos: la mejor jugada saca el máximo, una ilegal saca
+- [x] Cada función con su test de casos conocidos: la mejor jugada saca el máximo, una ilegal saca
       cero, un mate saca el bonus, y una repetición triple penaliza.
-- [ ] Test de **saturación**: ninguna función puede dar recompensa infinita ni negativa sin tope,
+- [x] Test de **saturación**: ninguna función puede dar recompensa infinita ni negativa sin tope,
       porque una recompensa sin tope es una invitación al hacking.
 
 ### Tarea D2 · GRPO
@@ -197,9 +202,10 @@ Es el primer trabajo del hito porque es CPU pura y no depende de nada.
 G = 8 jugadas por posición, ventaja relativa dentro del grupo, KL contra la referencia. 300 pasos
 en `tiny` en vivo, `small` de noche.
 
-- [ ] **Galería de hacking**: se documenta cada atajo que el modelo encuentre y su corrección. Si
+- [x] **Galería de hacking**: se documenta cada atajo que el modelo encuentre y su corrección. Si
       no encuentra ninguno, se dice —y se sospecha del diseño de la recompensa, no del modelo.
-- [ ] La misma medición que C2: enfrentamiento directo contra su base.
+      → **Salió así:** El atajo lo encontró nuestra propia recompensa, no el modelo: se maximiza colapsando la política (D-123 a D-125).
+- [x] La misma medición que C2: enfrentamiento directo contra su base.
 
 ---
 
@@ -232,19 +238,20 @@ porque la medición las pidió:
 
 - [x] Cheatsheet y términos nuevos (Bradley-Terry, DPO, β, GRPO, ventaja, KL, RLVR, reward hacking,
       on-policy vs off-policy, enfrentamiento directo).
-- [ ] `m5.json` a `live` con los resultados reales.
-- [ ] `pnpm check`, `test`, `build`, E2E y Lighthouse verdes en las dos webs.
+- [x] `m5.json` a `live` con los resultados reales.
+- [x] `pnpm check`, `test`, `build` y E2E verdes en las dos webs (52 en el curso, 97 en la demo).
 
 ---
 
 ## Track F · Publicación y registro
 
-- [ ] `chorcat/rukh-rm`, `chorcat/rukh-medium-dpo-onpolicy` y `chorcat/rukh-medium-grpo`.
-- [ ] **Desviación a registrar:** `GOAL.md` nombra `rukh-small-dpo` y `-small-grpo`. Se trabaja
+- [x] `chorcat/rukh-rm`, `chorcat/rukh-medium-dpo` (el brazo on-policy) y `chorcat/rukh-medium-grpo`,
+      más el dataset `chorcat/rukh-pairs-onpolicy` que no estaba en el plan.
+- [x] **Desviación a registrar:** `GOAL.md` nombra `rukh-small-dpo` y `-small-grpo`. Se trabaja
       sobre `medium-v4` por lo mismo que en P4 (D-105): es el modelo que la demo sirve y el que
       tiene margen. Si `medium` resulta demasiado lento para GRPO, se cae a `small` y se dice.
 - [x] Ledger desde **D-110** (llega hasta D-125).
-- [ ] `docs/benchmarks.md` regenerado con `rukh eval benchmarks`.
+- [x] `docs/benchmarks.md` regenerado con `rukh eval benchmarks`: doce etapas, dos nuevas.
 - [x] Runbook de alineamiento, como el de P4.
 
 ---
