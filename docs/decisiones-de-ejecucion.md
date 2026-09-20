@@ -2120,6 +2120,26 @@ Evidencia obtenida por el controlador, no por subagentes:
   forma —sube, se dobla, baja— es lo que distingue «mejora» de «sobreoptimización», y con un solo
   ajuste no se ve ninguna de las dos.
 
+### D-126 · Qué GRPO se publica, y por qué el que gana más Elo no es el que sale
+- **Las dos corridas largas, medidas en el tablero:**
+
+  | corrida | Elo sobre la base | ilegales propios | grupos planos | KL |
+  |---|---|---|---|---|
+  | GRPO lr 1e-6 | **+44** (IC 23 a 66, 800 partidas) | 1,92 % · **1,66×** la base | 0,472 | 0,122 |
+  | GRPO lr 5e-6 | **+54** (IC 25 a 85, 400 partidas) | 3,12 % · **2,08×** la base | 0,560 | 0,555 |
+
+- **La lectura:** diez puntos de Elo más a cambio de duplicar el peaje de legalidad y multiplicar
+  la KL por cuatro. Y esos diez puntos **no están establecidos**: los intervalos se solapan casi
+  enteros, así que la diferencia entre las dos corridas es del orden del ruido. El coste, en cambio,
+  sí está medido y no se solapa.
+- **Qué se publica:** la de **1e-6**. Cuando una ganancia está dentro del ruido y un coste no, se
+  paga el coste más pequeño.
+- **Y se dice lo que es:** un punto elegido de una curva, no un óptimo encontrado. La curva de
+  D-125 sube, se dobla y baja, y el indicador de colapso sube en todo su recorrido; dónde pararse
+  es una decisión que hay que declarar, no un resultado que se descubre.
+- **La regla que deja:** cuando dos configuraciones se diferencian en una ganancia que está dentro
+  del intervalo y en un coste que no, la comparación ya está hecha.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
