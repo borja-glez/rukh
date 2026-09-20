@@ -18,34 +18,34 @@ tags:
 
 A bidirectional transformer written from scratch that reads a chess **position** and says three
 things about it: how good it is, whether the move that led to it threw the game away, and how
-the game is going to end. This is the `encoder` stage of [Rukh](https://github.com/borja-glez/rukh), a
-course that builds a chess language model end to end: 15,054,725 parameters
-over 8 layers of width 384,
+the game is going to end. This is the `encoder-v4` stage of [Rukh](https://github.com/borja-glez/rukh), a
+course that builds a chess language model end to end: 38,973,957 parameters
+over 12 layers of width 512,
 pretrained with masked move modeling and fine-tuned on Stockfish
 labels.
 
-See it evaluate a live game: [https://rukh.borjaglez.com/?stage=encoder](https://rukh.borjaglez.com/?stage=encoder) · read how it was built:
+See it evaluate a live game: [https://rukh.borjaglez.com](https://rukh.borjaglez.com) · read how it was built:
 [https://lab.rukh.borjaglez.com](https://lab.rukh.borjaglez.com)
 
 ## Results
 
-Measured with `rukh eval encoder` on 2026-09-19, over
+Measured with `rukh eval encoder` on 2026-09-20, over
 10000 held-out positions (7453 of them with a blunder label).
 
 | Metric | Value |
 |---|---|
-| Blunder F1 (tuned, `p >= 0.06631`) | 18.0 % |
-| Blunder precision | 11.7 % |
-| Blunder recall | 39.6 % |
+| Blunder F1 (tuned, `p >= 0.09617`) | 18.6 % |
+| Blunder precision | 13.8 % |
+| Blunder recall | 28.5 % |
 | Blunder F1 (fixed, `p >= 0.5`) | 0.0 % |
-| Blunder ROC AUC | 0.740 |
-| Blunder average precision | 0.112 |
+| Blunder ROC AUC | 0.761 |
+| Blunder average precision | 0.117 |
 | Blunder base rate | 3.7 % |
 | Blunder F1, material baseline | 8.9 % |
-| Margin over the baseline | +9.2 F1 points |
-| Value vs Stockfish cp, Pearson | 0.648 |
-| Value vs Stockfish cp, Spearman | 0.520 |
-| Result accuracy | 50.0 % |
+| Margin over the baseline | +9.7 F1 points |
+| Value vs Stockfish cp, Pearson | 0.726 |
+| Value vs Stockfish cp, Spearman | 0.666 |
+| Result accuracy | 50.8 % |
 
 ### Acceptance bars
 
@@ -55,8 +55,8 @@ flattering or not.
 
 | Bar | Target | Measured | Verdict |
 |---|---|---|---|
-| Blunder F1 over the material baseline | at least +5 F1 points | +9.2 F1 points | met |
-| Value vs Stockfish cp, Spearman | at least 0.80 | 0.520 | **not met** |
+| Blunder F1 over the material baseline | at least +5 F1 points | +9.7 F1 points | met |
+| Value vs Stockfish cp, Spearman | at least 0.80 | 0.666 | **not met** |
 
 **The value bar is not met.** The head was fine-tuned for 4 000 steps on labels that cover 9.8 %
 of the positions they were crossed with, and the target `tanh(cp / 400)` compresses the scale
@@ -68,7 +68,7 @@ missing is labelled data, not capacity.
 A blunder is rare (3.7 % of the labelled rows), so **accuracy is meaningless** here: a model that always answers "no blunder" scores 96.3 % without knowing anything about chess. F1 at an arbitrary threshold is nearly as bad, because an uncalibrated sigmoid can rank the positions well and still put every probability below 0.5: that number measures the operating point, not the representation. This is why the threshold is chosen on a `tune` half and the F1 is reported on a `score` half, and why ROC AUC and average precision, which no threshold can flatter, are reported next to it.
 
 The labelled rows are cut in two **by game**, never by position: the `tune` half
-(3793 rows, 2455 games) chose the threshold `p >= 0.06630505621433258`
+(3793 rows, 2455 games) chose the threshold `p >= 0.09617140889167786`
 by maximising F1 there, and the `score` half (3660 rows, 2368 games) is
 where the F1, the precision and the recall in the table are measured. No game is in both halves,
 and the threshold never saw the rows it is scored on. The F1 at the fixed threshold is in the
@@ -99,11 +99,11 @@ How to read these numbers:
 
 - the blunder F1 of the encoder and of the material baseline are measured on the same rows of the held-out 'val' split, which is drawn by game_id, never by position, and those rows are cut in two by game_id again: the 'tune' half chooses the threshold and the 'score' half is what gets reported
 - the checkpoint carries no label-count curve: run `rukh train heads --curve` and evaluate one of its checkpoints to fill that table
-- the encoder is +9.2 F1 points from the baseline; GOAL.md asks for at least +5
+- the encoder is +9.7 F1 points from the baseline; GOAL.md asks for at least +5
 - the value head is correlated against `tanh(cp / 400)`, the bounded score it is trained on, and not against raw `cp`, where a forced mate is worth ±9 99x and a few rows would decide Pearson for the whole set; the GOAL.md bar of 0.80 is read on Spearman
 - the baseline counts material (1/3/3/5/9) and mobility and looks one ply ahead at captures: it cannot see a positional sacrifice, and calls Fischer's 17...Be6 (Byrne-Fischer, 1956) a nine-point blunder
 - the two blunder detectors do not see the same thing: the baseline is given the predecessor position and the move that was played, while the encoder is given only the resulting position and has to infer that something was thrown away. That is the comparison GOAL.md asks for, but it is not a level playing field
-- the blunder threshold 0.06631 was chosen on the 'tune' half (3,793 rows, 2,455 games) by maximising F1 there, and the reported numbers are measured on the 'score' half (3,660 rows, 2,368 games), which no threshold ever saw; the same rows at the fixed threshold 0.5 give an F1 of 0.0000 against 0.1804 tuned
+- the blunder threshold 0.09617 was chosen on the 'tune' half (3,793 rows, 2,455 games) by maximising F1 there, and the reported numbers are measured on the 'score' half (3,660 rows, 2,368 games), which no threshold ever saw; the same rows at the fixed threshold 0.5 give an F1 of 0.0000 against 0.1855 tuned
 - the material baseline is a hard yes/no rule: it has no threshold, so nothing was tuned on its side and it got no half to tune on. The margin therefore compares a model at its best operating point against a rule at its only one
 - a blunder is rare (3.7 % of the labelled rows), so **accuracy is meaningless** here: a model that always answers "no blunder" scores 96.3 % without knowing anything about chess. F1 at an arbitrary threshold is nearly as bad, because an uncalibrated sigmoid can rank the positions well and still put every probability below 0.5: that number measures the operating point, not the representation. This is why the threshold is chosen on a `tune` half and the F1 is reported on a `score` half, and why ROC AUC and average precision, which no threshold can flatter, are reported next to it
 
@@ -152,9 +152,9 @@ repository is that measurement, as the exporter wrote it.
 
 | File | Same blunder decision as PyTorch | Worst `value` drift |
 |---|---|---|
-| `model.onnx` (fp32) | 100.0 % | 2.57e-06 |
-| `model-fp16.onnx` (fp16) | 100.0 % | 0.00249 |
-| `model-int8.onnx` (int8) | 100.0 % | 0.135 |
+| `model.onnx` (fp32) | 100.0 % | 4.44e-06 |
+| `model-fp16.onnx` (fp16) | 100.0 % | 0.00164 |
+| `model-int8.onnx` (int8) | 100.0 % | 0.117 |
 
 The bar the project set itself is 99.9 %.
 Every precision, int8 included, makes the same call on every position checked: quantizing this
@@ -171,9 +171,9 @@ decoder's number, where it is not true.
 | `block` | `200` |
 | `ckpt_every` | `1000` |
 | `compile` | `False` |
-| `curve` | `[0.1, 0.25, 0.5, 1.0]` |
+| `curve` | `[]` |
 | `device` | `cuda` |
-| `encoder_ckpt` | `checkpoints/encoder-mmm-20260919-093554//best.pt` |
+| `encoder_ckpt` | `checkpoints/encoder-mmm-v4-20260920-111628/best.pt` |
 | `eval_batches` | `50` |
 | `eval_every` | `250` |
 | `fraction` | `1.0` |
@@ -194,11 +194,11 @@ decoder's number, where it is not true.
 | `min_lr_ratio` | `0.1` |
 | `mode` | `last-n` |
 | `model` | `None` |
-| `num_params` | `15054725` |
+| `num_params` | `38973957` |
 | `out_dir` | `checkpoints` |
 | `pooling` | `mean` |
 | `precision` | `bf16` |
-| `run_name` | `encoder-heads-moves` |
+| `run_name` | `encoder-heads-v4` |
 | `seed` | `42` |
 | `train_labels` | `438093` |
 | `trainable_encoder_tensors` | `26` |
@@ -209,9 +209,10 @@ decoder's number, where it is not true.
 | `weights.blunder` | `1.0` |
 | `weights.result` | `0.5` |
 | `weights.value` | `1.0` |
+| `weights.value_rank` | `1.0` |
 | `workers` | `4` |
 
-MLflow run: `be759117d1f743f996e8418842456314`.
+MLflow run: `647cdcf0d6b1411b96190312561aaf62`.
 
 ```json
 {
@@ -221,26 +222,26 @@ MLflow run: `be759117d1f743f996e8418842456314`.
   "model_type": "rukh-position-encoder",
   "library_name": "rukh",
   "rukh_version": "0.0.1",
-  "stage": "encoder",
-  "step": 3000,
-  "params": 15054725,
+  "stage": "encoder-v4",
+  "step": 4000,
+  "params": 38973957,
   "tokenizer": "moves",
   "vocab_hash": null,
   "data_manifest_sha": null,
-  "git_sha": "cb84867f1c101c80cb1b64a1d1dda8d24d7c44e0",
+  "git_sha": "db5d48e5db36a0d24e00cbe21375167b8f9f9c3b",
   "heads": [
     "value",
     "blunder",
     "result"
   ],
   "pooling": "mean",
-  "pretrained_from": "checkpoints/encoder-mmm-20260919-093554//best.pt",
+  "pretrained_from": "checkpoints/encoder-mmm-v4-20260920-111628/best.pt",
   "input": "moves",
   "vocab_size": 2030,
   "square_vocab": 47,
-  "n_layer": 8,
-  "n_head": 6,
-  "d_model": 384,
+  "n_layer": 12,
+  "n_head": 8,
+  "d_model": 512,
   "d_ff": null,
   "block": 200,
   "dropout": 0.1,
@@ -257,7 +258,7 @@ positions
 crossed with the Lichess Stockfish evaluations: `value` and `blunder` come from those
 scores, `result` from the game the position was played in.
 
-The pretraining checkpoint the heads started from: `checkpoints/encoder-mmm-20260919-093554//best.pt`.
+The pretraining checkpoint the heads started from: `checkpoints/encoder-mmm-v4-20260920-111628/best.pt`.
 
 
 ## Limitations
