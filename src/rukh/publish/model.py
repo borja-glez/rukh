@@ -173,25 +173,82 @@ def read_run(run_id: str | None = None, run_name: str | None = None) -> RunSumma
     )
 
 
-DEMO_STAGES = {"tiny": "tiny-int8", "small": "small-fp16"}
-"""Stage ids the demo actually serves, keyed by the model size in the repo name.
+DEMO_STAGES = {
+    "tiny": "tiny-int8",
+    "small": "small-fp16",
+    "medium": "medium-fp16",
+    "medium-dpo": "medium-dpo-fp16",
+    "medium-elo": "medium-elo-fp16",
+    "medium-lora": "medium-lora-fp16",
+}
+"""Stage ids the demo actually serves, keyed by the repository name without ``rukh-``.
 
 The card used to link ``/?stage=<eval stage>``, and the demo does not know those names: an
-unknown ``stage`` falls back to whatever the device would load anyway. For `tiny` and `small`
-that lands on the right model by luck; for a `medium` card it promises a game against a model
-the demo never loads. A repo the demo does not serve gets a bare link and a sentence saying so
-(D-075).
+unknown ``stage`` falls back to whatever the device would load anyway, so a card could promise a
+game against a model the demo never loads. A repo the demo does not serve gets a bare link and a
+sentence saying so (D-075).
+
+The keys are the **repository** names and not the model size, because since M4 the demo serves
+four different `medium` repositories and "medium" alone no longer says which one. Keeping this
+list right is a promise to a reader who clicks: what they get has to be the weights the card is
+about.
 """
 
 
 def demo_link(cfg: ModelPublishConfig, repo_id: str) -> tuple[str, bool]:
     """``(url, served)``: where to send a reader, and whether the demo really runs this model."""
     name = repo_id.split("/")[-1].removeprefix("rukh-")
-    size = name.split("-")[0]
-    stage = DEMO_STAGES.get(size)
-    if stage is None or name != size:
+    stage = DEMO_STAGES.get(name)
+    if stage is None:
         return cfg.demo_url, False
     return f"{cfg.demo_url}/?stage={stage}", True
+
+
+def read_sweep(stage: str, cfg: ModelPublishConfig) -> dict[str, Any] | None:
+    """The per-condition sweep of an Elo-conditioned stage, if one was run.
+
+    A model whose whole point is that it answers ``<wXXXX>`` cannot be published with only the
+    number it scores at one header. What the header *does* is the claim, and the claim is either
+    measured on the card or it is marketing.
+    """
+    path = resolve(cfg.eval_dir) / f"{stage}-elo-sweep" / "results.json"
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) and payload.get("rows") else None
+
+
+def sweep_context(sweep: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The sweep as the card prints it: one row per condition, and the verdict in words."""
+    if not sweep:
+        return None
+    rows = []
+    for row in sweep["rows"]:
+        interval = row.get("elo_ci")
+        rows.append(
+            {
+                "header": f"<w{int(row['header_elo']):04d}>",
+                "elo": "n/a" if row.get("elo") is None else f"{row['elo']:.0f}",
+                "ci": (
+                    f"{interval[0]:.0f}-{interval[1]:.0f}"
+                    if isinstance(interval, list) and len(interval) == 2
+                    else "n/a"
+                ),
+                "entropy": (
+                    "n/a"
+                    if row.get("first_move_entropy") is None
+                    else f"{row['first_move_entropy']:.3f}"
+                ),
+                "legality": _percent(row.get("legality")),
+                "top1": _percent(row.get("top1")),
+            }
+        )
+    return {
+        "rows": rows,
+        "monotonic": bool(sweep.get("monotonic")),
+        "separated": bool(sweep.get("separated")),
+        "span": None if sweep.get("span") is None else f"{sweep['span']:.0f}",
+    }
 
 
 def read_eval(stage: str, cfg: ModelPublishConfig) -> dict[str, Any] | None:
@@ -665,6 +722,7 @@ def card_context(
         "config": config,
         "config_json": json.dumps(config, indent=2, ensure_ascii=False),
         "metrics": metrics,
+        "sweep": sweep_context(read_sweep(stage, cfg)),
         "bars": acceptance_bars(evaluation),
         "parity": parity_context(parity),
         "sampling": sampling_context(evaluation, counterpart),
