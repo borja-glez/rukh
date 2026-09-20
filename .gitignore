@@ -44,3 +44,4 @@ Thumbs.db
 # They feed phase 2's position retrieval and belong on the Hub, never in git.
 /artifacts/embeddings/
 .fetch-current.yaml
+configs/train/.rank-*.yaml
