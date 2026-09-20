@@ -265,8 +265,16 @@ def parity(
     onnx_path: Path,
     positions: Sequence[Sequence[int]],
     n: int = DEFAULT_N,
+    extra: dict[str, object] | None = None,
 ) -> ParityResult:
-    """Compare the argmax token and the logits of the checkpoint and the exported file."""
+    """Compare the argmax token and the logits of the checkpoint and the exported file.
+
+    ``extra`` is the rest of the feed, for a graph that takes more than the token ids: the
+    adaptable decoder wants its two LoRA tensors, and the model on the PyTorch side is expected
+    to carry the same adapter already (``load_adapter``) so that both sides answer the same
+    question. Zeros on one side and a trained adapter on the other would measure the adapter,
+    not the export.
+    """
     model = ckpt if isinstance(ckpt, MoveDecoder) else _load(Path(ckpt))
     wrapper = LastStepLogits(model.eval()).eval()
     session = _session(Path(onnx_path))
@@ -281,7 +289,8 @@ def parity(
         idx = np.asarray([list(history)], dtype=np.int64)
         with torch.no_grad():
             reference = wrapper(torch.from_numpy(idx)).numpy()[0].astype(np.float64)
-        exported = np.asarray(session.run(None, {INPUT_NAME: idx})[0])[0].astype(np.float64)
+        feed = {INPUT_NAME: idx, **(extra or {})}
+        exported = np.asarray(session.run(None, feed)[0])[0].astype(np.float64)
         worst = max(worst, float(np.max(np.abs(reference - exported))))
         if int(np.argmax(reference)) == int(np.argmax(exported)):
             agreed += 1

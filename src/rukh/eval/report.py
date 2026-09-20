@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from rukh.eval.diversity import DiversityResult
 from rukh.eval.elo import EloResult
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -55,6 +56,8 @@ class WebRow(BaseModel):
     elo_separated: bool = False
     delta_cp: float | None = None
     diversity: float | None = None
+    first_move_entropy: float | None = None
+    """The sampler-free half of the diversity measure; comparable across stages as-is."""
     date: str
     run_id: str | None = None
 
@@ -132,9 +135,49 @@ def row_of(result: SuiteResult) -> WebRow:
         elo_separated=bool(elo.separated) if elo else False,
         delta_cp=result.delta_cp,
         diversity=result.diversity,
+        first_move_entropy=(
+            result.diversity_detail.first_move_entropy_bits if result.diversity_detail else None
+        ),
         date=result.date,
         run_id=result.run_id,
     )
+
+
+def _diversity_section(detail: DiversityResult | None) -> list[str]:
+    """How varied the model's own openings are, and the two numbers that say it.
+
+    Split in two because they fail differently. The line entropy depends on the sampler -- at the
+    near-deterministic setting the stages are compared at, every decoder plays one opening and
+    scores 0 -- so it is read at its own temperature and always reported with it. The first-move
+    entropy has no sampler in it at all: it is the model's own distribution over the twenty legal
+    first moves, so it is the one to compare across stages.
+    """
+    if detail is None:
+        return []
+    top_k = "none" if detail.top_k is None else str(detail.top_k)
+    lines = [
+        "## Opening diversity",
+        "",
+        f"{detail.games} self-play openings of {detail.plies} plies, drawn at temperature "
+        f"{detail.temperature} with top-k {top_k}. **Not** the suite's sampling: at the "
+        "near-deterministic setting every stage plays one single opening and scores 0, which "
+        "measures the sampler and not the weights (D-047).",
+        "",
+        "| Metric | Value |",
+        "|---|---:|",
+        f"| Distinct opening lines | {detail.distinct_lines} of {detail.games} |",
+        f"| Line entropy | {detail.entropy_bits:.3f} bits of {detail.max_entropy_bits:.3f} |",
+        f"| Normalised | {detail.normalised:.3f} |",
+        f"| First-move entropy (no sampling) | {detail.first_move_entropy_bits:.3f} bits |",
+        "",
+        "Most played lines:",
+        "",
+        "| Line | Games |",
+        "|---|---:|",
+    ]
+    lines.extend(f"| `{line}` | {count} |" for line, count in detail.top_lines)
+    lines.append("")
+    return lines
 
 
 def encoder_row_of(result: EncoderResult) -> EncoderWebRow:
@@ -188,6 +231,136 @@ def upsert_row(path: Path, row: TableRow) -> list[dict[str, Any]]:
         json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
     )
     return rows
+
+
+def drop_rows(path: Path, stages: list[str]) -> tuple[list[str], list[dict[str, Any]]]:
+    """Remove rows from the shared results file; return ``(removed stages, rows that stay)``.
+
+    A measurement can be **retracted**, and when it is, the table has to be able to say so by not
+    carrying it any more. It happened once already: D-070 found that four of the eight rungs of
+    the Elo ladder had invented ratings, wrong by about five hundred points, which made every Elo
+    published before it wrong. The corrected runs were written under new stage names, so the old
+    rows stayed in the table and the project page kept serving retracted numbers for a day.
+
+    Deliberately explicit and per stage rather than a filter or a wildcard: dropping a row is
+    throwing away a measurement, and it should take saying its name.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return [], []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    found = payload.get("rows") if isinstance(payload, dict) else payload
+    rows = [item for item in found if isinstance(item, dict)] if isinstance(found, list) else []
+    wanted = set(stages)
+    removed = sorted({str(item.get("stage")) for item in rows if item.get("stage") in wanted})
+    kept = [item for item in rows if item.get("stage") not in wanted]
+    document = {"updated_at": datetime.now(UTC).isoformat(timespec="seconds"), "rows": kept}
+    path.write_text(
+        json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+    )
+    return removed, kept
+
+
+BENCHMARKS_MARK = "## Resultados"
+"""Heading of ``docs/benchmarks.md`` from which everything is rewritten by ``render_benchmarks``."""
+
+BENCHMARKS_COLUMNS: list[tuple[str, str]] = [
+    ("Etapa", ""),
+    ("Legalidad sin máscara (%)", "---:"),
+    ("Top-1 (%)", "---:"),
+    ("Top-3 (%)", "---:"),
+    ("Puzles 1000-1500 (%)", "---:"),
+    ("Puzles 1500-2000 (%)", "---:"),
+    ("Puzles 2000+ (%)", "---:"),
+    ("Elo estimado (IC 95 %)", ""),
+    ("Δcp medio", "---:"),
+    ("Entropía 1.ª jugada (bits)", "---:"),
+    ("Fecha", ""),
+]
+
+
+def _band(row: dict[str, Any], key: str, band: str) -> str:
+    value = (row.get(key) or {}).get(band)
+    return _percent(value if isinstance(value, int | float) else None)
+
+
+def _elo_cell(row: dict[str, Any]) -> str:
+    """The Elo of a row with its interval, or the one-sided bound when every game went one way."""
+    if row.get("elo_separated"):
+        if row.get("elo_lower") is not None:
+            return f"> {row['elo_lower']:.0f}"
+        if row.get("elo_upper") is not None:
+            return f"< {row['elo_upper']:.0f}"
+    elo = row.get("elo")
+    if elo is None:
+        return "n/a"
+    interval = row.get("elo_ci")
+    if not (isinstance(interval, list) and len(interval) == 2):
+        return f"{elo:.0f}"
+    return f"{elo:.0f} ({interval[0]:.0f}-{interval[1]:.0f})"
+
+
+def render_benchmarks(rows: list[dict[str, Any]]) -> str:
+    """The results table of ``docs/benchmarks.md``, rendered from the measured rows.
+
+    Written rather than typed, and for the reason the whole project keeps repeating: a table
+    copied by hand from a report is a second source of truth that starts drifting on the day it
+    is written. The encoder's rows are left out -- they share not one column with these -- and so
+    is every row that has no measurement at all.
+    """
+    playing = sorted(
+        (row for row in rows if row.get("kind") != "encoder"), key=lambda row: str(row.get("stage"))
+    )
+    header = "| " + " | ".join(name for name, _ in BENCHMARKS_COLUMNS) + " |"
+    rule = "|" + "|".join(align or "---" for _, align in BENCHMARKS_COLUMNS) + "|"
+    lines = [BENCHMARKS_MARK, "", header, rule]
+    for row in playing:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    f"`{row.get('stage')}`",
+                    _percent(row.get("legality")),
+                    _percent(row.get("top1")),
+                    _percent(row.get("top3")),
+                    _band(row, "puzzles", "1000-1500"),
+                    _band(row, "puzzles", "1500-2000"),
+                    _band(row, "puzzles", "2000+"),
+                    _elo_cell(row),
+                    "n/a" if row.get("delta_cp") is None else f"{row['delta_cp']:.1f}",
+                    "n/a"
+                    if row.get("first_move_entropy") is None
+                    else f"{row['first_move_entropy']:.4f}",
+                    str(row.get("date") or ""),
+                ]
+            )
+            + " |"
+        )
+    lines.append("")
+    lines.append(
+        f"{len(playing)} etapas medidas con la misma suite. Las filas del encoder viven aparte "
+        "porque no comparten una sola columna con estas; las que una medición retiró no están "
+        "(`rukh eval drop`)."
+    )
+    return "\n".join(lines) + "\n"
+
+
+def write_benchmarks(results: Path | str, out: Path | str) -> int:
+    """Rewrite the results section of ``docs/benchmarks.md``; returns how many rows it wrote.
+
+    Everything above ``## Resultados`` is the document's own text -- what each column means and
+    how it is measured -- and is left exactly as it is. Only the table is generated.
+    """
+    payload = json.loads(Path(results).read_text(encoding="utf-8"))
+    found = payload.get("rows") if isinstance(payload, dict) else payload
+    rows = [item for item in found if isinstance(item, dict)] if isinstance(found, list) else []
+    target = Path(out)
+    document = target.read_text(encoding="utf-8")
+    head, mark, _ = document.partition(BENCHMARKS_MARK)
+    if not mark:
+        raise ValueError(f"{target} has no `{BENCHMARKS_MARK}` heading to rewrite")
+    target.write_text(head + render_benchmarks(rows), encoding="utf-8", newline="\n")
+    return len([row for row in rows if row.get("kind") != "encoder"])
 
 
 def _percent(value: float | None) -> str:
@@ -250,6 +423,7 @@ def render_markdown(result: SuiteResult) -> str:
             "",
         ]
     )
+    lines.extend(_diversity_section(result.diversity_detail))
 
     if result.legality_argmax is not None or result.legality_sampled is not None:
         lines.extend(

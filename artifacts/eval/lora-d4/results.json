@@ -1,0 +1,208 @@
+{
+  "stage": "lora-d4",
+  "suite": "full",
+  "checkpoint": "checkpoints/lora-d4-20260920-160902/step-1500.pt",
+  "model_sha": "e3876f4119b656fd585c5ffddf5c3878dbb8b161a767f694121cf31ce79da154",
+  "params": 115120128,
+  "date": "2026-09-20",
+  "device": "cuda",
+  "run_id": null,
+  "legality_argmax": {
+    "positions": 1000,
+    "legal": 998,
+    "rate": 0.998,
+    "mode": "argmax",
+    "temperature": null,
+    "top_k": null
+  },
+  "legality_sampled": {
+    "positions": 1000,
+    "legal": 998,
+    "rate": 0.998,
+    "mode": "sampled",
+    "temperature": 0.05,
+    "top_k": 1
+  },
+  "accuracy": {
+    "positions": 1000,
+    "top1": 0.551,
+    "top3": 0.83,
+    "bands": [
+      {
+        "band": "1800-2000",
+        "positions": 543,
+        "top1": 0.5193370165745856,
+        "top3": 0.8232044198895028
+      },
+      {
+        "band": "2000-2200",
+        "positions": 328,
+        "top1": 0.573170731707317,
+        "top3": 0.8414634146341463
+      },
+      {
+        "band": "2200-2400",
+        "positions": 97,
+        "top1": 0.6185567010309279,
+        "top3": 0.8247422680412371
+      },
+      {
+        "band": "2400-2600",
+        "positions": 28,
+        "top1": 0.6428571428571429,
+        "top3": 0.8214285714285714
+      },
+      {
+        "band": "2600+",
+        "positions": 4,
+        "top1": 0.75,
+        "top3": 1.0
+      }
+    ]
+  },
+  "puzzles": {
+    "attempted": 6000,
+    "solved": 2236,
+    "rate": 0.37266666666666665,
+    "bands": [
+      {
+        "band": "1000-1500",
+        "attempted": 2000,
+        "solved": 1147,
+        "rate": 0.5735
+      },
+      {
+        "band": "1500-2000",
+        "attempted": 2000,
+        "solved": 751,
+        "rate": 0.3755
+      },
+      {
+        "band": "2000+",
+        "attempted": 2000,
+        "solved": 338,
+        "rate": 0.169
+      }
+    ],
+    "prompt_style": "game-prefix"
+  },
+  "elo": null,
+  "delta_cp": null,
+  "diversity": 1.0,
+  "diversity_detail": {
+    "games": 200,
+    "plies": 12,
+    "distinct_lines": 200,
+    "entropy_bits": 7.643856189774724,
+    "max_entropy_bits": 7.643856189774724,
+    "normalised": 1.0,
+    "first_move_entropy_bits": 0.016019740477340737,
+    "temperature": 1.0,
+    "top_k": 20,
+    "top_lines": [
+      [
+        "d2d4 g8f6 g1f3 d7d5 e2e3 c8f5 f1d3 f5g4 c2c3 b8d7 b1d2 e7e5",
+        1
+      ],
+      [
+        "d2d4 d7d5 c2c4 c7c6 b1c3 g8f6 c1g5 e7e6 e2e3 d8a5 g5f6 g7f6",
+        1
+      ],
+      [
+        "d2d4 g8f6 g1f3 g7g6 e2e3 f8g7 b2b4 e8g8 c1b2 d7d6 c2c4 b8d7",
+        1
+      ],
+      [
+        "d2d4 a7a6 f2f3 b7b5 e2e4 c8b7 d4d5 c7c5 c2c4 b5b4 b2b3 d7d6",
+        1
+      ],
+      [
+        "d2d4 e7e6 c2c4 d7d5 b1c3 f8b4 g1f3 d5c4 e2e4 g8f6 c1g5 b8d7",
+        1
+      ]
+    ]
+  },
+  "notes": [
+    "legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.",
+    "Elo skipped: no games were played"
+  ],
+  "config": {
+    "stage": "lora-d4",
+    "games": "data/uci/year=2025/month=02/games.parquet",
+    "puzzles": "data/puzzles/puzzles.parquet",
+    "puzzle_split": "test",
+    "legality_positions": 1000,
+    "accuracy_positions": 1000,
+    "position_pool": 20000,
+    "puzzles_per_band": 2000,
+    "force_header": false,
+    "header_elo": 1800,
+    "elo_games": 0,
+    "elo_rungs": [
+      {
+        "name": "uci-1320",
+        "elo": 1320,
+        "uci_elo": 1320,
+        "skill": null
+      },
+      {
+        "name": "skill-0",
+        "elo": 1381,
+        "uci_elo": null,
+        "skill": 0
+      },
+      {
+        "name": "skill-1",
+        "elo": 1467,
+        "uci_elo": null,
+        "skill": 1
+      },
+      {
+        "name": "uci-1500",
+        "elo": 1500,
+        "uci_elo": 1500,
+        "skill": null
+      },
+      {
+        "name": "skill-2",
+        "elo": 1589,
+        "uci_elo": null,
+        "skill": 2
+      },
+      {
+        "name": "skill-3",
+        "elo": 1678,
+        "uci_elo": null,
+        "skill": 3
+      },
+      {
+        "name": "uci-1800",
+        "elo": 1800,
+        "uci_elo": 1800,
+        "skill": null
+      },
+      {
+        "name": "uci-2000",
+        "elo": 2000,
+        "uci_elo": 2000,
+        "skill": null
+      }
+    ],
+    "elo_move_time": 0.1,
+    "elo_max_plies": null,
+    "bootstrap": 500,
+    "diversity_games": 200,
+    "diversity_plies": 12,
+    "diversity_temperature": 1.0,
+    "diversity_top_k": 20,
+    "temperature": 0.05,
+    "top_k": 1,
+    "block": 200,
+    "seed": 42,
+    "out_dir": "artifacts/eval",
+    "web_results": "artifacts/web/results.json",
+    "cache_db": "artifacts/eval/cache-greedy.sqlite",
+    "device": null,
+    "track": false
+  }
+}

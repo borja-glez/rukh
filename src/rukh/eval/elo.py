@@ -36,7 +36,15 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from rukh.config import BaseConfig
 from rukh.eval.cache import EvalCache
-from rukh.infer import GameResult, SampleConfig, StockfishOpponent, adjudicate, play_game
+from rukh.infer import (
+    GameResult,
+    Player,
+    SampleConfig,
+    StockfishOpponent,
+    adjudicate,
+    play_game,
+    play_game_with,
+)
 from rukh.models import MoveDecoder
 from rukh.tokenize.uci_vocab import UciTokenizer
 
@@ -355,7 +363,7 @@ def record_of(
 
 
 def play_rung(
-    model: MoveDecoder,
+    model: MoveDecoder | None,
     tok: UciTokenizer,
     rung: EloRung,
     games: int,
@@ -364,12 +372,19 @@ def play_rung(
     max_plies: int | None = None,
     cache: EvalCache | None = None,
     header_elo: int = 1800,
+    player: Player | None = None,
 ) -> list[GameRecord]:
     """Play ``games`` games against one rung, alternating colours, reusing cached games.
 
     A game that ends with ``*`` (the context ran out) is adjudicated with the rung's own engine
     before it is scored, so it enters the fit as a win, a loss or a draw on the merits of the
     final position.
+
+    ``player`` replaces the decoder, and it is how M4 puts a general language model on this exact
+    ladder -- same opponents, same move time, same colours, same adjudication. A comparison whose
+    two halves went through different code is not a comparison. When it is given, ``model`` is
+    unused and may be ``None``; the seed still varies per game, but a player that cannot be
+    seeded simply ignores it.
     """
     records: list[GameRecord] = []
     suffix = "" if header_elo == 1800 else f":e{header_elo}"
@@ -386,16 +401,31 @@ def play_rung(
     try:
         for index in missing:
             model_white = index % 2 == 0
-            outcome = play_game(
-                model,
-                tok,
-                opponent,
-                cfg.model_copy(update={"seed": None if cfg.seed is None else cfg.seed + index}),
-                model_color=chess.WHITE if model_white else chess.BLACK,
-                white_elo=header_elo,
-                black_elo=header_elo,
-                max_plies=max_plies,
+            per_game = cfg.model_copy(
+                update={"seed": None if cfg.seed is None else cfg.seed + index}
             )
+            colour = chess.WHITE if model_white else chess.BLACK
+            if player is not None:
+                outcome = play_game_with(
+                    player,
+                    opponent,
+                    model_color=colour,
+                    white_elo=header_elo,
+                    black_elo=header_elo,
+                    max_plies=max_plies,
+                )
+            else:
+                assert model is not None, "play_rung needs a model or a player"
+                outcome = play_game(
+                    model,
+                    tok,
+                    opponent,
+                    per_game,
+                    model_color=colour,
+                    white_elo=header_elo,
+                    black_elo=header_elo,
+                    max_plies=max_plies,
+                )
             record = record_of(
                 outcome, rung, index, model_white, engine=opponent.engine, header_elo=header_elo
             )
@@ -408,7 +438,7 @@ def play_rung(
 
 
 def play_rungs(
-    model: MoveDecoder,
+    model: MoveDecoder | None,
     tok: UciTokenizer,
     rungs: Sequence[EloRung],
     games: int,
@@ -417,6 +447,7 @@ def play_rungs(
     max_plies: int | None = None,
     cache: EvalCache | None = None,
     header_elo: int = 1800,
+    player: Player | None = None,
 ) -> list[GameRecord]:
     """Play every rung and return all the game records."""
     records: list[GameRecord] = []
@@ -432,6 +463,7 @@ def play_rungs(
                 max_plies=max_plies,
                 cache=cache,
                 header_elo=header_elo,
+                player=player,
             )
         )
     return records

@@ -1,0 +1,43 @@
+{
+  "stage": "medium-elo-t1",
+  "checkpoint": "checkpoints/medium-elo-20260920-143756/step-3800.pt",
+  "params": 115120128,
+  "date": "2026-09-20",
+  "rows": [
+    {
+      "header_elo": 1200,
+      "elo": 1002.4813071132777,
+      "elo_ci": [
+        866.2420189682506,
+        1108.8298839740153
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.053125,
+      "legality": 1.0,
+      "top1": 0.514,
+      "puzzles": 0.37016666666666664,
+      "first_move_entropy": 1.5955005966393512,
+      "stage": "medium-elo-t1@1200"
+    },
+    {
+      "header_elo": 2400,
+      "elo": 1272.0631703781123,
+      "elo_ci": [
+        1192.8771511387404,
+        1340.2865487889896
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.190625,
+      "legality": 0.997,
+      "top1": 0.533,
+      "puzzles": 0.38083333333333336,
+      "first_move_entropy": 1.9915567737134319,
+      "stage": "medium-elo-t1@2400"
+    }
+  ],
+  "monotonic": true,
+  "separated": true,
+  "span": 269.5818632648346
+}

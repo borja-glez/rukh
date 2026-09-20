@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "kind": "decoder",
+  "measures": "the argmax move",
+  "positions": 1000,
+  "source": "validation",
+  "exporter": "dynamo",
+  "rukh_version": "0.0.1",
+  "warning": null,
+  "precisions": {
+    "fp32": {
+      "file": "model.onnx",
+      "agreement": 1.0,
+      "max_abs_logit_delta": 1.9073486328125e-05
+    },
+    "fp16": {
+      "file": "model-fp16.onnx",
+      "agreement": 0.999,
+      "max_abs_logit_delta": 0.01959085464477539
+    },
+    "int8": {
+      "file": "model-int8.onnx",
+      "agreement": 0.951,
+      "max_abs_logit_delta": 2.7724474668502808
+    }
+  },
+  "adapter_inputs": true,
+  "with_adapter": {
+    "adapter": "lora-e4-20260920-160133",
+    "precisions": {
+      "fp32": {
+        "file": "model.onnx",
+        "agreement": 1.0,
+        "max_abs_logit_delta": 2.09808349609375e-05
+      },
+      "fp16": {
+        "file": "model-fp16.onnx",
+        "agreement": 0.998,
+        "max_abs_logit_delta": 0.011737823486328125
+      },
+      "int8": {
+        "file": "model-int8.onnx",
+        "agreement": 0.96,
+        "max_abs_logit_delta": 2.6470459699630737
+      }
+    }
+  }
+}

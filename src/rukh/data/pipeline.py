@@ -13,9 +13,11 @@ from rukh.data.elite import EliteConfig
 from rukh.data.elo_bins import EloBinsConfig
 from rukh.data.evals import EvalsConfig
 from rukh.data.pairs import PairsConfig
+from rukh.data.pgn_text import PgnTextConfig
 from rukh.data.positions import PositionsConfig
 from rukh.data.publish import PublishConfig
 from rukh.data.puzzles import PuzzlesConfig
+from rukh.data.style import StyleConfig
 from rukh.data.uci import UciConfig
 
 
@@ -32,6 +34,12 @@ class TokenizeConfig(BaseConfig):
     val_games: int = Field(default=0, ge=0)
     extra_train_parquets: list[str] = Field(default_factory=list)
     """UCI parquets appended to the training split, outside the ``year=/month=`` layout."""
+    val_remainder_trains: bool = True
+    """Whether the part of ``val_month`` that is not held out joins the training split.
+
+    Off for a corpus whose shape is the point: the Elo-balanced sample of M4 has the same number
+    of games per rating band on purpose, and 2.85 M games of rated-1800+ play poured on top would
+    undo it."""
     """Games of ``val_month`` held out; the rest of it trains. 0 = the whole month validates."""
     stats_games: str = "data/uci/year=2025/month=01/games.parquet"
     bpe_vocab_size: int = Field(default=4096, ge=100)
@@ -40,7 +48,7 @@ class TokenizeConfig(BaseConfig):
     max_len: int = Field(default=200, ge=8)
 
 
-DUCKDB_STEPS = ("positions", "evals", "puzzles", "elo_bins")
+DUCKDB_STEPS = ("positions", "evals", "puzzles", "elo_bins", "style")
 
 
 class PipelineConfig(BaseConfig):
@@ -59,6 +67,8 @@ class PipelineConfig(BaseConfig):
     pairs: PairsConfig = Field(default_factory=PairsConfig)
     elite: EliteConfig = Field(default_factory=EliteConfig)
     elo_bins: EloBinsConfig = Field(default_factory=EloBinsConfig)
+    style: StyleConfig = Field(default_factory=StyleConfig)
+    pgn_text: PgnTextConfig = Field(default_factory=PgnTextConfig)
     publish: PublishConfig = Field(default_factory=PublishConfig)
 
     @model_validator(mode="after")

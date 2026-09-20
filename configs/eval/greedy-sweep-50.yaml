@@ -1,0 +1,56 @@
+# The sweep again with the games the arithmetic asks for, on the conditions the criterion names.
+#
+# The first pass played 160 games per condition and left every adjacent pair overlapping. Before
+# spending more machine time, `labs/m4/games_needed.py` turns the measured scores into the number
+# of games each comparison would need (`n > 3.84 / (delta p)^2` per condition, two proportions
+# near a half):
+#
+#   <w1500> -> <w2000>   0.466 -> 0.453   -0.013   24 420 games each
+#   <w2000> -> <w2400>   0.453 -> 0.569   +0.116      284 games each
+#   <w1500> -> <w2400>   0.466 -> 0.569   +0.103      357 games each
+#
+# So the middle of the criterion is not a sample-size problem and no run will fix it, while the
+# outer pair is one and 400 games clears it with room. 50 games on each of the eight rungs is
+# 400 per condition, about an hour each; it is run on `<w1500>` and `<w2400>` only, because
+# paying for `<w2000>` again would buy a tighter interval around a difference that is not there.
+#
+# Its own cache, and not out of tidiness: `elo_games` is part of the cache key, so this run
+# cannot read back the games already played even though game `rung:index` is literally the same
+# game (its seed is `seed + index`, independent of the total). That is a real waste and it is
+# written down in `docs/backlog.md`; fixing it belongs to P6, not to the middle of a milestone.
+
+# The suite the Elo sweep of M4 runs once per condition.
+#
+# Identical to `greedy.yaml` -- the sampling every published number was read at (D-047) -- with
+# one change: `force_header`. Validation positions carry their own players' ratings and almost
+# every puzzle carries its game's, so with it off the legality, the accuracy and the puzzle rate
+# come out identical in every row of the sweep. Correct by their own definition, and
+# indistinguishable from evidence that the condition does nothing, which is the one thing this
+# table must not be ambiguous about.
+#
+# Its own cache, for the same reason: these puzzle attempts answer a different question from the
+# ones `cache-greedy.sqlite` holds and must not be confused with them.
+games: data/uci/year=2025/month=02/games.parquet
+puzzles: data/puzzles/puzzles.parquet
+puzzle_split: test
+legality_positions: 1000
+accuracy_positions: 1000
+position_pool: 20000
+puzzles_per_band: 2000
+force_header: true
+elo_games: 50
+elo_move_time: 0.1
+bootstrap: 500
+temperature: 0.05
+top_k: 1
+block: 200
+seed: 42
+header_elo: 1800
+diversity_games: 200
+diversity_plies: 12
+diversity_temperature: 1.0
+diversity_top_k: 20
+out_dir: artifacts/eval
+web_results: null
+cache_db: artifacts/eval/cache-sweep50.sqlite
+track: false

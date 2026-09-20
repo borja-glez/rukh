@@ -286,9 +286,17 @@ def split_sources(cfg: TokenizeConfig) -> dict[str, list[GameSlice]]:
     """The parquet slices behind each split, as ``pack_scheme`` will read them.
 
     ``train_months`` are taken whole. ``val_month`` is cut in two: its first ``val_games`` games
-    are the validation set and everything after them joins training. With ``val_games = 0`` the
-    whole month is validation, which is what P1 and P2 did -- and what left 238 M tokens unused,
-    since an eval reads 50 batches and not a month (D-062).
+    are the validation set and, unless ``val_remainder_trains`` is off, everything after them
+    joins training. With ``val_games = 0`` the whole month is validation, which is what P1 and P2
+    did -- and what left 238 M tokens unused, since an eval reads 50 batches and not a month
+    (D-062).
+
+    ``val_remainder_trains`` exists for a corpus whose *shape* is the point. The Elo-balanced
+    sample of M4 has the same number of games per rating band on purpose, because that is what
+    teaches the model what a header means rather than how common it is; pouring 2.85 M rated-1800+
+    games of the validation month on top would quietly undo exactly that. Turning it off keeps the
+    validation set identical to the one every other run is measured against -- the same first
+    ``val_games`` of the same month -- while leaving the training split as it was configured.
 
     ``extra_train_parquets`` appends UCI parquets that live outside the ``year=/month=`` layout,
     which is how the Elite Database (2200+ only) joins the corpus without pretending to be a
@@ -299,7 +307,8 @@ def split_sources(cfg: TokenizeConfig) -> dict[str, list[GameSlice]]:
     val_parquet = month_parquet(uci_dir, cfg.val_month)
     if cfg.val_games:
         val = [GameSlice(val_parquet, take=cfg.val_games)]
-        train.append(GameSlice(val_parquet, skip=cfg.val_games))
+        if cfg.val_remainder_trains:
+            train.append(GameSlice(val_parquet, skip=cfg.val_games))
     else:
         val = [GameSlice(val_parquet)]
     train += [GameSlice(resolve(extra)) for extra in cfg.extra_train_parquets]

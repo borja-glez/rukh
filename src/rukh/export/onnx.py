@@ -118,22 +118,31 @@ def target_path(out: Path) -> Path:
     return out if out.suffix == ".onnx" else out / MODEL_NAME
 
 
-def _dynamic_shapes(dynamic_batch: bool, dynamic_seq: bool) -> dict[str, dict[int, str]] | None:
+def _dynamic_shapes(
+    dynamic_batch: bool, dynamic_seq: bool, inputs: Sequence[str] = (INPUT_NAME,)
+) -> dict[str, dict[int, str]] | None:
     axes: dict[int, str] = {}
     if dynamic_batch:
         axes[0] = BATCH_AXIS
     if dynamic_seq:
         axes[1] = SEQUENCE_AXIS
-    return {INPUT_NAME: axes} if axes else None
+    if not axes:
+        return None
+    # Only the token input has a batch and a sequence; everything else the graph takes (the
+    # stacked LoRA factors) is the same shape on every call and is declared static by omission.
+    return {name: (axes if name == INPUT_NAME else {}) for name in inputs}
 
 
 def _dynamic_axes(
-    dynamic_batch: bool, dynamic_seq: bool, outputs: Sequence[str] = (OUTPUT_NAME,)
+    dynamic_batch: bool,
+    dynamic_seq: bool,
+    outputs: Sequence[str] = (OUTPUT_NAME,),
+    inputs: Sequence[str] = (INPUT_NAME,),
 ) -> dict[str, dict[int, str]] | None:
-    shapes = _dynamic_shapes(dynamic_batch, dynamic_seq)
+    shapes = _dynamic_shapes(dynamic_batch, dynamic_seq, inputs)
     if shapes is None:
         return None
-    axes = dict(shapes)
+    axes = {name: value for name, value in shapes.items() if value}
     if dynamic_batch:
         for name in outputs:
             axes[name] = {0: BATCH_AXIS}
@@ -166,20 +175,26 @@ def _utf8_console() -> Iterator[None]:
 
 def _write_graph(
     wrapper: nn.Module,
-    example: Tensor,
+    example: Tensor | tuple[Tensor, ...],
     path: Path,
     opset: int,
     outputs: Sequence[str],
     dynamic_batch: bool,
     dynamic_seq: bool,
+    inputs: Sequence[str] = (INPUT_NAME,),
 ) -> tuple[Literal["dynamo", "legacy"], str | None]:
     """Write one ONNX file with the modern exporter, falling back to the legacy one.
 
-    Both graphs of the project (the decoder's next move and the encoder's two heads) are written
-    here so that the fallback, the console workaround and the axis declarations exist once.
+    Every graph of the project is written here -- the decoder's next move, the encoder's two
+    heads and the decoder that takes its LoRA factors as inputs -- so that the fallback, the
+    console workaround and the axis declarations exist once. ``inputs`` names them in the order
+    the wrapper's ``forward`` takes them; the first one is always the token ids.
     """
+    args = example if isinstance(example, tuple) else (example,)
+    if len(args) != len(inputs):
+        raise ValueError(f"{len(args)} example tensors for {len(inputs)} input names")
     common: dict[str, Any] = {
-        "input_names": [INPUT_NAME],
+        "input_names": list(inputs),
         "output_names": list(outputs),
         "opset_version": opset,
     }
@@ -187,10 +202,10 @@ def _write_graph(
         with torch.no_grad(), _utf8_console():
             torch.onnx.export(
                 wrapper,
-                (example,),
+                args,
                 str(path),
                 dynamo=True,
-                dynamic_shapes=_dynamic_shapes(dynamic_batch, dynamic_seq),
+                dynamic_shapes=_dynamic_shapes(dynamic_batch, dynamic_seq, inputs),
                 **common,
             )
     except Exception as exc:  # noqa: BLE001 - any exporter failure must fall back, not stop
@@ -199,10 +214,10 @@ def _write_graph(
         with torch.no_grad():
             torch.onnx.export(
                 wrapper,
-                (example,),
+                args,
                 str(path),
                 dynamo=False,
-                dynamic_axes=_dynamic_axes(dynamic_batch, dynamic_seq, outputs),
+                dynamic_axes=_dynamic_axes(dynamic_batch, dynamic_seq, outputs, inputs),
                 **common,
             )
         return "legacy", warning
@@ -354,8 +369,14 @@ def sequence_lengths(seq_len: int, block: int) -> list[int]:
     return sorted({seq_len, other})
 
 
-def verify_dynamic_seq(path: Path, seq_len: int, block: int) -> bool | None:
-    """Run the file at two sequence lengths; None when ``onnxruntime`` is not installed."""
+def verify_dynamic_seq(
+    path: Path, seq_len: int, block: int, extra: dict[str, Any] | None = None
+) -> bool | None:
+    """Run the file at two sequence lengths; None when ``onnxruntime`` is not installed.
+
+    ``extra`` carries the other inputs the graph needs, if any: the adaptable decoder refuses to
+    run without its LoRA factors, and a missing input would read here as a baked-in length.
+    """
     import numpy as np
 
     try:
@@ -369,7 +390,8 @@ def verify_dynamic_seq(path: Path, seq_len: int, block: int) -> bool | None:
     session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
     for length in lengths:
         try:
-            session.run(None, {INPUT_NAME: np.zeros((1, length), dtype=np.int64)})
+            feed = {INPUT_NAME: np.zeros((1, length), dtype=np.int64), **(extra or {})}
+            session.run(None, feed)
         except Exception as exc:  # noqa: BLE001 - any refusal means the axis is not dynamic
             log.info("the exported graph refused a sequence of %d tokens: %s", length, exc)
             return False

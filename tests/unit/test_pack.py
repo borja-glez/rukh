@@ -229,3 +229,27 @@ def test_extra_parquets_join_training_only(tmp_path: Path, games_parquet: Path) 
     assert sources["val"][0].path.name == "games.parquet"
     assert sources["train"][-1].path == games_parquet
     assert games_parquet not in [s.path for s in sources["val"]]
+
+
+def test_the_validation_remainder_can_be_kept_out_of_training(rukh_home: Path) -> None:
+    """A corpus whose shape is the point must not be topped up with 2.85 M games of one band.
+
+    The Elo-balanced sample of M4 has the same number of games per rating band on purpose: that
+    is what teaches the model what `<w1500>` *means* rather than how rare it is. The default
+    behaviour -- the rest of the validation month joins training -- would quietly undo it.
+    """
+    from rukh.data.pipeline import TokenizeConfig
+    from rukh.tokenize.pack import split_sources
+
+    for month in ("01", "02"):
+        target = rukh_home / "data" / "uci" / "year=2025" / f"month={month}" / "games.parquet"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.touch()
+
+    shared = {"train_months": [], "val_month": "2025-02", "val_games": 100, "uci_dir": "data/uci"}
+    default = split_sources(TokenizeConfig(**shared))  # type: ignore[arg-type]
+    assert len(default["train"]) == 1  # the remainder of the month
+
+    kept_out = split_sources(TokenizeConfig(**shared, val_remainder_trains=False))  # type: ignore[arg-type]
+    assert kept_out["train"] == []
+    assert kept_out["val"] == default["val"]  # the same held-out games either way

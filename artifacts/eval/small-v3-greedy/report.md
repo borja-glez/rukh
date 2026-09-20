@@ -19,7 +19,28 @@
 | Puzzles solved | 26.7 % |
 | Estimated Elo | 1365 (95 % CI 1293-1423) |
 | Mean centipawn loss | n/a |
-| Opening diversity | n/a |
+| Opening diversity | 1.000 |
+
+## Opening diversity
+
+200 self-play openings of 12 plies, drawn at temperature 1.0 with top-k 20. **Not** the suite's sampling: at the near-deterministic setting every stage plays one single opening and scores 0, which measures the sampler and not the weights (D-047).
+
+| Metric | Value |
+|---|---:|
+| Distinct opening lines | 200 of 200 |
+| Line entropy | 7.644 bits of 7.644 |
+| Normalised | 1.000 |
+| First-move entropy (no sampling) | 1.639 bits |
+
+Most played lines:
+
+| Line | Games |
+|---|---:|
+| `d2d4 g8f6 g1f3 d7d5 e2e3 c8f5 f1d3 f5g4 c2c3 c7c6 b1d2 e7e6` | 1 |
+| `e2e4 d7d5 e4d5 g8f6 b1c3 f6d5 c3d5 d8d5 g1f3 b8c6 d2d3 e7e5` | 1 |
+| `d2d4 g8f6 g1f3 g7g6 e2e3 f8g7 f1e2 e8g8 e1g1 d7d6 b2b3 b8d7` | 1 |
+| `g1f3 a7a6 d2d3 b7b5 c2c3 c8b7 b1d2 c7c5 e2e4 e7e6 f1e2 f8e7` | 1 |
+| `e2e4 e7e6 d2d4 d7d5 e4d5 d8d5 c2c4 d5d8 g1f3 g8f6 c1g5 f8e7` | 1 |
 
 ## Legality
 

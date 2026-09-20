@@ -214,6 +214,49 @@ def test_resume_continues_from_the_saved_step(rukh_home: Path, tokens_dir: Path)
         assert not torch.allclose(before, moved.eval()(idx)[0], atol=1e-5)
 
 
+def test_init_from_takes_the_weights_and_leaves_the_schedule_alone(
+    rukh_home: Path, tokens_dir: Path
+) -> None:
+    """A fine-tune starts where a previous run ended, but as a run of its own.
+
+    `--resume` restores the optimizer moments, the step counter and the MLflow run, which is
+    exactly what a fine-tune must not inherit: its data, its learning rate and its warmup are
+    different, and half-decayed Adam moments would fight the schedule that starts now.
+    """
+    pretrained = train(toy_config(max_steps=3, ckpt_every=3, run_name="base"), device="cpu")
+    tuned = train(
+        toy_config(max_steps=2, ckpt_every=2, run_name="tuned", init_from=str(pretrained)),
+        device="cpu",
+    )
+    payload = load_checkpoint(tuned)
+    assert tuned.parent.name == "tuned"  # its own folder, not the base run's
+    assert payload["step"] == 2  # its own step count, not 3 + 2
+    assert payload["run_id"] != load_checkpoint(pretrained)["run_id"]
+
+
+def test_init_from_actually_starts_at_the_given_weights(rukh_home: Path, tokens_dir: Path) -> None:
+    """With zero steps of training the fine-tune is the checkpoint it was pointed at."""
+    pretrained = train(toy_config(max_steps=3, ckpt_every=3, run_name="base"), device="cpu")
+    tuned = train(
+        toy_config(max_steps=1, ckpt_every=1, lr=0.0, run_name="tuned", init_from=str(pretrained)),
+        device="cpu",
+    )
+    before = load_checkpoint(pretrained)["model_state"]["tokens.weight"]
+    after = load_checkpoint(tuned)["model_state"]["tokens.weight"]
+    torch.testing.assert_close(before, after)
+
+
+def test_init_from_and_resume_together_are_refused(rukh_home: Path, tokens_dir: Path) -> None:
+    first = train(toy_config(max_steps=3, ckpt_every=3), device="cpu")
+    with pytest.raises(ValueError, match="pick one"):
+        train(toy_config(max_steps=6, init_from=str(first)), resume=first, device="cpu")
+
+
+def test_init_from_a_missing_checkpoint_says_so(rukh_home: Path, tokens_dir: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="init_from"):
+        train(toy_config(init_from="nowhere/best.pt"), device="cpu")
+
+
 def test_a_mismatched_vocabulary_is_refused(rukh_home: Path, tokens_dir: Path) -> None:
     cfg = toy_config(model=TOY.model_copy(update={"vocab_size": 64}))
     with pytest.raises(ValueError, match="vocab_size"):
@@ -316,3 +359,114 @@ def test_toy_pack_matches_the_packer_layout(tmp_path: Path) -> None:
     assert meta["n_games"] == 3
     assert np.load(directory / TOKENS_FILE).dtype == np.uint16
     assert np.load(directory / STARTS_FILE).tolist() == [0, 6, 12]
+
+
+def test_a_lora_run_trains_only_the_adapter_and_saves_a_plain_checkpoint(
+    rukh_home: Path, tokens_dir: Path
+) -> None:
+    """The two properties that let an adapter be a first-class artefact of this project.
+
+    It trains: the loss moves, so `A` and `B` are receiving gradients. And what lands on disk is
+    an ordinary decoder checkpoint -- same module names, no wrappers -- so the exporter, the
+    publisher and `rukh eval` never learn that LoRA happened. The adapter travels beside it as
+    its own small file.
+    """
+    from rukh.models.lora import ADAPTER_FILE, LoraConfig
+
+    base = train(toy_config(max_steps=2, ckpt_every=2, run_name="base"), device="cpu")
+    plain_keys = set(load_checkpoint(base)["model_state"])
+
+    final = train(
+        toy_config(
+            max_steps=4,
+            ckpt_every=4,
+            run_name="lora",
+            init_from=str(base),
+            lora=LoraConfig(r=2, alpha=4, targets=("q", "v")),
+        ),
+        device="cpu",
+    )
+    payload = load_checkpoint(final)
+    assert set(payload["model_state"]) == plain_keys  # no `.base.weight`, no `.a.0`
+    assert payload["opt_state"] is None  # two small matrices are not worth an optimizer state
+
+    adapter = final.parent / ADAPTER_FILE
+    assert adapter.is_file()
+    assert (final.parent / "adapter_config.json").is_file()
+    assert adapter.stat().st_size < payload_size(final) / 10  # small, by a wide margin
+
+
+def payload_size(path: Path) -> int:
+    return path.stat().st_size
+
+
+def test_a_lora_run_moves_the_weights_it_adapts_and_no_others(
+    rukh_home: Path, tokens_dir: Path
+) -> None:
+    from rukh.models.lora import LoraConfig
+
+    base = train(toy_config(max_steps=2, ckpt_every=2, run_name="base"), device="cpu")
+    before = load_checkpoint(base)["model_state"]
+    final = train(
+        toy_config(
+            max_steps=4,
+            ckpt_every=4,
+            run_name="lora",
+            lr=0.5,
+            init_from=str(base),
+            lora=LoraConfig(r=2, alpha=4, targets=("q", "v")),
+        ),
+        device="cpu",
+    )
+    after = load_checkpoint(final)["model_state"]
+    assert not torch.equal(before["blocks.0.attn.qkv.weight"], after["blocks.0.attn.qkv.weight"])
+    torch.testing.assert_close(before["tokens.weight"], after["tokens.weight"])
+    torch.testing.assert_close(before["blocks.0.mlp.fc.weight"], after["blocks.0.mlp.fc.weight"])
+
+
+def test_a_lora_run_cannot_be_resumed(rukh_home: Path, tokens_dir: Path) -> None:
+    """Its checkpoints hold merged weights, which no longer say where the adapter ended."""
+    from rukh.models.lora import LoraConfig
+
+    first = train(toy_config(max_steps=2, ckpt_every=2), device="cpu")
+    with pytest.raises(ValueError, match="cannot continue a LoRA run"):
+        train(toy_config(max_steps=4, lora=LoraConfig(r=2)), resume=first, device="cpu")
+
+
+def test_a_fine_tune_says_when_best_is_not_its_result(
+    rukh_home: Path, tokens_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`best.pt` means lowest validation loss, and a fine-tune is allowed to raise it.
+
+    The Elo-balanced run of M4 does exactly that on purpose -- it trades imitation of 1800+ play
+    for coverage of the whole rating axis -- so `best.pt` freezes a model a few hundred steps in.
+    Evaluating it later would measure the wrong weights and the numbers would look plausible.
+    """
+    import logging
+
+    base = train(toy_config(max_steps=2, ckpt_every=2, run_name="base"), device="cpu")
+    with caplog.at_level(logging.WARNING, logger="rukh.train.loop"):
+        final = train(
+            toy_config(
+                max_steps=6,
+                eval_every=2,
+                ckpt_every=6,
+                lr=5.0,  # large enough that validation gets worse, which is the case under test
+                run_name="tuned",
+                init_from=str(base),
+            ),
+            device="cpu",
+        )
+    warnings = [record.message for record in caplog.records if record.levelno >= logging.WARNING]
+    assert any(str(final) in message for message in warnings), warnings
+
+
+def test_a_pretraining_run_says_nothing_about_best(
+    rukh_home: Path, tokens_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Without `init_from` the validation loss *is* the objective and the two agree."""
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="rukh.train.loop"):
+        train(toy_config(max_steps=4, eval_every=2, ckpt_every=4), device="cpu")
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING and "best" in r.message]

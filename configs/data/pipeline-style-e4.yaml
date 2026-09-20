@@ -1,0 +1,16 @@
+# Token pack of the `e4` style slice, for `configs/train/lora-e4.yaml`.
+#
+# The validation split is the project's own -- the first 100 000 games of 2025-02 -- and its
+# remainder does **not** join training: an adapter trained on one opening has to be measured
+# against the same held-out games as everything else, and topping it up with a general corpus
+# would dilute the very slice that defines the style.
+tokenize:
+  uci_dir: data/uci
+  out_dir: data/tokens-style-e4
+  train_months: []
+  extra_train_parquets: ['data/style/e4.parquet']
+  val_month: '2025-02'
+  val_games: 100000
+  val_remainder_trains: false
+  stats_games: data/uci/year=2025/month=01/games.parquet
+  max_len: 200

@@ -18,8 +18,17 @@ Cómo se mide cada columna:
 
 ## Resultados
 
-| Etapa | Modelo (Hub) | Legalidad sin máscara (%) | Top-1 (%) | Top-3 (%) | Puzles 1000-1500 (%) | Puzles 1500-2000 (%) | Puzles 2000+ (%) | Elo estimado (IC 95 %) | Δcp medio | Diversidad (bits) | Run MLflow | Fecha |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Etapa | Legalidad sin máscara (%) | Top-1 (%) | Top-3 (%) | Puzles 1000-1500 (%) | Puzles 1500-2000 (%) | Puzles 2000+ (%) | Elo estimado (IC 95 %) | Δcp medio | Entropía 1.ª jugada (bits) | Fecha |
+|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---|
+| `lora-d4` | 99.8 % | 55.1 % | 83.0 % | 57.4 % | 37.5 % | 16.9 % | n/a | n/a | 0.0160 | 2026-09-20 |
+| `lora-e4` | 99.8 % | 54.7 % | 83.3 % | 58.1 % | 38.2 % | 17.2 % | n/a | n/a | 0.0209 | 2026-09-20 |
+| `medium-elo` | 99.7 % | 54.9 % | 82.5 % | 59.8 % | 37.1 % | 16.6 % | 1558 (1500-1609) | n/a | 1.7408 | 2026-09-20 |
+| `medium-masters` | 99.7 % | 54.9 % | 82.3 % | 58.1 % | 38.7 % | 17.1 % | 1583 (1525-1641) | n/a | 1.8850 | 2026-09-20 |
+| `medium-v4-dpo-greedy` | 99.8 % | 53.4 % | 80.5 % | 58.3 % | 39.9 % | 18.1 % | 1529 (1470-1583) | n/a | 1.7785 | 2026-09-20 |
+| `medium-v4-greedy` | 99.8 % | 54.4 % | 82.2 % | 57.9 % | 38.0 % | 16.6 % | 1504 (1446-1558) | n/a | 1.7695 | 2026-09-20 |
+| `qwen3-pgn-qlora` | 62.5 % | 12.5 % | n/a | 1.8 % | 0.7 % | 0.4 % | < 807 | n/a | n/a | 2026-09-20 |
+| `small-greedy` | 99.4 % | 51.1 % | 79.4 % | 34.7 % | 21.1 % | 10.3 % | 1321 (1247-1383) | n/a | 1.7412 | 2026-09-20 |
+| `small-v3-greedy` | 99.1 % | 52.4 % | 80.5 % | 41.0 % | 27.0 % | 12.2 % | 1365 (1293-1423) | n/a | 1.6393 | 2026-09-20 |
+| `tiny-greedy` | 94.5 % | 40.3 % | 67.1 % | 14.1 % | 8.6 % | 3.9 % | 921 (713-1040) | n/a | 1.7214 | 2026-09-20 |
 
-Etapas previstas (`docs/spec/02`): base tiny/small/medium, maestros (SFT), Elo-cond, LoRA, RM,
-DPO, GRPO, Qwen-QLoRA y las referencias externas Karvonen-50M y Maia.
+10 etapas medidas con la misma suite. Las filas del encoder viven aparte porque no comparten una sola columna con estas; las que una medición retiró no están (`rukh eval drop`).

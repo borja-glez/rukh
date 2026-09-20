@@ -46,8 +46,26 @@ medibles (50-150 Elo) con Elo-conditioning, DPO y GRPO.
 
 - **Completo con maestros**: seguir preentrenando con `rukh-games-elite` (lr 1e-4). Medir: sube el
   Elo, baja la diversidad.
+
+> **Nota (2026-09-20, P4):** «baja la diversidad» sale **del revés**. La entropía analítica de la
+> primera jugada a `<w1800>` pasa de 1,7695 a 1,8850 bits y `1. e4` baja del 59,6 % al 55,1 %: la
+> élite juega **más** aperturas distintas que el jugador medio de 1800, así que afinar sobre ella
+> ensancha el repertorio en vez de estrecharlo. Lo que sí se estrecha es el eje por arriba —entre
+> `<w2100>` y `<w2400>` el base separa 0,107 bits y el de maestros 0,010— y lo que se deteriora es
+> el tramo bajo, que este corpus tampoco cubre: 2,856 → 3,307 bits a `<w1200>`.
 - **Elo-conditioning** (instruction tuning): reentrenar/afinar con `rukh-elo-bins` y evaluar que
   `<w1500>` juega peor que `<w2400>` de forma medible (Elo estimado por condición). Comparar con Maia.
+
+> **Nota (2026-09-20, P4):** medido y **no se cumple** por la vía del Elo. Con 160 partidas por
+> condición ni las estimaciones son monótonas ni los intervalos se separan, y el cálculo de potencia
+> dice que entre `<w1500>` y `<w2000>` harían falta 24 420 partidas por condición para separar una
+> diferencia de −0,013 en tasa de puntos: no es tamaño de muestra, es que no hay diferencia. El
+> control lo remata: el modelo **sin** afinar recorre 161 Elo por el mismo eje usando cabeceras que
+> nunca entrenó, así que la columna de Elo no distingue «condicionamiento» de «un prefijo
+> desconocido estorba». Lo que sí cambia de forma medible y ordenada es el **estilo**: entropía
+> analítica de la primera jugada monótona en las seis condiciones (1,596 → 1,992 bits), top-1 con
+> máximo en `<w1800>` y legalidad que baja al ensanchar el repertorio. Detalle en D-100, D-101 y
+> D-106 de `docs/decisiones-de-ejecucion.md`.
 - **LoRA por estilo**: adaptadores r=8-16 sobre las proyecciones de atención, uno por repertorio o
   jugador (p. ej. partidas de un jugador concreto de la Elite DB), intercambiables en la demo.
   Implementado a mano en el decoder propio (para entender LoRA) y con `peft` sobre el modelo HF.

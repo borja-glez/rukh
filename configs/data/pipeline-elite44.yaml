@@ -60,7 +60,7 @@ elite:
   max_plies: 300
   workers: 6   # the GPU is training; leave cores for its dataloader
 elo_bins:
-  uci_dir: data/uci
+  sources: [data/uci]
   out_dir: data/elo-bins
   n_per_bin: 50000
   seed: 42

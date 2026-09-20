@@ -1,0 +1,43 @@
+{
+  "stage": "medium-v4",
+  "checkpoint": "checkpoints/medium-v4-20260919-174623/best.pt",
+  "params": 115120128,
+  "date": "2026-09-20",
+  "rows": [
+    {
+      "header_elo": 1200,
+      "elo": 1418.8234813662575,
+      "elo_ci": [
+        1358.3438497766547,
+        1478.911247802261
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.325,
+      "legality": 0.996,
+      "top1": 0.498,
+      "puzzles": 0.3641666666666667,
+      "first_move_entropy": 2.8555768650332403,
+      "stage": "medium-v4@1200"
+    },
+    {
+      "header_elo": 2100,
+      "elo": 1580.2996481338712,
+      "elo_ci": [
+        1512.1657528458957,
+        1649.3029371416624
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.5,
+      "legality": 0.998,
+      "top1": 0.538,
+      "puzzles": 0.38266666666666665,
+      "first_move_entropy": 1.903292744568921,
+      "stage": "medium-v4@2100"
+    }
+  ],
+  "monotonic": true,
+  "separated": true,
+  "span": 161.47616676761368
+}

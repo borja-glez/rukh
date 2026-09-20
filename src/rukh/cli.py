@@ -6,6 +6,7 @@ Every command is a thin shell over the library: parse options, call one function
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import Annotated
 
@@ -87,14 +88,18 @@ def data_fetch(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print the plan; touch neither network nor disk.")
     ] = False,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Refetch months whose parquet is already on disk.")
+    ] = False,
     as_json: Annotated[bool, typer.Option("--json", help="Print the plan as JSON only.")] = False,
 ) -> None:
     """Fetch filtered Lichess games as parquet files plus a manifest."""
     from rukh.config import load_yaml
     from rukh.data.fetch import FetchConfig, run
 
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
     cfg = load_yaml(config, FetchConfig)
-    fetch_plan = run(cfg, dry_run=dry_run)
+    fetch_plan = run(cfg, dry_run=dry_run, overwrite=overwrite)
     if as_json:
         typer.echo(fetch_plan.model_dump_json(indent=2))
         return
@@ -292,6 +297,44 @@ def data_elo_bins(config: PipelineOption = None, as_json: JsonOption = False) ->
     _echo_manifest(run(cfg), as_json, cfg.out_dir)
 
 
+@data_app.command("pgn-text")
+def data_pgn_text(config: PipelineOption = None, as_json: JsonOption = False) -> None:
+    """Render the same games as PGN text, for the general-model comparison of M4."""
+    from rukh.data.pgn_text import PgnTextConfig, build
+    from rukh.data.pipeline import load_pipeline
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_pipeline(config).pgn_text if config is not None else PgnTextConfig()
+    try:
+        manifest = build(cfg)
+    except FileNotFoundError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    _echo_manifest(manifest, as_json, cfg.out_dir)
+
+
+@data_app.command("style")
+def data_style(config: PipelineOption = None, as_json: JsonOption = False) -> None:
+    """Cut one parquet per style: the games a LoRA adapter is trained to sound like."""
+    from rukh.data.pipeline import load_pipeline
+    from rukh.data.style import build_styles
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_pipeline(config).style
+    try:
+        manifests = build_styles(cfg)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo("[" + ", ".join(m.model_dump_json(indent=2) for m in manifests.values()) + "]")
+        return
+    typer.echo(f"out_dir:  {cfg.out_dir}")
+    typer.echo("styles:")
+    for name, manifest in manifests.items():
+        typer.echo(f"  {name}: {manifest.counts[name]:,} games")
+
+
 @data_app.command("publish")
 def data_publish(
     name: Annotated[
@@ -427,6 +470,48 @@ def train_encoder_cmd(
     )
     typer.echo(f"steps:      {cfg.max_steps}")
     typer.echo(f"checkpoint: {checkpoint}")
+
+
+@train_app.command("qwen")
+def train_qwen_cmd(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", exists=True, dir_okay=False, readable=True, help="YAML config."),
+    ] = None,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """QLoRA a general language model on PGN text, for the comparison table of M4.
+
+    Four-bit is attempted and not required: at 0.6 B parameters on a 32 GB card it saves nothing
+    that matters, so if `bitsandbytes` will not load the run falls back to bf16 and says so in
+    its report instead of claiming a technique it did not use.
+    """
+    from rukh.config import load_yaml
+    from rukh.train.qwen import QwenConfig, train_qwen
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_yaml(config, QwenConfig) if config is not None else QwenConfig()
+    try:
+        report = train_qwen(cfg, device=device)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"model:     {report.model}")
+    typer.echo(f"precision: {'4-bit NF4' if report.four_bit else 'bf16'}")
+    if report.fallback_reason:
+        typer.echo(f"fallback:  {report.fallback_reason}")
+    typer.echo(
+        f"trainable: {report.trainable_params:,} of {report.total_params:,} "
+        f"({100 * report.trainable_share:.3f} %)"
+    )
+    typer.echo(f"samples:   {report.train_samples:,} over {report.steps:,} steps")
+    if report.final_loss is not None:
+        typer.echo(f"loss:      {report.final_loss:.4f}")
+    if report.weights_memory_mb is not None:
+        typer.echo(f"weights:   {report.weights_memory_mb:,.0f} MB on the device")
+    if report.peak_memory_mb is not None:
+        typer.echo(f"peak mem:  {report.peak_memory_mb:,.0f} MB during training")
+    typer.echo(f"adapter:   {report.adapter_dir}")
 
 
 @train_app.command("heads")
@@ -626,6 +711,258 @@ def eval_cmd(
         typer.echo(f"table:    {report.web}")
 
 
+@eval_app.command("drop")
+def eval_drop_cmd(
+    stages: Annotated[
+        str, typer.Option("--stages", help="Rows to remove from the table, comma separated.")
+    ],
+    table: Annotated[
+        Path | None, typer.Option("--table", help="Results file (default: the shared one).")
+    ] = None,
+    yes: Annotated[bool, typer.Option("--yes", help="Do it without asking.")] = False,
+) -> None:
+    """Retract rows from the single results table.
+
+    A measurement can turn out to be wrong, and when it does the table has to be able to say so by
+    not carrying it any more. It happened once: D-070 found four of the eight rungs of the Elo
+    ladder had invented ratings, wrong by about five hundred points. The corrected runs went in
+    under new stage names, so the old rows stayed and the project page kept serving retracted
+    numbers.
+    """
+    from rukh.eval.report import drop_rows
+    from rukh.paths import resolve
+
+    target = table or resolve("artifacts/web/results.json")
+    wanted = [name.strip() for name in stages.split(",") if name.strip()]
+    if not wanted:
+        typer.echo("error: --stages must name at least one row", err=True)
+        raise typer.Exit(code=2)
+    if not yes and not typer.confirm(f"Remove {', '.join(wanted)} from {target}?"):
+        raise typer.Abort
+    removed, kept = drop_rows(target, wanted)
+    missing = sorted(set(wanted) - set(removed))
+    for name in removed:
+        typer.echo(f"removed:  {name}")
+    for name in missing:
+        typer.echo(f"not there: {name}")
+    typer.echo(f"rows left: {len(kept)}")
+
+
+@eval_app.command("benchmarks")
+def eval_benchmarks_cmd(
+    table: Annotated[
+        Path | None, typer.Option("--table", help="Results file (default: the shared one).")
+    ] = None,
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", help="Document to rewrite (default: docs/benchmarks.md)."),
+    ] = None,
+) -> None:
+    """Rewrite the results table of `docs/benchmarks.md` from the measured rows.
+
+    Only the table under `## Resultados` is generated; everything above it -- what each column
+    means and how it is measured -- is the document's own text and is left alone. A table copied
+    by hand from a report is a second source of truth that starts drifting the day it is written.
+    """
+    from rukh.eval.report import write_benchmarks
+    from rukh.paths import resolve
+
+    source = table or resolve("artifacts/web/results.json")
+    target = out or resolve("docs/benchmarks.md")
+    if not Path(source).is_file():
+        typer.echo(f"error: no results table at {source}", err=True)
+        raise typer.Exit(code=1)
+    try:
+        written = write_benchmarks(source, target)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"{target}: {written} stage(s) from {source}")
+
+
+@eval_app.command("openings")
+def eval_openings_cmd(
+    model: Annotated[str, typer.Option("--model", help="Checkpoint or Hub id to read.")],
+    against: Annotated[
+        str | None,
+        typer.Option("--against", help="A second model to compare the distribution with."),
+    ] = None,
+    header_elo: Annotated[
+        int, typer.Option("--elo", help="Elo header to ask the distribution at.")
+    ] = 1800,
+    top: Annotated[int, typer.Option("--top", help="How many first moves to print.")] = 8,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """Print what the model would open with, as probabilities rather than as sampled games.
+
+    No temperature, no top-k, no seed: the softmax over the twenty legal first moves as the
+    weights produce it. That is what makes it the right instrument for an adapter's effect --
+    the share it moved is a property of the weights and does not have to be averaged out of
+    hundreds of self-play games.
+    """
+    from rukh.eval.diversity import first_move_distribution, first_move_entropy
+    from rukh.eval.suite import resolve_model
+    from rukh.tokenize.uci_vocab import UciTokenizer
+    from rukh.train import load_model, pick_device
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    where = device or pick_device()
+    tok = UciTokenizer()
+
+    def read(path: str) -> tuple[dict[str, float], float]:
+        loaded, _ = load_model(resolve_model(path), map_location=where)
+        loaded = loaded.to(where).eval()
+        return first_move_distribution(loaded, tok, header_elo), first_move_entropy(
+            loaded, tok, header_elo
+        )
+
+    try:
+        probs, entropy = read(model)
+        other = read(against) if against is not None else None
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"header:   <w{header_elo:04d}>")
+    typer.echo(f"entropy:  {entropy:.4f} bits of {math.log2(20):.4f}")
+    if other is not None:
+        typer.echo(f"          {other[1]:.4f} bits for {against}")
+    order = sorted(probs, key=lambda move: probs[move], reverse=True)[:top]
+    header_row = "move      share" + ("     other     delta" if other is not None else "")
+    typer.echo(header_row)
+    for move in order:
+        line = f"{move:<9s} {probs[move] * 100:6.2f} %"
+        if other is not None:
+            mine, theirs = probs[move], other[0].get(move, 0.0)
+            line += f"  {theirs * 100:6.2f} %  {(theirs - mine) * 100:+6.2f}"
+        typer.echo(line)
+
+
+@eval_app.command("qwen")
+def eval_qwen_cmd(
+    adapter: Annotated[
+        Path,
+        typer.Option(
+            "--adapter", exists=True, file_okay=False, help="Directory of the fine-tuned adapter."
+        ),
+    ],
+    suite: Annotated[str, typer.Option("--suite", help="Suite name: full or quick.")] = "full",
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Suite YAML override."
+        ),
+    ] = None,
+    stage: Annotated[str, typer.Option("--stage", help="Row name in the results table.")] = (
+        "qwen3-pgn-qlora"
+    ),
+    no_cache: Annotated[bool, typer.Option("--no-cache", help="Recompute everything.")] = False,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """Put a fine-tuned general model through the decoder's own suite.
+
+    Same positions, same puzzles, same Stockfish ladder. The one column this report has and the
+    decoder's does not is the breakdown of *how* its answers failed: a model writing SAN can write
+    something that is not a move, or a move two pieces could make, and neither is possible for a
+    vocabulary in which one token is one move.
+    """
+    from rukh.eval import load_suite
+    from rukh.eval.qwen_suite import run_qwen_suite
+    from rukh.eval.report import elo_line
+    from rukh.eval.suite import SUITES
+
+    if suite not in SUITES:
+        typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
+        raise typer.Exit(code=2)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_suite(suite, config)
+    try:
+        result, report = run_qwen_suite(
+            adapter, cfg, stage=stage, use_cache=not no_cache, device=device
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    stats = result.written
+    typer.echo(f"stage:    {result.stage} ({result.params:,} parameters)")
+    typer.echo(f"legal:    {stats.legal_rate:.4f} of {stats.asked} answers")
+    typer.echo(
+        f"failures: {stats.illegal} illegal, {stats.unparseable} not a move, "
+        f"{stats.ambiguous} ambiguous, {stats.empty} empty"
+    )
+    if result.top1 is not None:
+        typer.echo(f"accuracy: top1 {result.top1:.4f}")
+    if result.puzzles is not None:
+        typer.echo(f"puzzles:  {result.puzzles.rate:.4f} solved")
+    if result.elo is not None:
+        typer.echo(f"elo:      {elo_line(result.elo)} over {result.elo.games} games")
+    typer.echo(f"report:   {report.markdown}")
+
+
+@eval_app.command("sweep")
+def eval_sweep_cmd(
+    model: Annotated[
+        str, typer.Option("--model", help="Checkpoint path or Hub id to evaluate per condition.")
+    ],
+    elos: Annotated[
+        str,
+        typer.Option("--elos", help="Increasing Elo headers to ask for, comma separated."),
+    ] = "1200,1500,1800,2100,2400",
+    suite: Annotated[str, typer.Option("--suite", help="Suite name: full or quick.")] = "full",
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Suite YAML override."
+        ),
+    ] = None,
+    stage: Annotated[str | None, typer.Option("--stage", help="Name of the sweep.")] = None,
+    no_cache: Annotated[bool, typer.Option("--no-cache", help="Recompute every game.")] = False,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+    web: Annotated[
+        bool, typer.Option("--web/--no-web", help="Also write the JSON the course reads.")
+    ] = True,
+) -> None:
+    """Run the suite once per Elo header and say whether the ratings come out monotonic.
+
+    Every row is the same evaluation with one number changed, so anything that differs between
+    them is the condition. The verdict is printed twice on purpose: whether the point estimates
+    rise, and whether the confidence intervals actually separate. Only the second is evidence.
+    """
+    from rukh.eval import load_suite
+    from rukh.eval.suite import SUITES, is_hub_id
+    from rukh.eval.sweep import WEB_FILE, elo_summary, run_sweep, write_sweep
+    from rukh.paths import resolve
+
+    if suite not in SUITES:
+        typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
+        raise typer.Exit(code=2)
+    if not Path(model).is_file() and not is_hub_id(model):
+        typer.echo(f"error: --model {model!r} is neither a checkpoint nor a Hub id", err=True)
+        raise typer.Exit(code=2)
+    try:
+        wanted = [int(part) for part in elos.split(",") if part.strip()]
+    except ValueError as exc:
+        typer.echo(f"error: --elos must be a comma-separated list of integers: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_suite(suite, config)
+    try:
+        result = run_sweep(
+            model, cfg, wanted, suite=suite, use_cache=not no_cache, device=device, stage=stage
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    markdown = write_sweep(result, resolve(cfg.out_dir), WEB_FILE if web else None)
+    typer.echo(f"stage:      {result.stage} ({result.params:,} parameters)")
+    typer.echo(elo_summary(result.rows))
+    typer.echo(f"monotonic:  {'yes' if result.monotonic else 'no'} (point estimates)")
+    typer.echo(f"separated:  {'yes' if result.separated else 'no'} (confidence intervals)")
+    if result.span is not None:
+        typer.echo(f"span:       {result.span:.0f} Elo")
+    typer.echo(f"report:     {markdown}")
+
+
 @eval_app.command("encoder")
 def eval_encoder_cmd(
     model: Annotated[
@@ -757,12 +1094,31 @@ def export_cmd(
             help="Validation games parquet for the parity positions.",
         ),
     ] = None,
+    adapter_inputs: Annotated[
+        bool,
+        typer.Option(
+            "--adapter-inputs",
+            help="Write the graph with the LoRA factors as inputs, so styles can be swapped.",
+        ),
+    ] = False,
+    adapter: Annotated[
+        Path | None,
+        typer.Option(
+            "--adapter",
+            exists=True,
+            file_okay=False,
+            readable=True,
+            help="Adapter folder to check the parity of the swapped path against PyTorch.",
+        ),
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
 ) -> None:
     """Export a model to ONNX, quantize it and check parity with PyTorch.
 
     The decoder exports its next-move head; ``--kind encoder`` exports the two heads the demo
-    reads from a position, ``value`` and ``blunder``.
+    reads from a position, ``value`` and ``blunder``. With ``--adapter-inputs`` the decoder's
+    graph takes its LoRA factors as two extra inputs: fed zeros it is the checkpoint, fed a
+    1.6 MB adapter it is that style, and the browser changes style without downloading a model.
     """
     from rukh.export import KINDS, export_all
 
@@ -782,6 +1138,8 @@ def export_cmd(
             check_parity=check_parity,
             positions=positions,
             games=games,
+            adapter_inputs=adapter_inputs,
+            adapter=adapter,
         )
     except (ImportError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
@@ -805,10 +1163,21 @@ def export_cmd(
                 f"{quantized.kind}:     {quantized.path} ({quantized.bytes} bytes, "
                 f"{quantized.ratio:.2f} of fp32, {quantized.method})"
             )
+    if bundle.adapter_inputs:
+        shape_a = bundle.onnx.metadata.get("rukh_adapter_shape_a", "?")
+        shape_b = bundle.onnx.metadata.get("rukh_adapter_shape_b", "?")
+        typer.echo(f"adapter:  factors are inputs, A ({shape_a}) and B ({shape_b})")
     for name, result in bundle.parity.items():
+        label = "parity" if not bundle.adapter_inputs else "parity zeros"
         typer.echo(
-            f"parity {name}: {result.agreement:.4f} on {result.positions} "
+            f"{label} {name}: {result.agreement:.4f} on {result.positions} "
             f"{bundle.parity_source} positions "
+            f"(max |delta logits| {result.max_abs_logit_delta:.4g})"
+        )
+    for name, result in bundle.adapter_parity.items():
+        typer.echo(
+            f"parity {bundle.adapter_name} {name}: {result.agreement:.4f} on "
+            f"{result.positions} positions "
             f"(max |delta logits| {result.max_abs_logit_delta:.4g})"
         )
     for name, heads in bundle.heads_parity.items():
@@ -920,6 +1289,113 @@ def publish_model_cmd(
     typer.echo(f"run:      {result.run_id or 'not found in MLflow'}")
     typer.echo(f"folder:   {result.folder}")
     typer.echo("files:")
+    for path in result.files:
+        typer.echo(f"  {path}")
+
+
+@publish_app.command("adapter")
+def publish_adapter_cmd(
+    run_dir: Annotated[
+        Path,
+        typer.Option(
+            "--run", exists=True, file_okay=False, help="Training run folder with the adapter."
+        ),
+    ],
+    repo: Annotated[str, typer.Option("--repo", help="Hub repository, e.g. chorcat/rukh-lora-e4.")],
+    base: Annotated[
+        str, typer.Option("--base", help="Repository of the model this adapter mounts on.")
+    ],
+    stage: Annotated[str | None, typer.Option("--stage", help="Name of the adapter.")] = None,
+    effect: Annotated[
+        Path | None,
+        typer.Option(
+            "--effect",
+            exists=True,
+            dir_okay=False,
+            help="JSON with what the adapter changed (AdapterEffect).",
+        ),
+    ] = None,
+    n_layer: Annotated[int, typer.Option("--n-layer", help="Layers of the base model.")] = 16,
+    d_model: Annotated[int, typer.Option("--d-model", help="Width of the base model.")] = 768,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Stage the folder locally; touch no network.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Publish a LoRA adapter as its own repository, with the base model it needs to work.
+
+    An adapter is not a model: no weights, no ONNX, no vocabulary, and on its own it does nothing
+    at all. So the card leads with the base model, and the numbers it publishes are what the
+    adapter *changed* -- publishing it with the base model's Elo would be publishing somebody
+    else's number.
+    """
+    from rukh.publish.adapter import AdapterEffect, publish_adapter
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    measured = (
+        AdapterEffect.model_validate_json(effect.read_text(encoding="utf-8"))
+        if effect is not None
+        else None
+    )
+    try:
+        result = publish_adapter(
+            run_dir,
+            repo,
+            base,
+            stage=stage,
+            effect=measured,
+            base_config={"n_layer": n_layer, "d_model": d_model},
+            dry_run=dry_run,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(f"repo:     {result.repo_id}")
+    typer.echo(f"base:     {result.base_repo}")
+    typer.echo(f"mode:     {'dry-run (staged, nothing uploaded)' if dry_run else 'uploaded'}")
+    typer.echo(f"params:   {result.params:,} ({result.bytes / 1e6:.1f} MB)")
+    typer.echo(f"folder:   {result.folder}")
+    for path in result.files:
+        typer.echo(f"  {path}")
+
+
+@publish_app.command("qwen")
+def publish_qwen_cmd(
+    run_dir: Annotated[
+        Path,
+        typer.Option("--run", exists=True, file_okay=False, help="The peft output folder."),
+    ],
+    repo: Annotated[str, typer.Option("--repo", help="Hub repository for the adapter.")],
+    stage: Annotated[
+        str, typer.Option("--stage", help="Evaluation row the card reads.")
+    ] = "qwen3-pgn-qlora",
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Write the card locally; touch no network.")
+    ] = False,
+) -> None:
+    """Publish the QLoRA adapter of the general model, in the format `peft` wrote it.
+
+    Not re-staged into this project's own adapter format: `peft` already wrote a valid
+    `adapter_config.json` and `adapter_model.safetensors`, and rewriting them would make the file
+    unusable with the two lines of `peft` any reader would actually type. What gets added is the
+    card, built from the run's own record and from the evaluation, never by hand.
+    """
+    from rukh.publish.adapter import publish_qwen_adapter
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    try:
+        result = publish_qwen_adapter(run_dir, repo, stage=stage, dry_run=dry_run)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"repo:     {result.repo_id}")
+    typer.echo(f"base:     {result.base_repo}")
+    typer.echo(f"mode:     {'dry-run (card written, nothing uploaded)' if dry_run else 'uploaded'}")
+    typer.echo(f"trained:  {result.params:,} parameters ({result.bytes / 1e6:.1f} MB)")
+    typer.echo(f"card:     {result.card_path}")
     for path in result.files:
         typer.echo(f"  {path}")
 

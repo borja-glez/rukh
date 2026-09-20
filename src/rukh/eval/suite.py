@@ -26,6 +26,7 @@ from rukh import paths
 from rukh.config import BaseConfig
 from rukh.eval.accuracy import AccuracyResult, accuracy
 from rukh.eval.cache import EvalCache, config_sha, file_sha
+from rukh.eval.diversity import DiversityResult, opening_diversity
 from rukh.eval.elo import DEFAULT_RUNGS, EloResult, EloRung, estimate, play_rungs
 from rukh.eval.legality import LegalityResult, legality, sample_positions
 from rukh.eval.puzzles import (
@@ -84,6 +85,15 @@ class EvalConfig(BaseConfig):
     accuracy_positions: int = 10_000
     position_pool: int = 50_000
     puzzles_per_band: int = 2_000
+    force_header: bool = False
+    """Prompt everything with ``header_elo`` instead of the ratings the game really had.
+
+    Off everywhere except the Elo sweep, where it is what makes the table readable. Validation
+    positions carry their own players' ratings and almost every puzzle carries its game's, so
+    with it off the legality, the accuracy and the puzzle rate come out **identical in every row**
+    of a sweep: correct by their own definition, and indistinguishable from evidence that the
+    condition does nothing. The Elo games never had this problem -- they are played from the
+    starting position and the header is the only thing that says who is playing."""
     header_elo: int = 1_800
     """The Elo the model is asked to play at (``<wXXXX> <bXXXX>``).
 
@@ -97,6 +107,18 @@ class EvalConfig(BaseConfig):
     elo_move_time: float = 0.1
     elo_max_plies: int | None = None
     bootstrap: int = 1_000
+    diversity_games: int = 200
+    """Self-play openings for the diversity metric; 0 switches it off."""
+    diversity_plies: int = 12
+    diversity_temperature: float = 1.0
+    """Read at its own temperature, not the suite's. The suite plays near-deterministically so
+    that stages are comparable (D-047), and at that setting a decoder plays one single opening
+    and the entropy is 0 for every model alike. Diversity only says something where there is a
+    choice to make, so it gets the temperature that leaves one."""
+    diversity_top_k: int | None = 20
+    """And its own top-k, for the same reason and a sharper one: the suite reads at ``top_k: 1``,
+    which is argmax whatever the temperature says. Overriding the temperature alone would look
+    like a diversity measurement and be a second copy of the deterministic one."""
     temperature: float = 0.6
     top_k: int | None = 20
     block: int = 200
@@ -111,7 +133,7 @@ class EvalConfig(BaseConfig):
 
     def cache_fields(self) -> dict[str, Any]:
         """The settings that change what a cached game or puzzle means."""
-        return {
+        fields: dict[str, Any] = {
             "temperature": self.temperature,
             "top_k": self.top_k,
             "elo_move_time": self.elo_move_time,
@@ -121,6 +143,15 @@ class EvalConfig(BaseConfig):
             "seed": self.seed,
             "block": self.block,
         }
+        # Only when it is on. A cache key is a promise that two runs with the same key measured
+        # the same thing, and a flag that is off *is* the behaviour every cached game was played
+        # under; adding it unconditionally would throw away the 17 MB of games P2 and P3 paid for.
+        # The key keeps the old name on purpose: puzzles are the only thing this flag changes
+        # that is *cached* (legality and accuracy are recomputed every run), so renaming it would
+        # throw away the games and the attempts of a sweep that is already paid for.
+        if self.force_header:
+            fields["puzzles_use_header"] = True
+        return fields
 
     def sampling(self) -> SampleConfig:
         """The sampler the Elo games use: masked, seeded, as the demo plays."""
@@ -155,7 +186,10 @@ class SuiteResult(BaseModel):
     delta_cp: float | None = None
     """Mean centipawn loss; measured by a later milestone, ``null`` until then."""
     diversity: float | None = None
-    """Opening entropy over self-play games; measured by a later milestone."""
+    """Normalised opening entropy over self-play games, 0 (always the same) to 1 (never twice)."""
+    diversity_detail: DiversityResult | None = None
+    """The whole measurement: distinct lines, the analytic first-move entropy and the
+    temperature it was read at, which the normalised number alone would not carry."""
     notes: list[str] = []
     config: dict[str, Any] = {}
 
@@ -186,6 +220,7 @@ def _positions(cfg: EvalConfig, tok: UciTokenizer, notes: list[str]) -> list[Any
         seed=cfg.seed,
         pool=cfg.position_pool,
         block=cfg.block,
+        header_elo=cfg.header_elo if cfg.force_header else None,
     )
 
 
@@ -383,12 +418,34 @@ def evaluate(
                 puzzle_path, cfg.puzzles_per_band, seed=cfg.seed, split=cfg.puzzle_split
             )
             result.puzzles = run_puzzles(
-                model_source(model, tok), tok, items, cache=cache, header_elo=cfg.header_elo
+                model_source(model, tok),
+                tok,
+                items,
+                cache=cache,
+                header_elo=cfg.header_elo,
+                force_header=cfg.force_header,
             )
             if result.puzzles.prompt_style != GAME_PREFIX:
                 notes.append(PUZZLE_PROMPT_NOTE)
         else:
             notes.append(f"puzzles not found at {puzzle_path}: puzzle suite skipped")
+        if cfg.diversity_games:
+            detail = opening_diversity(
+                model,
+                tok,
+                games=cfg.diversity_games,
+                plies=cfg.diversity_plies,
+                sampling=cfg.sampling().model_copy(
+                    update={
+                        "temperature": cfg.diversity_temperature,
+                        "top_k": cfg.diversity_top_k,
+                    }
+                ),
+                header_elo=cfg.header_elo,
+                seed=cfg.seed,
+            )
+            result.diversity_detail = detail
+            result.diversity = detail.normalised
         result.elo = _elo(model, tok, cfg, cache, notes)
         _elo_notes(result.elo, cfg, notes)
         result.notes = notes  # pydantic copied the list at construction time

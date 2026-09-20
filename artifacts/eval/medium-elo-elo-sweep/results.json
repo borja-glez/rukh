@@ -1,0 +1,107 @@
+{
+  "stage": "medium-elo",
+  "checkpoint": "checkpoints/medium-elo-20260920-143756/step-3800.pt",
+  "params": 115120128,
+  "date": "2026-09-20",
+  "rows": [
+    {
+      "header_elo": 1200,
+      "elo": 1424.8708108844783,
+      "elo_ci": [
+        1361.178346054483,
+        1479.1583309615335
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.33125,
+      "legality": 1.0,
+      "top1": 0.514,
+      "puzzles": 0.37016666666666664,
+      "first_move_entropy": 1.5955005966393512,
+      "stage": "medium-elo@1200"
+    },
+    {
+      "header_elo": 1500,
+      "elo": 1549.0399509257222,
+      "elo_ci": [
+        1481.3044125027088,
+        1608.771489736966
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.465625,
+      "legality": 1.0,
+      "top1": 0.539,
+      "puzzles": 0.37666666666666665,
+      "first_move_entropy": 1.6469883143874313,
+      "stage": "medium-elo@1500"
+    },
+    {
+      "header_elo": 1800,
+      "elo": 1497.908527511075,
+      "elo_ci": [
+        1435.2194986185973,
+        1552.2555734680718
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.409375,
+      "legality": 0.998,
+      "top1": 0.541,
+      "puzzles": 0.382,
+      "first_move_entropy": 1.7407688017812908,
+      "stage": "medium-elo@1800"
+    },
+    {
+      "header_elo": 2000,
+      "elo": 1537.7025527209353,
+      "elo_ci": [
+        1478.7576608975435,
+        1597.0262009043502
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.453125,
+      "legality": 0.997,
+      "top1": 0.54,
+      "puzzles": 0.37983333333333336,
+      "first_move_entropy": 1.84060262733361,
+      "stage": "medium-elo@2000"
+    },
+    {
+      "header_elo": 2100,
+      "elo": 1606.1017054006375,
+      "elo_ci": [
+        1543.1273664905214,
+        1670.0236242421254
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.528125,
+      "legality": 0.997,
+      "top1": 0.534,
+      "puzzles": 0.38083333333333336,
+      "first_move_entropy": 1.880906346231127,
+      "stage": "medium-elo@2100"
+    },
+    {
+      "header_elo": 2400,
+      "elo": 1644.032326263673,
+      "elo_ci": [
+        1577.6373491004802,
+        1706.5725376904218
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.56875,
+      "legality": 0.997,
+      "top1": 0.533,
+      "puzzles": 0.38083333333333336,
+      "first_move_entropy": 1.9915567737134319,
+      "stage": "medium-elo@2400"
+    }
+  ],
+  "monotonic": false,
+  "separated": false,
+  "span": 219.16151537919473
+}

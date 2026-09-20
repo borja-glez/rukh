@@ -1,0 +1,18 @@
+# The same games as PGN text, for the general-model side of the M4 comparison.
+#
+# Training reads 2025-01 and the harness measures on 2025-02, which is the split every other run
+# in the project uses -- so Qwen is trained on the same games the decoder was and evaluated on
+# positions neither of them has seen. `val.jsonl` exists for a validation loss and is not what
+# the comparison is read from: that is `rukh eval qwen`, on the harness's own positions.
+#
+# 120 plies covers the great majority of the games whole; the longest few are cut rather than
+# dropped, because a corpus that quietly excludes long games is a corpus that teaches short ones.
+pgn_text:
+  train_games: data/uci/year=2025/month=01/games.parquet
+  val_games: data/uci/year=2025/month=02/games.parquet
+  out_dir: data/pgn-text
+  n_train: 100000
+  n_val: 2000
+  max_plies: 120
+  val_offset: 20000
+  seed: 42

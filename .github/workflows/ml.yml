@@ -24,8 +24,11 @@ jobs:
       - name: Install Python 3.12
         run: uv python install 3.12
 
-      - name: Sync (CPU torch, dev group)
-        run: uv sync --extra cpu --group dev
+      # `hf` as well as `cpu`: without it the Hugging Face tests skip, and one of them is the
+      # only check that the hand-written LoRA of `rukh.models.lora` is the same update rule as
+      # `peft`'s. A claim that is verified on one laptop is not verified.
+      - name: Sync (CPU torch, Hugging Face extra, dev group)
+        run: uv sync --extra cpu --extra hf --group dev
 
       - name: Ruff check
         run: uv run ruff check .

@@ -1,0 +1,41 @@
+# A style adapter: 393 216 numbers that make `medium-v4` open 1. d4.
+#
+# Everything outside `A` and `B` is frozen, so the 115 M weights on disk are the ones the reader
+# already downloaded and the adapter is 1.6 MB on top of them. `r = 8` on the query and value
+# projections is the configuration of the paper, and it is also the smallest one that has a chance:
+# whatever the adapter learns has to pass through eight dimensions per matrix.
+#
+# 1 500 steps of 51 200 tokens is 76.8 M, about half a pass over the 200 000-game slice. Short on
+# purpose -- an adapter that trains until it has memorised the slice stops being a style and
+# becomes a worse model, and the Elo of base-plus-adapter is what says which of the two happened.
+preset: medium
+init_from: checkpoints/medium-v4-20260919-174623/best.pt
+tokens_dir: data/tokens-style-d4/uci
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.0
+  targets: [q, v]
+block: 200
+batch_size: 32
+grad_accum: 8
+# Twenty times the fine-tuning rate, because only 0.34 % of the model is moving and `B` starts at
+# exactly zero: at 1e-4 the adapter would still be near the identity after 1 500 steps.
+lr: 2.0e-4
+min_lr_ratio: 0.1
+warmup: 100
+max_steps: 1500
+weight_decay: 0.0
+betas: [0.9, 0.95]
+grad_clip: 1.0
+precision: bf16
+compile: true
+eval_every: 250
+eval_batches: 50
+ckpt_every: 750
+out_dir: checkpoints
+seed: 42
+run_name: lora-d4
+unique_run_name: true
+workers: 4
+log_every: 10

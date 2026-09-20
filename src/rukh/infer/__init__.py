@@ -3,8 +3,10 @@
 from rukh.infer.game import (
     ADJUDICATION_CP,
     ADJUDICATION_DEPTH,
+    DecoderPlayer,
     GameResult,
     Opponent,
+    Player,
     RandomOpponent,
     StockfishOpponent,
     adjudicate,
@@ -12,6 +14,7 @@ from rukh.infer.game import (
     legality_rate,
     material_balance,
     play_game,
+    play_game_with,
     result_token,
 )
 from rukh.infer.sampler import (
@@ -39,7 +42,10 @@ __all__ = [
     "material_balance",
     "model_generator",
     "pick_move",
+    "DecoderPlayer",
+    "Player",
     "play_game",
+    "play_game_with",
     "prompt_ids",
     "result_token",
 ]

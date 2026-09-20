@@ -38,7 +38,51 @@ Not evaluated yet: run `rukh eval --model <checkpoint>` to fill this table.{% en
 {%- endfor %}
 {%- if puzzle_bands %}
 
-Puzzles by difficulty band:
+{% if parity and parity.adapter_inputs %}
+## Swappable styles: the LoRA factors are inputs of the graph
+
+The ONNX files here are not the ordinary export. They declare two extra inputs, `lora_a`
+`(16, 2, 8, 768)` and `lora_b` `(16, 2, 768, 8)`, which carry a LoRA adapter stacked over the
+blocks. Merging an adapter into the weights and exporting the result would cost a whole copy of
+the model per style; this way a style is 1.6 MB fed on every call, and changing style costs an
+upload rather than a download.
+
+Two things have to hold and both are measured, on the same 1000 validation positions:
+
+| Fed | fp32 | fp16 | int8 |
+|---|---|---|---|
+| an adapter of **zeros** | {% for row in parity.rows %}{{ row.agreement }}{% if not loop.last %} | {% endif %}{% endfor %} |
+{% if parity.adapter_rows %}| `{{ parity.adapter_name }}` | {% for row in parity.adapter_rows %}{{ row.agreement }}{% if not loop.last %} | {% endif %}{% endfor %} |
+{% endif %}
+Fed zeros the graph computes what the plain checkpoint computes, so this file **replaces** the
+ordinary export instead of being a second copy of it. Fed a trained adapter it computes what
+PyTorch computes with that adapter loaded. The `alpha / r` scaling lives in the adapter file and
+not in the graph, so an adapter of any rank is correct here without matching two numbers by hand;
+`chorcat/rukh-lora-e4` and `chorcat/rukh-lora-d4` ship theirs as `web/adapter.bin`, a flat
+little-endian `float32` buffer, `A` first and then `B`.
+
+{% endif %}{% if sweep %}
+## What the Elo header does
+
+The two header tokens `<wXXXX> <bXXXX>` are an instruction: *play like somebody of this strength*.
+Below is the same suite run once per condition -- same opponents, same positions, same puzzles,
+same seed -- with only those two tokens changed.
+
+| Asked for | Elo | 95 % CI | legal argmax | top-1 | first-move entropy |
+|---|---:|---|---:|---:|---:|
+{% for row in sweep.rows -%}
+| `{{ row.header }}` | {{ row.elo }} | {{ row.ci }} | {{ row.legality }} | {{ row.top1 }} | {{ row.entropy }} bits |
+{% endfor %}
+Point estimates are **{{ 'monotonic' if sweep.monotonic else 'not monotonic' }}** and the intervals are **{{ 'separated' if sweep.separated else 'not separated' }}**{% if sweep.span %}, with {{ sweep.span }} Elo between the weakest and the strongest condition{% endif %}.
+
+Read it for what it says. The **entropy of the first move** -- the model's own distribution over
+the twenty legal openings, with no sampling and no seed -- rises in order with the condition, which
+is the header controlling the **repertoire**. The **Elo** does not separate, and the same sweep run
+on the model *before* this fine-tune covers most of the same range using headers it never trained
+on, so the Elo column cannot tell conditioning from a prefix simply getting in the way. This model
+changes **how it plays**, not **how well**.
+
+{% endif %}Puzzles by difficulty band:
 
 | Band | Solved |
 |---|---|

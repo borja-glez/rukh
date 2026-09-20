@@ -195,3 +195,76 @@ def test_metric_names_survive_mlflow_validation() -> None:
     allowed = set(string.ascii_letters + string.digits + "_-. /")
     for band in ("<1800", "1800-2000", "2600+"):
         assert set(_metric_name("top1", band)) <= allowed
+
+
+def test_diversity_gets_its_own_top_k_and_not_just_its_own_temperature() -> None:
+    """`top_k: 1` is argmax whatever the temperature says.
+
+    Overriding the temperature alone would produce something that looks like a diversity
+    measurement and is a second copy of the deterministic one: one line, entropy zero, for every
+    model alike.
+    """
+    from rukh.eval.suite import EvalConfig
+
+    cfg = EvalConfig(temperature=0.05, top_k=1, diversity_temperature=1.0, diversity_top_k=20)
+    assert cfg.sampling().top_k == 1  # what the Elo games and the puzzles read at
+    assert cfg.diversity_top_k == 20  # what the openings are drawn at
+
+
+def test_the_shipped_sweep_config_reads_diversity_where_there_is_a_choice(repo_root: Path) -> None:
+    from rukh.eval import load_suite
+
+    cfg = load_suite("full", repo_root / "configs" / "eval" / "greedy-sweep.yaml")
+    assert (cfg.temperature, cfg.top_k) == (0.05, 1)
+    assert (cfg.diversity_temperature, cfg.diversity_top_k) == (1.0, 20)
+
+
+def test_forcing_the_header_reaches_the_validation_positions_too(
+    rukh_home: Path, repo_root: Path
+) -> None:
+    """The same trap as the puzzles, one layer up.
+
+    `sample_positions` builds each prefix with the ratings the game really had, so legality and
+    next-move accuracy do not move when the condition does: in a sweep they come out identical in
+    every row, which reads as evidence that the condition does nothing.
+    """
+    import polars as pl
+
+    from rukh.eval.legality import sample_positions
+    from rukh.tokenize.uci_vocab import UciTokenizer
+
+    games = rukh_home / "games.parquet"
+    pl.DataFrame(
+        {
+            "game_id": [1, 2],
+            "uci": ["e2e4 e7e5 g1f3 b8c6 f1b5 a7a6"] * 2,
+            "white_elo": [2100, 2200],
+            "black_elo": [2150, 2250],
+        }
+    ).write_parquet(games.as_posix())
+    tok = UciTokenizer()
+
+    own = sample_positions(games, 2, tok, seed=1, pool=10)
+    assert {p.history[1] for p in own} <= {tok.vocab["<w2100>"], tok.vocab["<w2200>"]}
+
+    forced = sample_positions(games, 2, tok, seed=1, pool=10, header_elo=1200)
+    assert {p.history[1] for p in forced} == {tok.vocab["<w1200>"]}
+    assert {p.history[2] for p in forced} == {tok.vocab["<b1200>"]}
+    # Same positions, same plies: only the header changed.
+    assert [p.moves for p in forced] == [p.moves for p in own]
+
+
+def test_the_shipped_sweep_config_forces_the_header_everywhere(repo_root: Path) -> None:
+    from rukh.eval import load_suite
+
+    assert load_suite("full", repo_root / "configs" / "eval" / "greedy-sweep.yaml").force_header
+    assert not load_suite("full", repo_root / "configs" / "eval" / "greedy.yaml").force_header
+
+
+def test_the_cache_key_keeps_its_old_name_so_a_paid_sweep_survives(repo_root: Path) -> None:
+    """Renaming the field must not rename the key: puzzles are the only cached thing it changes."""
+    from rukh.eval.suite import EvalConfig
+
+    assert "puzzles_use_header" in EvalConfig(force_header=True).cache_fields()
+    assert "force_header" not in EvalConfig(force_header=True).cache_fields()
+    assert "puzzles_use_header" not in EvalConfig().cache_fields()

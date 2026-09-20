@@ -129,6 +129,21 @@ se decide o se desvía durante la ejecución.
 - **Por qué:** fallo conocido de chrome-launcher en Windows; no afecta al runner.
 - **Si está mal:** los scripts `lighthouse*` de los `package.json` no cambian; es solo el modo de
   ejecutarlos en la máquina de referencia.
+- **Ampliación (2026-09-20, P4):** hay un camino más corto que lanzar Chrome aparte, y es el que se
+  usa ahora. El `EPERM` ocurre en `Launcher.kill`, **después** de escribir el informe, así que basta
+  con llamar al CLI de Lighthouse que trae `@lhci/cli` e ignorar el código de salida:
+
+  ```bash
+  node node_modules/.pnpm/lighthouse@12.6.1/node_modules/lighthouse/cli/index.js     "http://127.0.0.1:4402/curso/m4/01-fine-tuning/" --preset=desktop --quiet     --output=json --output-path=informe.json --chrome-flags="--headless=new --disable-gpu"
+  ```
+
+  El fichero está escrito aunque el proceso termine en 1. Dos avisos para la próxima: `lighthouse`
+  no es un binario expuesto en estos repos —hay que llamar al `cli/index.js` de dentro de
+  `.pnpm`—, y Node en Windows no entiende las rutas `/c/...` de MSYS, así que el `--output-path` y
+  el `require` del informe tienen que ir en `C:/...`.
+- **Medido así el 2026-09-20:** `rukh-lab` `/curso/m4/01-fine-tuning/` **1 / 1 / 1 / 1** en
+  escritorio, igual que `/curso/m3/01-el-encoder/`; `rukh-web` **1 / 1 / 1 / 1** en escritorio y
+  **0,99 / 1 / 1 / 1** en móvil.
 
 ## Verificación de P0 (2026-09-18, máquina de referencia)
 
@@ -1174,6 +1189,580 @@ Evidencia obtenida por el controlador, no por subagentes:
   y D-073 lo desmintió — sobre `medium-v4` la legalidad se queda en 99,80 % antes y después. No era
   el método, era la falta de holgura en 39 M parámetros. Enseñarlo sin esa corrección sería
   generalizar desde un solo punto de operación.
+
+## P4 · Fine-tuning e instrucción (2026-09-20)
+
+### D-079 · El corpus entero empieza en 1800, así que media escala de Elo nunca se entrenó
+- **Qué se encontró:** `configs/data/lichess-2025-01-02.yaml` fija `min_elo: 1800` y el filtro se
+  aplica a **los dos** jugadores. Todo lo que ha visto cualquier modelo del proyecto —los 19 M de
+  partidas de `tokens-v4`, la Elite DB incluida— está entre 1800 y ~3100.
+  `data/elo-bins/manifest.json` lo confirma sin ambigüedad: su bin más bajo es **1800**.
+- **Consecuencia:** los tokens `<w1000>`…`<w1700>` y sus gemelos de negras **nunca han recibido un
+  gradiente**. Su embedding sigue en la inicialización. Pedirle al modelo publicado que «juegue
+  como 1500» no le pide nada: le pone delante un vector aleatorio.
+- **Qué reinterpreta:** D-069 midió que condicionar a 2600 no daba Elo y concluyó que imitar a un
+  fuerte no compra táctica. Eso sigue en pie para el extremo alto. Pero el extremo **bajo**, que es
+  el que pide el criterio de P4 y el que un jugador humano querría, no se había probado nunca
+  porque no había datos con los que probarlo.
+- **Qué se hace:** un segundo corpus con el mismo filtro salvo el rango (`min_elo: 1000`,
+  `max_elo: 1799`, `configs/data/lichess-low.yaml`) en su propio `out_dir`, para que `data/uci`
+  siga significando exactamente aquello con lo que se entrenó lo publicado.
+- **Si está mal:** que el eje no se aprenda ni con datos, y entonces el problema no era el corpus
+  sino la capacidad del condicionamiento por prefijo. Lo decidirá `rukh eval sweep`, no una
+  opinión.
+
+### D-080 · Leer un mes por `hf://` dejó de funcionar; se descarga shard a shard
+- **Qué pasó:** el primer intento de descargar la banda baja murió con `HTTP 429 Too Many Requests`
+  después de minutos de trabajo y sin fichero parcial. El segundo, ya autenticado y con ocho
+  reintentos, se quedó **cincuenta minutos a 0,02 MB/s** con 8,6 GB de buffer en memoria y cero
+  bytes escritos.
+- **Por qué:** un mes son 72 ficheros de ~1 GB y leerlos en remoto son miles de peticiones de
+  rango contra un solo host. El anfitrión responde 429 y DuckDB entra en una espera que se
+  cuadruplica a cada intento. Medido el mismo día: descargar **un shard entero** va a 14,8 MB/s.
+- **Qué se hace:** cada shard se descarga una vez con `huggingface_hub` (que cachea, reanuda y
+  espera bien), se filtra en local a un fichero de parte y se borra. El pico de disco es un shard,
+  el mes reanuda donde se quedó, y `limit` ahora **para la descarga** en vez de solo recortar el
+  resultado: con 505 547 partidas de la banda 1000-1799 en el primer shard, 1,2 M salen de tres.
+- **Lo que no cambia:** el filtro. `where_clause` se construye una vez y se usa en los dos sitios
+  —la consulta que imprime el ensayo y cada shard descargado— para que lo documentado sea lo que
+  corre.
+- **Coste:** una conexión DuckDB ahora crea un secreto de Hugging Face cuando hay token local, y el
+  presupuesto de reintentos sube de 3 a 8. Firmar las peticiones también sube el límite del
+  anfitrión, así que es lo correcto aunque no hubiera 429.
+
+### D-081 · El corpus balanceado es plano a propósito, y se estrecha donde se estrecha el mundo
+- **Construido:** `data/elo-bins-v2`, bandas de 200 Elo de 1000 a 2600 sobre las dos mitades del eje
+  (`data/uci-low` y `data/uci`), 150 000 partidas por banda.
+- **Medido:** siete bandas llenas (1000-2200), 146 232 en la de 2400 y **23 191** en la de 2600.
+  Total **1 219 423 partidas, 95 722 318 tokens**. La cabecera queda plana entre 59 335 y 87 662
+  partidas por bin de 100 desde `<w1000>` hasta `<w2400>`, frente a la pirámide 20:1 del corpus real.
+- **Por qué plano:** un corpus con la forma real enseña que `<w1500>` es *raro*, que no es lo mismo
+  que enseñar qué *significa*. La frecuencia de una condición y su contenido son cosas distintas y
+  aquí solo interesa la segunda.
+- **Lo que no se puede arreglar:** no hay 150 000 partidas de 2600+ en dos meses de Lichess. El
+  manifiesto publica el reparto real. El criterio de `GOAL.md` (1500 < 2000 < 2400) vive entero
+  dentro de la parte plana, así que la cola fina no lo compromete.
+- **Ancho de banda 200 y no 100:** con 100 las cuatro bandas de club tendrían la misma resolución
+  que las de maestro y se quedarían sin partidas; con 400 se difuminaría la diferencia entre 1500 y
+  1800, que es justo la que hay que enseñar.
+
+### D-082 · `val_remainder_trains`: una regla razonable que habría deshecho el experimento
+- **Qué pasaba:** el empaquetador parte el mes de validación en dos y suma el resto al
+  entrenamiento (es lo que recuperó 238 M de tokens en D-062). Sobre el corpus balanceado eso añade
+  **2,85 millones** de partidas de 1800+ encima del reparto plano y lo deshace en silencio.
+- **Qué se hace:** `val_remainder_trains: false` en la config del afinado. El conjunto de
+  validación sigue siendo exactamente el mismo con el que se miden las demás corridas —para que las
+  pérdidas sean comparables— y el de entrenamiento es el corpus balanceado y nada más.
+- **Por qué no se quita la regla:** para un preentrenamiento sigue siendo correcta y valiosa. Lo que
+  hacía falta era un interruptor, no una marcha atrás.
+
+### D-083 · El afinado por Elo cuesta 0,025 nats de imitación fuerte
+- **Medido** sobre el mismo conjunto de validación (100 000 partidas de 2025-02, 1800+) y con el
+  mismo medidor:
+
+  | Modelo | pérdida val | top-1 val |
+  |---|---|---|
+  | `medium-v4` (paso 48 000) | 1,3733 | 54,73 % |
+  | `medium-elo` (paso 3 800) | **1,3987** | **54,66 %** |
+
+- **Es el precio esperado y es pequeño.** La validación mide imitación de juego 1800+, que es
+  precisamente lo que este afinado deja de optimizar: dos tercios de su corpus son partidas de club.
+  Que suba no es un defecto, es la definición de lo que se está haciendo.
+- **Receta:** 3 800 pasos × 51 200 tokens = 194,56 M (unas dos pasadas), `lr` 1e-4 (dieciséis veces
+  por debajo del preentrenamiento), warmup 200, coseno a 0,1. ~20 min en la 5090.
+- **Lo que decide el hito no es esta tabla** sino el barrido por condición: lo que importa es qué
+  compró ese cuarto de nat.
+
+### D-084 · `best.pt` no es el resultado de un afinado, y ahora el bucle lo dice
+- **Qué pasó:** `best.pt` se quedó congelado en el **paso 200** de `medium-elo`. Es correcto según
+  su definición (menor pérdida de validación) y es la trampa: en un afinado que cambia de corpus a
+  propósito la pérdida de validación sube desde el principio, así que «el mejor» es el modelo casi
+  sin tocar.
+- **Por qué es peligroso:** quien evaluara ese fichero después estaría midiendo los pesos
+  equivocados, y los números saldrían perfectamente plausibles. No hay excepción que lo delate.
+- **Qué se hace:** cuando hay `init_from` y `best.pt` no es el último paso, el bucle escribe un
+  aviso que nombra el checkpoint que **sí** es el resultado y explica por qué. Con test.
+
+### D-085 · La LoRA escrita a mano es LoRA: comprobado contra `peft`, paso a paso
+- **Por qué hacía falta:** un `alpha` en el sitio equivocado, `A` y `B` intercambiadas o una
+  inicialización distinta dan un modelo que entrena, converge y produce números creíbles. Ninguna da
+  LoRA.
+- **Cómo se comprueba:** dos modelos sobre los mismos pesos base, uno con `apply_lora` y otro con
+  `peft.get_peft_model`; se copia nuestra `A` en la suya (`B` es cero en los dos por construcción) y
+  los dos dan pasos de SGD sobre el mismo lote. Las pérdidas se comparan **paso a paso** con
+  tolerancia 1e-5.
+- **Medido:** iguales en los seis pasos, y el recuento de parámetros entrenables coincide.
+- **Detalle que obliga a elegir el objetivo con cuidado:** la comparación se hace sobre `attn.proj`
+  y no sobre `q`/`v`, porque `peft` no puede expresar lo mismo que nosotros sobre una matriz `qkv`
+  fusionada: con `target_modules=["qkv"]` adapta las tres proyecciones con **una** pareja `A`/`B` de
+  2304 filas, mientras que nuestra implementación da una por rango. Son parametrizaciones distintas
+  y compararlas mediría esa diferencia, no la corrección del código.
+
+### D-086 · Tres cosas que exige `PreTrainedModel` y que no salen en los tutoriales
+- **`_tied_weights_keys` es un diccionario** `{copia: origen}` en `transformers` 5, no una lista. Con
+  una lista, `save_pretrained` revienta con `'list' object has no attribute 'keys'`.
+- **Hay que llamar a `post_init()`** al final del constructor. Sin él no existe
+  `all_tied_weights_keys` y cualquier guardado o carga falla con un `AttributeError` sobre un
+  atributo que uno nunca escribió. En esta versión `post_init` no toca los pesos, así que llamarlo
+  después de construir el decoder es seguro.
+- **La config no puede tener un miembro llamado `decoder`.** `transformers` lo lee como la mitad
+  decodificadora de un par encoder-decoder e intenta llamarle `to_dict()`; un método enlazado se
+  convierte en una excepción la primera vez que algo pide una `GenerationConfig`. Se llama
+  `decoder_config()`.
+- **`labels` no se vuelve a desplazar.** El flujo empaquetado ya guarda `y` un paso por delante de
+  `x`; desplazarlas otra vez dentro de `forward`, como hace casi todo `transformers`, entrenaría al
+  modelo a predecir la jugada de después de la siguiente, con una pérdida de aspecto normal.
+
+### D-087 · El harness se abre a cualquier jugador, sin mover una coma del camino del decoder
+- **Por qué:** M4 tiene que pasar un modelo de lenguaje general por la misma escalera que el
+  decoder. Una comparación cuyas dos mitades corren por código distinto mide también el código.
+- **Cómo:** `play_game` se parte en `play_game_with(player, opponent, ...)` más un `DecoderPlayer`
+  que es el camino original palabra por palabra. `play_rung`/`play_rungs` aceptan un `player`
+  opcional. Los 639 tests siguieron verdes sin tocar ninguno, que es la comprobación de que la
+  refactorización no cambió comportamiento.
+- **Lo que el protocolo obliga a decir:** `choose` devuelve la jugada **y** si la propuesta sin
+  máscara era legal. Son dos preguntas distintas: la partida tiene que seguir, así que una propuesta
+  ilegal se rescata, pero el rescate no puede esconder que ocurrió.
+
+### D-088 · Un modelo de texto puede fallar de tres maneras que el decoder no tiene
+- **El decoder** solo puede equivocarse de una forma: jugada legal en la posición equivocada. Su
+  vocabulario *es* el conjunto de jugadas.
+- **Un modelo que escribe SAN** puede además escribir algo que no es una jugada (`Nf9`), una jugada
+  bien formada que esta posición no permite, o SAN **ambigua** que dos piezas podrían satisfacer y
+  que no desambiguó (`Nd2` en vez de `Nbd2`).
+- **Se cuentan por separado**, nunca sumadas en «ilegal». Sumarlas escondería justo lo que cuesta la
+  representación, que es la mitad de lo que enseña la comparación.
+
+### D-089 · Los puzles llevan el Elo real de sus jugadores, y eso habría falseado el barrido
+- **Qué habría pasado:** casi todos los puzles del conjunto traen `white_elo`/`black_elo` de la
+  partida de la que salieron, y `start_history` los usa cuando están. En un barrido por condición
+  eso deja la columna de puzles **idéntica en las cinco filas** — correcto por su propia definición,
+  e indistinguible de la evidencia de que la condición no hace nada.
+- **Qué se hace:** `puzzles_use_header`, activo solo en el barrido, fuerza la cabecera de la
+  condición en todos los puzles; y la caché del barrido es otra, porque estas tentativas responden a
+  otra pregunta.
+- **La caché vieja no se invalida:** el campo entra en la clave **solo cuando está activo**. Una
+  clave de caché es la promesa de que dos corridas midieron lo mismo, y un interruptor apagado *es*
+  el comportamiento con el que se jugaron las partidas cacheadas de P2 y P3.
+
+### D-090 · Se mide y se publica la entropía de aperturas, que llevaba desde el spec en `n/a`
+- **Por qué ahora:** el spec predice del afinado con maestros que «sube el Elo y baja la
+  diversidad». Una tabla que solo mide la primera mitad no puede comprobar esa frase.
+- **Dos números, porque fallan distinto.** La **entropía de líneas** (N auto-partidas, entropía de
+  Shannon de las líneas distintas) es la que pide el spec y depende del muestreo: al ajuste casi
+  determinista con el que se comparan las etapas, cualquier decoder juega una sola partida y saca 0.
+  La **entropía de la primera jugada** es analítica, no tiene varianza entre tiradas y es la
+  comparable entre etapas tal cual; su techo es log₂(20) = 4,32 bits.
+- **La primera se publica siempre con la temperatura a la que se leyó** (D-047 otra vez).
+- **Detalle de implementación que este modelo obliga:** las auto-partidas van en lote y el lote es
+  rectangular por construcción. Las posiciones son *aprendidas*, así que rellenar por la izquierda
+  desplazaría cada token real a una posición en la que nunca se entrenó, y rellenar por la derecha
+  dejaría un `<pad>` en la columna que predice. El código falla antes que rellenar.
+
+### D-091 · El eje pasó de ruido a significado, y se ve sin jugar una sola partida
+- **Medido** con `rukh eval openings`: la distribución del propio modelo sobre las veinte primeras
+  jugadas legales, sin temperatura, sin top-k y sin semilla. Es analítica, así que no tiene varianza
+  entre tiradas y no hay que promediar cientos de auto-partidas para leerla.
+
+  | Cabecera | `medium-v4` entropía | su jugada preferida | `medium-elo` entropía | su jugada preferida |
+  |---|---|---|---|---|
+  | `<w1200>` | 2,8556 | e2e4 43,7 % | **1,5955** | e2e4 66,9 % |
+  | `<w1500>` | **2,9369** | e2e4 41,8 % | **1,6470** | e2e4 64,8 % |
+  | `<w1800>` | 1,7695 | e2e4 59,6 % | 1,7408 | e2e4 60,5 % |
+  | `<w2100>` | 1,9033 | e2e4 52,6 % | 1,8809 | e2e4 53,5 % |
+  | `<w2400>` | 2,0104 | e2e4 46,1 % | 1,9916 | e2e4 47,2 % |
+
+- **La huella del suelo del corpus está en los pesos.** En `medium-v4` hay un escalón entre
+  `<w1500>` (2,9369 bits) y `<w1800>` (1,7695): **1,17 bits** de discontinuidad exactamente donde
+  `min_elo: 1800` cortaba los datos. Por debajo del suelo el modelo está *menos* decidido que en
+  cualquier cabecera entrenada, que es la firma del ruido y no la de la debilidad: un prefijo
+  aleatorio no le pide nada, le confunde.
+- **Después del afinado el eje es monótono y tiene el signo correcto:** 1,5955 → 1,6470 → 1,7408 →
+  1,8809 → 1,9916 bits. Un jugador de club abre con `1. e4` o `1. d4` y poco más; el repertorio se
+  ensancha con la fuerza. El modelo condicionado reproduce esa forma, y lo hace **en orden**.
+- **Por encima de 1800 los dos modelos coinciden** (1,74 frente a 1,77; 1,99 frente a 2,01): el
+  afinado no deshizo lo que ya estaba, solo llenó lo que faltaba.
+- **Por qué esta medida vale aparte del Elo:** no cuesta una sola partida, no tiene ruido de
+  muestreo y no depende de Stockfish. Si la escalera de Elo saliera ambigua, esto seguiría siendo
+  evidencia de que la cabecera dejó de ser ruido.
+
+### D-092 · Un `<style>` de componente `.astro` no llega a una lección MDX, y nada avisa
+- **Qué pasó:** las tres figuras nuevas de M4 llevaban su CSS —incluidas las animaciones— en el
+  bloque `<style>` de su propio componente, que es lo que documenta Astro. Se construyeron sin
+  error, sin aviso y sin animación: en Chrome, `document.styleSheets` no contenía **ninguna** regla
+  de esos componentes, mientras que las de `global.css` sí estaban.
+- **Por qué no se había visto:** ninguna figura anterior del curso tenía `<style>`. Todas se
+  pintan con atributos SVG y tokens, así que el proyecto llevaba tres módulos sin tocar ese camino.
+- **Qué se hace:** el CSS de las figuras vive en `src/styles/global.css`, que es la misma regla que
+  ya seguían las islas (`.vb*`, `.tr*`). Y un e2e comprueba lo que un build verde no comprueba:
+  que cada figura tiene al menos un elemento con una animación corriendo.
+- **La clase de fallo:** silencioso y estético. No hay excepción que lo delate, y revisarlo en una
+  captura tampoco sirve si uno no sabe que debería moverse. La única defensa es una aserción sobre
+  `getComputedStyle(...).animationName`.
+
+### D-093 · Dos trampas de MDX que el navegador enseña y el build no
+- **Un `<Term>` al principio de línea parte el párrafo.** MDX trata una línea que empieza por `<`
+  como un bloque, así que cuando Prettier movió un `<Term>` al inicio de una línea, el párrafo que
+  lo contenía se convirtió en dos. Renderiza sin error y se lee como dos frases rotas. Hay un e2e
+  que falla si algún `<p>` de la prosa empieza en minúscula y no por código en línea.
+- **Las casillas de tarea son campos de formulario sin etiqueta.** Los `- [ ]` que se copiaron de
+  los documentos de plan renderizan como `<input type="checkbox">` sin `<label>`: **24 violaciones
+  críticas** de axe en una sola lección. Las lecciones de M2 y M3 no tienen ni una; usan viñetas.
+- **Los dos se detectaron en Chrome real**, no en `astro check` ni en el build, que pasaron los dos
+  en verde con la lección rota.
+
+### D-094 · QLoRA funciona en sm_120 y a 0,6 B no ahorra lo que dice su nombre
+- **Medido** con la misma corrida de dos pasos, cambiando solo `four_bit`:
+
+  | Precisión | pesos en la tarjeta | pico durante el entrenamiento |
+  |---|---|---|
+  | bf16 | 1 192 MB | 1 963 MB |
+  | 4 bits NF4 | **851 MB** | **1 956 MB** |
+
+- **El ahorro real es 341 MB sobre los pesos (29 %) y 7 MB sobre el pico (0,4 %).** El pico lo
+  dominan las activaciones y el estado del optimizador, que la cuantización no toca. La razón de
+  existir de QLoRA —caber en una tarjeta que sin ella no llegaría— no aplica a esta escala, y el
+  módulo lo dice en vez de presentar la técnica como si se hubiera demostrado algo.
+- **Por qué solo 341 MB y no ~900:** `bitsandbytes` no cuantiza la tabla de embeddings ni la cabeza
+  atada, y en Qwen3-0.6B esa tabla son 151 936 × 1024 = **155,6 M parámetros, el 25,9 %** del
+  modelo. Un cuarto de los pesos se queda en bf16 por construcción.
+- **La contabilidad también engaña si no se corrige:** `numel()` sobre un `Params4bit` devuelve la
+  mitad de los parámetros que representa, porque hay dos valores por byte. Sin corregirlo, la línea
+  de «solo el 0,764 % es entrenable» saldría el doble de favorable.
+- **`bitsandbytes` 0.50.2 instala y carga** en Windows con CUDA 12.8 y sm_120 sin `nvcc`. Entra en
+  el extra `hf`.
+
+### D-095 · El ensayo de dos pasos encontró un fallo que habría aparecido a los veinticinco minutos
+- **Qué se hizo:** antes de la corrida real de Qwen (media hora de GPU) se ejecutó la misma receta
+  con `max_steps: 2` y cien partidas, y la evaluación con una suite de doce posiciones, nueve
+  puzles y una partida.
+- **Qué encontró:** `estimate(records, bootstrap=...)` — el parámetro se llama `samples`. Un
+  `TypeError` que solo se dispara después de jugar todas las partidas, es decir, al final de la
+  fase más cara de la evaluación.
+- **La regla:** una receta nueva se ensaya con el presupuesto más pequeño en el que todavía pasa por
+  todas sus fases. Todo lo que puede fallar en un afinado falla en los primeros treinta segundos —
+  la descarga, el backend de cuantización, la API del entrenador, el relleno del tokenizador, el
+  guardado— y descubrirlo al final es la forma cara.
+
+### D-096 · Los factores de LoRA se creaban en CPU con el modelo ya en CUDA
+- **Qué pasó:** `apply_lora` construía `A` y `B` con `torch.empty(...)` sin dispositivo, y el bucle
+  aplica los adaptadores **después** de mover el modelo y cargar el checkpoint (cargar necesita los
+  nombres de módulo de un decoder limpio). Primer `forward` en la GPU: `Expected all tensors to be
+  on the same device`.
+- **Por qué los tests no lo veían:** los catorce tests de `test_lora.py` corren en CPU, donde el
+  fallo es invisible. Lo destapó un ensayo de veinte pasos sobre el modelo real —el mismo
+  procedimiento que en D-095— y ahora hay un test que comprueba la *propiedad* (los factores viven
+  donde el peso que corrigen) en vez del dispositivo en el que toque ejecutarse.
+
+### D-097 · Fundir un adaptador es exacto a 3,6e-6 relativo sobre 115 M de parámetros
+- **Medido** sobre `medium-v4` con un adaptador real de `r = 8`: diferencia máxima entre el modelo
+  con envoltorios y el mismo modelo fundido, **6,8e-5 absoluta sobre logits de escala 18,9**, o sea
+  3,6e-6 relativa, y **la jugada elegida es la misma** en todas las posiciones probadas.
+- **Por qué importa el número y no solo el test:** el test unitario comprueba la igualdad sobre un
+  decoder de juguete con tolerancias de `float32`; la afirmación que hace la lección —«publicar un
+  adaptador de 1,6 MB y aun así exportarlo como un modelo cualquiera»— es sobre el modelo de 115 M,
+  donde el error se acumula por dieciséis capas. Es exacta en lo que importa (el argmax) y no bit a
+  bit, y conviene decirlo así.
+- **El adaptador pesa 1,6 MB**, que es exactamente lo que predice `2 · r · d_model · capas ·
+  objetivos` = 393 216 números en `float32`.
+
+### D-098 · M1 prometía lo que M4 tuvo que desmentir, y se corrige donde estaba escrito
+- **Qué decía la lección de M1**, publicada y en `vigente`: «en M4, cuando quieras que juegue como
+  un 1500, no habrá que entrenar nada nuevo: bastará con poner `<w1500>` al principio y muestrear».
+  La ficha de M1 repetía la misma frase.
+- **Por qué era falso:** tres secciones más abajo, en esa misma página, está el recorte con
+  `min_elo: 1800`. El mecanismo que M1 explica es correcto —el Elo va delante, condiciona todas las
+  jugadas— y la promesa daba por hecho que los datos lo alimentaban.
+- **Qué se hace:** se borra la promesa y se pone en su lugar un aviso que cuenta el error, cómo se
+  encontró (contando: cero de doce cabeceras en 1 681 069 636 tokens) y lo que costó (un corpus
+  nuevo y un afinado). No se reescribe la historia: se deja dicho qué decía antes.
+- **Lo que no había que tocar:** los Elo de M1 y M2 ya son los corregidos de D-070 (1425 y 1397
+  para `small` v3 a `<w1800>` y `<w2600>`; 1359 para `small` v1), y M2 ya cuenta su propia
+  corrección. El problema estaba solo en la promesa.
+
+### D-099 · La tabla única servía Elo retractados en `/proyecto/`
+- **Qué pasaba:** `configs/eval/greedy.yaml` tenía `web_results: null`, así que ninguna de las
+  corridas deterministas —las que producen todos los números publicados— escribía en
+  `artifacts/web/results.json`. La tabla se quedó con las filas de la suite `full`, medidas antes
+  de que D-070 corrigiera la escalera: **1091** para `medium`, **1007** y **785** para `small`,
+  **64** para `tiny`. La página en inglés del proyecto las servía.
+- **Qué se hace:** `greedy.yaml` escribe en la tabla; las etapas publicadas se vuelven a evaluar
+  (las partidas y los puzles están en `cache-greedy.sqlite`, así que son minutos y no otra hora de
+  Stockfish); y las filas que ninguna corrida corregida reemplaza se **retractan** con
+  `rukh eval drop`, que es una operación que faltaba.
+- **Por qué existe el comando en vez de editar el JSON:** una medición puede resultar equivocada, y
+  cuando lo es la tabla tiene que poder dejar de llevarla. Es explícito y por etapa a propósito:
+  tirar una fila es tirar una medición, y debería costar decir su nombre.
+
+### D-100 · El criterio 1 no se cumple, y la aritmética dice que no es cuestión de partidas
+- **Qué se midió:** el barrido con las seis condiciones, 160 partidas cada una contra los ocho
+  peldaños de Stockfish, con la cabecera forzada también en las posiciones de validación y en los
+  puzles (D-088). Elo: 1425, 1549, 1498, 1538, 1606, 1644 para `<w1200>`…`<w2400>`. **Ni monótono
+  ni separado.** Span de 219 Elo entre extremos.
+- **Lo que pide `GOAL.md`:** `Elo(<w1500>) < Elo(<w2000>) < Elo(<w2400>)` con intervalos. El primer
+  par va del revés: 1549 contra 1538, once puntos de Elo, y la tasa de puntos contra la escalera
+  —que es el número que se mide, el Elo es una transformación de él— va de 0,466 a 0,453.
+- **La pregunta que había que contestar antes de pedir más máquina:** ¿faltan partidas o no hay
+  diferencia? Es aritmética. La tasa de puntos es una proporción, su error típico es
+  `sqrt(p(1-p)/n)` y dos intervalos del 95 % dejan de tocarse cuando la distancia entre las tasas
+  supera `1,96 (se1 + se2)`, que para proporciones cerca de la mitad es
+  `n > 3,84 / (delta p)^2` partidas por condición. Con los números medidos
+  (`labs/m4/games_needed.py`):
+
+  | par | tasa | delta | partidas necesarias |
+  |---|---|---:|---:|
+  | `<w1500>` → `<w2000>` | 0,466 → 0,453 | **−0,013** | **24 420** |
+  | `<w2000>` → `<w2400>` | 0,453 → 0,569 | +0,116 | 284 |
+  | `<w1500>` → `<w2400>` | 0,466 → 0,569 | +0,103 | 357 |
+  | `<w1200>` → `<w2400>` | 0,331 → 0,569 | +0,238 | 64 ✅ ya separado |
+
+- **Qué se decide:** el criterio 1 **no se cumple** y se dice así, con la tabla delante. No se
+  vuelve a correr `<w2000>`: veinticuatro mil partidas por condición son sesenta horas de
+  Stockfish para estrechar el intervalo alrededor de una diferencia que no está. Sí se vuelven a
+  correr `<w1500>` y `<w2400>` con 400 partidas (`configs/eval/greedy-sweep-50.yaml`), que es lo
+  que el mismo cálculo pide para el par exterior del criterio, y que convierte «no separado con
+  160» en una afirmación medida en un sentido o en el otro.
+- **Por qué esto es un resultado y no una excusa:** los extremos del eje **sí** están separados
+  (1200 contra 2400, con 64 partidas habría bastado y se jugaron 160), la entropía analítica de la
+  primera jugada es monótona en las **seis** condiciones sin una sola partida de por medio
+  (1,596 → 1,647 → 1,741 → 1,841 → 1,881 → 1,992 bits) y los puzles son planos
+  (37,0 – 38,2 %). Las tres cosas dicen lo mismo: **la cabecera mueve el estilo, no la fuerza
+  táctica**. Que es exactamente lo que P3 sospechaba y no podía afirmar, porque entonces las
+  cabeceras por debajo de 1800 ni siquiera se habían entrenado.
+
+### D-101 · La cabecera sí mueve dos columnas que en la primera pasada salían constantes
+- **Qué cambió:** con `force_header` extendido a las posiciones de validación (D-088), la legalidad
+  sin máscara y el top-1 dejan de ser idénticos en todas las filas y se ordenan solos:
+
+  | cabecera | legal argmax | top-1 |
+  |---|---:|---:|
+  | `<w1200>` | 100,00 % | 51,40 % |
+  | `<w1500>` | 100,00 % | 53,90 % |
+  | `<w1800>` | 99,80 % | **54,10 %** |
+  | `<w2000>` | 99,70 % | 54,00 % |
+  | `<w2100>` | 99,70 % | 53,40 % |
+  | `<w2400>` | 99,70 % | 53,30 % |
+
+- **Cómo se lee:** el top-1 tiene un máximo en `<w1800>` y baja hacia los dos lados. No es ruido:
+  las posiciones de validación son partidas reales con su reparto real de Elo, cuya media está
+  cerca de 1800, así que la cabecera que mejor predice la jugada siguiente es la que describe a
+  los jugadores que la hicieron. Pedirle al modelo que juegue como 2400 lo hace **peor** prediciendo
+  jugadas de un jugador medio, y eso es lo correcto.
+- **Y la legalidad baja al subir la cabecera**, de 100,00 % a 99,70 %. Tres décimas son tres
+  jugadas de mil, pero el signo es el mismo que el de la entropía: cuanto más ancho el repertorio,
+  más lejos de las aperturas trilladas y más ocasiones de escribir algo ilegal.
+
+### D-102 · Los adaptadores viajan como entradas del grafo, no fundidos en los pesos
+- **El problema:** fundir un adaptador y exportar el ONNX cuesta 221 MB por estilo en `medium`.
+  Dos estilos son 442 MB de descarga para mover 1,6 MB de corrección, que es tirar por tierra la
+  única cosa que LoRA compra.
+- **Qué se hace:** el grafo se exporta con `A` y `B` como **entradas**, apiladas por capas en dos
+  tensores `(capas, rangos, r, d)` y `(capas, rangos, d, r)` (`rukh.export.adapter`). El navegador
+  cambia de estilo subiendo 1,6 MB, no descargando otro modelo.
+- **Las tres propiedades que lo hacen honesto, y las tres están en `tests/unit/test_export_adapter.py`:**
+  con ceros el grafo **es** el modelo base (por eso el fichero adaptable *sustituye* al ordinario en
+  vez de sumarse a él, y una demo sin estilo elegido no está corriendo otro modelo); con un
+  adaptador distinto la respuesta cambia sin tocar el fichero; y la paridad contra PyTorch con el
+  mismo adaptador cargado se mide sobre posiciones reales.
+- **Lo que no admite:** un adaptador cuyos rangos no midan todos lo mismo. Los factores viajan como
+  un tensor cada uno, así que todas las capas tienen que adaptar la misma matriz con los mismos
+  anchos —cierto para consulta, clave y valor sobre el `qkv` fundido, falso en cuanto entra el MLP,
+  cuyo `fc` es cuatro veces más ancho—. Ese caso sigue teniendo `merge_lora` y una exportación
+  normal; lo único que no tiene es el intercambio en caliente. `adapter_layout` lo dice con esas
+  palabras en vez de apilar algo que no cuadra.
+- **Detalle de implementación que sí importa:** la corrección se arma con `cat` sobre todo el ancho
+  de salida en vez de escribirse en una rodaja de un tensor de ceros. La asignación por índice
+  exporta como `ScatterND`, que onnxruntime web ejecuta en CPU aunque el resto vaya por WebGPU.
+
+### D-103 · El fichero dice cuánto mide un adaptador válido, así que el navegador no hay que decírselo
+- **El problema de siempre en esta demo:** ORT Web no expone `metadata_props`, así que todo lo que
+  el exportador escribe dentro del `.onnx` (`rukh_block`, `rukh_vocab_size`) es inalcanzable desde
+  el navegador y tiene que viajar por el registro (D-031). Un adaptador tenía pinta de necesitar lo
+  mismo: formas, rango, orden de los tensores, un JSON al lado.
+- **Lo que se hace en vez de eso:** las entradas `lora_a` y `lora_b` se declaran con **forma fija**,
+  y las formas de las entradas sí las expone ORT (`inputMetadata`). Así que el propio fichero dice
+  cuántos `float32` tiene un adaptador suyo, y `readAdapterShape` lo lee. Un fichero descargado de
+  cualquier otro tamaño es un desajuste que la página puede **nombrar** en vez de leer como basura
+  sobre los pesos correctos, que es la peor forma de estar mal: un modelo que juega legal y fatal.
+- **Y «sin estilo» no es un caso especial.** El selector en «Sin estilo» alimenta un adaptador de
+  ceros, que por construcción es el modelo base exacto. Ni se recrea la sesión ni se vuelve a
+  descargar nada: el camino de código es el mismo con estilo y sin él, y el E2E comprueba que
+  quitar el adaptador devuelve **el mismo número**, no uno parecido.
+- **Cómo se verifica en un navegador de verdad:** `scripts/make_toy_web_models.py` escribe, con las
+  mismas funciones que escriben los ficheros publicados, un decoder de juguete exportado con
+  factores como entradas (186 KB) y un adaptador para él (256 bytes). `e2e/adapter.spec.ts` carga
+  el modelo una vez, lee la distribución que publica para una posición, cambia de estilo, la vuelve
+  a leer y comprueba tres cosas: que cambia, que al quitarlo vuelve exactamente, y que solo se ha
+  pedido **un** `.onnx` en toda la prueba. Esa última aserción es el hito entero en una línea.
+- **Lo que no se toca:** `toy-decoder.onnx`, el de juguete que ya estaba versionado, se deja como
+  está. Regenerarlo con otra semilla cambiaría las jugadas que espera media docena de pruebas del
+  navegador, y no hay ninguna razón para hacerlo; el script lo reescribe solo con `--plain`.
+
+### D-104 · Un valor por defecto de la especificación rompió el fp16 de todo modelo intercambiable
+- **El síntoma:** `onnxruntime` se niega a cargar el fichero fp16 con
+  `Type Error: Type (tensor(float16)) of output arg (val_20) of node (node_ConstantOfShape_18)
+  does not match expected type (tensor(float))`. El fp32 carga perfectamente, y el fp32 no lo sirve
+  nadie.
+- **La causa:** la corrección de LoRA se arma con `cat` sobre todo el ancho de la proyección, y los
+  rangos que nadie adapta son un `ConstantOfShape` de ceros. El exportador lo escribe **sin**
+  atributo `value`, porque la especificación dice que el valor por defecto es un cero de
+  `float32`. `convert_float_to_float16` retipa el grafo alrededor y no toca el nodo, así que el
+  grafo pasa a declarar `float16` donde el nodo sigue produciendo `float32`.
+- **La familia entera del fallo:** es el mismo error que ya arreglaba `_align_cast_outputs` —un
+  `Cast` cuyo atributo `to` se quedó diciendo el tipo viejo— escrito de otra forma. Aquí no hay un
+  atributo equivocado: hay un atributo **ausente**, y lo que cambia bajo los pies es el valor por
+  defecto que lo sustituía. Un parámetro implícito es una dependencia como cualquier otra, y las
+  herramientas que reescriben un fichero no la ven.
+- **Qué se hace:** `_align_constant_outputs` retipa el `value` de todo `Constant` y
+  `ConstantOfShape` que no cuadre con lo que el grafo declara, y le **pone** el atributo al que no
+  lo tenía. Y el test que lo cubre no comprueba que el fichero cargue: comprueba que, ya cargado,
+  el adaptador sigue cambiando la respuesta en fp16 y en int8. Cargar es el mínimo; lo que había
+  que saber es si la cuantización deja intactas las dos multiplicaciones del adaptador, cuyos dos
+  operandos vienen de fuera del grafo y no son inicializadores.
+- **Cuándo se encontró:** en el modelo de juguete, antes de la exportación real de 221 MB. La
+  prueba que lo destapó cuesta catorce segundos; la que no se escribió habría costado cuarenta y
+  cinco minutos de exportación y una demo rota en el navegador.
+
+### D-105 · La familia de P4 se construye sobre `medium-v4` y no sobre `small`
+- **Qué dice `GOAL.md`:** publicar `rukh-small-masters` y `rukh-small-elo`. Lo que se publica es
+  `rukh-medium-masters` y `rukh-medium-elo`.
+- **Por qué:** `medium-v4` es el modelo que la demo sirve y el que tiene margen para que el eje se
+  note. `small` saca 1007 de Elo y 51,1 % de top-1; pedirle además que el estilo cambie con la
+  cabecera es pedirle que mueva una aguja que apenas se ve. Los dos afinados y los dos adaptadores
+  parten del mismo `medium-v4-20260919-174623/best.pt`, que es también la base sobre la que la card
+  de cada adaptador dice que se monta.
+- **Coste de la desviación:** 221 MB por etapa en la demo en vez de 75, y la descarga se pide con
+  el consentimiento delante. A cambio, las mediciones del hito se hacen sobre el modelo cuyos
+  números ya están publicados, así que cada comparación es contra una fila que existe.
+- **Lo que cambia con el nombre:** nada más. El recorte, la receta, la suite y los criterios son
+  los del plan; lo único que se sustituye es el tamaño del modelo base, y queda escrito aquí para
+  que nadie busque `rukh-small-elo` en el Hub.
+
+### D-106 · El control que impide cantar victoria: el modelo **sin** afinar mueve el mismo Elo
+- **Por qué se hizo:** `medium-elo` puntúa 1425 pidiéndole 1200 y 1606 pidiéndole 2100, un salto de
+  181 Elo con los intervalos separados. Leído solo, eso es «el condicionamiento da fuerza». Hay una
+  segunda explicación: que **cualquier** modelo puntúe menos con una cabecera baja, y entonces el
+  salto no diría nada del afinado. Se distinguen con un control, y el control es correr el mismo
+  barrido sobre el modelo **base**, que por debajo de 1800 no tiene cabecera ninguna: `<w1200>` es
+  para él un vector de la inicialización.
+- **Lo que salió:**
+
+  | cabecera | modelo | Elo | IC 95 % | legal | top-1 | puzles | entropía 1.ª |
+  |---|---|---:|---|---:|---:|---:|---:|
+  | `<w1200>` | `medium-v4` (base) | 1419 | 1358-1479 | 99,60 % | 49,80 % | 36,42 % | 2,856 |
+  | `<w1200>` | `medium-elo` | **1425** | 1361-1479 | **100,00 %** | **51,40 %** | **37,02 %** | **1,596** |
+  | `<w2100>` | `medium-v4` (base) | 1580 | 1512-1649 | 99,80 % | 53,80 % | 38,27 % | 1,903 |
+  | `<w2100>` | `medium-elo` | 1606 | 1543-1670 | 99,70 % | 53,40 % | 38,08 % | 1,881 |
+
+- **La conclusión, que es incómoda y es la correcta:** el modelo **base** también recorre el eje,
+  161 Elo, con los intervalos separados. Y no puede ser condicionamiento, porque su `<w1200>` nunca
+  recibió un gradiente. Lo que le pasa al base es otra cosa: un prefijo desconocido le **estorba**,
+  y estorbarle cuesta unos ciento sesenta puntos. El afinado mueve 181, que está dentro del ruido
+  de los 161. **La columna de Elo no distingue las dos causas**, así que por sí sola no es evidencia
+  de que la cabecera signifique algo.
+- **Dónde sí se distinguen, en la misma tirada:** a `<w1200>`, con el mismo Elo, el modelo afinado
+  escribe **cero** jugadas ilegales contra cuatro de mil del base, acierta 1,6 puntos más de top-1,
+  resuelve 0,6 puntos más de puzles y —lo más claro— tiene **1,26 bits menos** de entropía de
+  primera jugada: 1,596 contra 2,856. Es decir, el afinado convirtió «ruido en la entrada» en «un
+  jugador de club decidido», y eso se ve en todo menos en el resultado contra Stockfish.
+- **Y a `<w2100>` los dos modelos coinciden** en las cinco columnas, como tenía que ser: esa
+  cabecera siempre estuvo entrenada y el afinado no debía tocarla. Que no la tocara es la prueba de
+  que no hubo olvido catastrófico.
+- **La regla que deja:** cuando una métrica sube con el tratamiento, córrela también sobre el
+  modelo sin tratar. Si sube igual, la métrica no mide el tratamiento. Cuesta una hora de máquina y
+  es la diferencia entre publicar un hallazgo y publicar un artefacto.
+
+### D-107 · La misma escalera, dos veces, con la misma semilla: 1498 y 1558
+- **Qué pasó:** `medium-elo` a `<w1800>` se midió dos veces por caminos distintos —la fila `@1800`
+  del barrido y la evaluación canónica— con **la misma** configuración en todo lo que afecta a las
+  partidas: mismos ocho peldaños, `elo_games: 20`, `elo_move_time: 0.1`, `seed: 42`, misma
+  temperatura, mismo `top_k`. Salió **0,4094 → 1498** en una y **0,4750 → 1558** en la otra.
+- **Por qué no es un fallo:** la semilla fija *nuestro* muestreo, no el de Stockfish. El rival juega
+  con un límite de **tiempo** (`chess.engine.Limit(time=0,1)`) y con `UCI_LimitStrength`, que además
+  aleatoriza a propósito para acertar el Elo pedido. Así que «las mismas 160 partidas» no son las
+  mismas partidas: son 160 partidas nuevas contra un rival que no se repite.
+- **Y el tamaño cuadra con la aritmética:** la diferencia de tasa es 0,0656 y el error típico de la
+  diferencia entre dos tiradas independientes de 160 partidas con `p ≈ 0,44` es
+  `sqrt(2 p (1-p) / 160) = 0,0555`. Son **1,18 σ**. Ruido de manual.
+- **Lo que esto significa para el hito:** el suelo de **reproducibilidad** del instrumento es de
+  unos 40 Elo de una sigma, es decir, unos ±80 al 95 %. Los pares contiguos del barrido están a 11,
+  40, 51 y 38 puntos. Están **por debajo de lo que el instrumento repite**, y eso no lo arregla
+  ninguna cantidad de partidas mientras el rival vaya por tiempo: lo arreglaría hacerlo
+  determinista (límite por **nodos** o por profundidad) y volver a calibrar la escalera. Es la misma
+  conclusión de D-100 vista desde el otro lado, y esta se puede enseñar con dos números.
+- **Qué se hace ahora:** nada en las mediciones —las dos son correctas y las dos se publican, cada
+  una diciendo de qué corrida sale—. La tabla única lleva la canónica (1558), que es la que
+  comparte suite con el resto de etapas; el barrido lleva la suya, que es la que comparte suite con
+  las otras cinco condiciones. Comparar **dentro** de una tirada es válido; comparar **entre**
+  tiradas es lo que este apunte existe para desaconsejar.
+- **La regla que deja:** antes de explicar una diferencia pequeña, mide cuánto se mueve tu montaje
+  cuando no cambias nada. Aquí no hubo que montar nada: bastó con que dos caminos distintos
+  midieran lo mismo sin querer.
+
+### D-108 · El módulo se reformula sobre lo medido, y el criterio se queda incumplido
+- **Decisión de Borja (2026-09-20):** «el valor del curso está en que cada módulo enseñe algo
+  cierto, no en aprobar el criterio que se escribió antes de medir». No se persigue el criterio 1
+  con más máquina; M4 se reformula sobre lo que el hito **sí** estableció.
+- **El título de la lección cambia** de «enseñarle a jugar peor» —que promete lo que no se
+  cumplió— a **«cambiar el estilo sin cambiar la fuerza»**, y la pregunta del módulo pasa a ser una
+  sola: *¿qué cambia un afinado y qué no?*
+- **Lo que el módulo enseña, con las mediciones que lo sostienen:**
+  - el afinado cambia el **comportamiento** de forma total y barata: 1,6 MB (0,34 % del modelo)
+    llevan `1. e4` del 59,64 % al 99,85 % sin coste medible en legalidad, top-1 ni puzles;
+  - ordena el **repertorio** a lo largo del eje sin jugar una partida: entropía monótona 6 de 6;
+  - y **no mueve la competencia**: ni el condicionado ni el de maestros separan su intervalo de Elo
+    del modelo del que salieron;
+  - más la mitad metodológica, que es la que se reutiliza: partidas necesarias (D-100), corrida de
+    control (D-106) y suelo de reproducibilidad (D-107).
+- **Por qué esto no es rebajar el listón:** el criterio se publica **incumplido**, con sus números y
+  su explicación, en `GOAL.md`, en el ledger y en la lección. Lo que se reformula es el **objetivo
+  docente**, no la medición. Y el resultado explica por qué M5 existe: si imitar mejor no da
+  táctica, hace falta otra herramienta —recompensas, DPO, GRPO—, que es exactamente el hito
+  siguiente.
+- **Lo que sí se mide antes de cerrar, porque es el mecanismo y no el criterio:** toda la suite
+  juega con `temperature: 0.05, top_k: 1`, es decir, **la moda** de la distribución. La diferencia
+  entre un 1200 y un 2400 no está en la moda —los dos hacen la recaptura obvia— sino en la cola.
+  La entropía de la primera jugada, que lee la distribución entera, es monótona; los puzles y el
+  Elo, que leen la moda, son planos. Así que se corre el barrido una vez a **temperatura 1,0 con
+  top-k 20** en `<w1200>` y `<w2400>`: si la brecha se abre, el eje controla la fuerza y lo que
+  faltaba era dejar de muestrear el pico; si sale plano, es un segundo nulo y la lección lo dice.
+  Una hora de máquina, y contesta una pregunta en vez de precisar un no.
+
+### D-109 · La explicación obvia se comprobó y salió que no: muestrear empeora la medición
+- **La hipótesis (D-108):** toda la suite juega con `temperature: 0.05, top_k: 1`, o sea la **moda**
+  de la distribución, y la diferencia entre un 1200 y un 2400 no está en la moda sino en la cola.
+  Todo lo que lee la distribución entera (la entropía de la primera jugada) es monótono; todo lo que
+  lee solo la moda (puzles, Elo) es plano. Si eso fuera la causa, muestrear de verdad abriría la
+  brecha.
+- **La prueba:** `configs/eval/sweep-temperature.yaml`, idéntico al barrido salvo por
+  `temperature: 1.0, top_k: 20`, sobre `<w1200>` y `<w2400>`. Una hora de máquina, caché propia, y
+  **no** sustituye a ningún número publicado (D-047 fija el muestreo casi determinista como el de
+  todo el proyecto).
+- **Lo que salió:**
+
+  | | `<w1200>` | `<w2400>` | brecha | anchura IC | brecha / IC | Δ tasa |
+  |---|---|---|---:|---:|---:|---:|
+  | moda | 1425 (1361-1479) | 1644 (1578-1707) | 219 | 123 | **1,78** | +0,2375 (4,40 σ) |
+  | T=1,0 | 1002 (866-1109) | 1272 (1193-1340) | 270 | 195 | 1,38 | +0,1375 (3,85 σ) |
+
+- **Cómo se lee:** en puntos de Elo la brecha se ensancha (219 → 270) y parece que la hipótesis
+  acierta. No acierta. Los intervalos se ensanchan **más** (123 → 195), así que el cociente que
+  decide si una diferencia se puede afirmar **baja** de 1,78 a 1,38; y en el espacio donde de verdad
+  se mide —la tasa de puntos, de la que el Elo es una transformación no lineal— la diferencia
+  **encoge**, de 4,40 σ a 3,85 σ. El ensanchamiento en Elo es un artefacto de la transformación
+  cerca del suelo, no una señal.
+- **La causa, visible en el detalle por peldaño:** muestrear a temperatura 1,0 cuesta unos **400
+  puntos de Elo**, más que todo lo que separa a las seis condiciones entre sí. Eso tira al modelo
+  por debajo del rango para el que la escalera está calibrada: `<w1200>` saca 0,053 de tasa —cinco
+  victorias en ciento sesenta partidas— aplastado contra el suelo, y las dos condiciones acaban
+  comprimidas en el mismo rincón.
+- **La regla que deja:** un instrumento tiene un **rango**. Un tratamiento que saca al sujeto de ese
+  rango no revela el efecto, lo esconde bajo el ruido del propio instrumento. Una escalera calibrada
+  para un 1500 mide mal a un 1000, igual que una báscula de cocina mide mal un camión. Probar la
+  hipótesis en serio pediría peldaños más flojos, o sea recalibrar los ocho y tirar todos los Elo
+  publicados: no en este hito.
+- **Y por qué valió la hora:** ahora se puede decir «la cabecera no mueve la fuerza» sin dejarse la
+  explicación obvia sin comprobar. Un negativo sin la alternativa descartada es una opinión.
 
 ## Publicación en Hugging Face (2026-09-19)
 

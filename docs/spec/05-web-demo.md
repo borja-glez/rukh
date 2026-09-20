@@ -44,6 +44,14 @@ opcional para el entrenador agéntico.
   real (muestra la jugada ilegal propuesta y la marca).
 - **Selectores**: etapa del modelo (base → maestros → Elo → DPO → GRPO), Elo objetivo (1200-2400 en
   pasos de 100, solo en modelos condicionados), adaptador LoRA de estilo, color, temperatura.
+
+> **Nota (2026-09-20, P4):** el selector de Elo ofrece **las seis condiciones medidas** —1200, 1500,
+> 1800, 2000, 2100 y 2400— y no los pasos de 100 que pedía el spec. Un control que el jugador puede
+> mover es la afirmación de que moverlo hace algo, y esa afirmación es tan ancha como el barrido que
+> la respalda: ofrecer veintisiete cabeceras sería prometer veintisiete mediciones y tener seis.
+> El de estilo carga el adaptador **sobre el modelo ya descargado**: el ONNX de la etapa
+> `medium-lora` toma sus factores de LoRA como entradas del grafo, así que cambiar de estilo cuesta
+> 1,6 MB de subida en vez de otra descarga del modelo entero (D-102, D-103).
 - **Paneles**: probabilidades de las 5 mejores jugadas del modelo sobre el tablero (flechas con
   opacidad), barra de valor del encoder y alerta de error (M3), historial en SAN, exportar PGN,
   cascada de latencia (tokenización → inferencia → muestreo), "qué ha salido por la red".

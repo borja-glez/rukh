@@ -158,6 +158,7 @@ def test_the_web_row_holds_the_columns_of_the_single_table() -> None:
         "elo_separated": False,
         "delta_cp": None,
         "diversity": None,
+        "first_move_entropy": None,
         "date": "2026-09-19",
         "run_id": "run-1",
     }
@@ -186,3 +187,64 @@ def test_a_corrupt_table_is_replaced_rather_than_crashing(tmp_path: Path) -> Non
     path.write_text("not json", encoding="utf-8")
     rows = upsert_row(path, WebRow(stage="tiny", params=1, date="2026-09-19"))
     assert [row["stage"] for row in rows] == ["tiny"]
+
+
+def test_the_diversity_section_names_the_temperature_it_was_read_at() -> None:
+    """The number is meaningless without it: at the suite's sampling every stage scores 0."""
+    from rukh.eval.diversity import DiversityResult
+
+    detail = DiversityResult(
+        games=200,
+        plies=12,
+        distinct_lines=137,
+        entropy_bits=6.4,
+        max_entropy_bits=7.643856189774724,
+        normalised=0.8372,
+        first_move_entropy_bits=1.85,
+        temperature=1.0,
+        top_k=20,
+        top_lines=[("e2e4 e7e5", 12), ("d2d4 d7d5", 9)],
+    )
+    markdown = render_markdown(
+        result().model_copy(update={"diversity": 0.8372, "diversity_detail": detail})
+    )
+    assert "## Opening diversity" in markdown
+    assert "temperature 1.0" in markdown
+    assert "| Distinct opening lines | 137 of 200 |" in markdown
+    assert "| First-move entropy (no sampling) | 1.850 bits |" in markdown
+    assert "| `e2e4 e7e5` | 12 |" in markdown
+    assert "| Opening diversity | 0.837 |" in markdown
+
+
+def test_a_stage_without_a_diversity_measurement_writes_no_section() -> None:
+    markdown = render_markdown(result())
+    assert "## Opening diversity" not in markdown
+    assert "| Opening diversity | n/a |" in markdown
+
+
+def test_a_retracted_row_can_be_removed_from_the_table(tmp_path: Path) -> None:
+    """A measurement can turn out to be wrong, and the table has to be able to stop carrying it.
+
+    It happened: D-070 found four of the eight Elo rungs had invented ratings, wrong by about five
+    hundred points. The corrected runs went in under new stage names, so the old rows stayed and
+    the project page kept serving retracted numbers.
+    """
+    from rukh.eval.report import drop_rows
+
+    table = tmp_path / "results.json"
+    for stage, elo in (("tiny", 64.0), ("small-greedy", 1007.0), ("medium-v4-greedy", 1504.0)):
+        upsert_row(table, row_of(result(stage=stage, elo=elo)))
+
+    removed, kept = drop_rows(table, ["tiny", "nothing-like-this"])
+    assert removed == ["tiny"]
+    assert sorted(item["stage"] for item in kept) == ["medium-v4-greedy", "small-greedy"]
+
+    payload = json.loads(table.read_text(encoding="utf-8"))
+    assert [item["stage"] for item in payload["rows"]] == ["medium-v4-greedy", "small-greedy"]
+    assert "updated_at" in payload
+
+
+def test_dropping_from_a_table_that_is_not_there_is_not_an_error(tmp_path: Path) -> None:
+    from rukh.eval.report import drop_rows
+
+    assert drop_rows(tmp_path / "nope.json", ["tiny"]) == ([], [])

@@ -1,0 +1,13 @@
+{
+  "lora": {
+    "r": 8,
+    "alpha": 16,
+    "dropout": 0.0,
+    "targets": [
+      "q",
+      "v"
+    ]
+  },
+  "base_model": "chorcat/rukh-medium-lora",
+  "format": "rukh-lora-1"
+}

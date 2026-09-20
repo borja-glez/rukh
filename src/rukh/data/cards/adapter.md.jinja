@@ -1,0 +1,99 @@
+---
+license: {{ license }}
+library_name: rukh
+base_model: {{ base_repo }}
+tags:
+  - chess
+  - rukh
+  - lora
+  - adapter
+---
+
+# {{ repo_id }}
+
+A LoRA adapter for [`{{ base_repo }}`](https://huggingface.co/{{ base_repo }}). On its own it does
+nothing: it is {{ "{:,}".format(params) }} numbers ({{ "%.1f"|format(bytes / 1e6) }} MB) that
+correct that model's weights, and without them there is no model to correct.
+
+Written by hand rather than imported, as part of [Rukh]({{ repository_url }}), a course that builds
+a chess language model end to end. How it works and why: [{{ course_url }}]({{ course_url }}).
+
+## What it is
+
+| | |
+|---|---|
+| Rank `r` | {{ lora.r }} |
+| Scaling `alpha` | {{ lora.alpha }} ({{ lora.alpha }}/{{ lora.r }} applied to `B·A`) |
+| Adapted matrices | `{{ targets }}`, in every block |
+| Trainable parameters | {{ "{:,}".format(params) }} |
+| File size | {{ "%.1f"|format(bytes / 1e6) }} MB |
+
+The base weights never move. Everything outside `A` and `B` is frozen during training, which is
+what makes the file this small and what limits what it can learn: the correction has to pass
+through {{ lora.r }} dimensions per matrix.
+
+## What it changed
+
+{% if effect.share_before is not none and effect.share_after is not none -%}
+The model's own probability for `{{ effect.first_move }}` from the opening position, read off the
+softmax over the twenty legal first moves with no sampling -- so the number is a property of the
+weights and two readings agree to the last decimal:
+
+| | P(`{{ effect.first_move }}`) | first-move entropy |
+|---|---:|---:|
+| `{{ base_repo }}` | {{ "%.2f"|format(effect.share_before * 100) }} % | {% if effect.entropy_before is not none %}{{ "%.4f"|format(effect.entropy_before) }} bits{% else %}n/a{% endif %} |
+| with this adapter | {{ "%.2f"|format(effect.share_after * 100) }} % | {% if effect.entropy_after is not none %}{{ "%.4f"|format(effect.entropy_after) }} bits{% else %}n/a{% endif %} |
+{%- else %}
+Not measured yet.
+{%- endif %}
+
+{% if cost -%}
+And what the style cost, on the same suite every other stage of the project is measured with --
+same validation positions, same puzzles, same seed:
+
+| | `{{ base_repo }}` | with this adapter |
+|---|---:|---:|
+{% for metric, before, after in cost -%}
+| {{ metric }} | {{ before }} | {{ after }} |
+{% endfor %}
+{%- endif %}
+
+## How it was trained
+
+{% if effect.train_games is not none -%}
+{{ "{:,}".format(effect.train_games) }} games selected with `{{ effect.predicate }}`, from the
+1800+ Lichess corpus of the project.
+{%- else -%}
+See the course for the corpus and the recipe.
+{%- endif %}
+
+## Using it
+
+```python
+from rukh.models import MoveDecoder
+from rukh.models.lora import load_adapter
+from rukh.train import load_model
+
+model, _ = load_model("<the base checkpoint>")
+load_adapter(model, "adapter.safetensors")  # the config travels next to it
+```
+
+`rukh.models.lora.merge_lora(model)` folds it into the weights, after which the model is an
+ordinary `MoveDecoder`: same module names, same state dict, exportable to ONNX like any other.
+
+### In the browser
+
+`{{ web_file }}` is the same factors again as one flat little-endian `float32` buffer
+({{ "%.1f"|format(web_bytes / 1e6) }} MB): `A` first, then `B`, both stacked over the blocks in the
+order they run, with the `alpha/r` scaling already applied. `web/adapter.json` carries the shapes,
+because a buffer of floats says nothing about itself.
+
+It is meant for the ONNX export of `{{ base_repo }}` that takes its LoRA factors as **inputs of the
+graph** (`lora_a` and `lora_b`) rather than baked into the weights. Fed an adapter of zeros that
+file is the base model exactly; fed this one it is this style. So the demo changes style by
+downloading {{ "%.1f"|format(web_bytes / 1e6) }} MB instead of a second copy of the model, which is
+the only reason a low-rank correction is worth keeping low-rank once it leaves the training loop.
+
+## Licence
+
+{{ license }}, the same as the base model.

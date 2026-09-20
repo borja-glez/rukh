@@ -111,17 +111,23 @@ def save_checkpoint(
     git_sha: str | None = None,
     best_val: float | None = None,
     run_id: str | None = None,
+    state: Mapping[str, torch.Tensor] | None = None,
 ) -> Path:
     """Write one checkpoint atomically (temporary file plus replace) and return its path.
 
     ``run_id`` is the MLflow run that wrote it, so ``--resume`` can carry on logging into the
     same run and the loss curve stays one line instead of two.
+
+    ``state`` replaces ``model.state_dict()``. A LoRA run passes the merged weights, so what
+    lands on disk is an ordinary decoder checkpoint that every loader, exporter and publisher
+    already reads, instead of a wrapped model only this repository could open.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    source = state if state is not None else model.state_dict()
     payload: dict[str, Any] = {
         "step": int(step),
-        "model_state": {k: v.detach().cpu() for k, v in model.state_dict().items()},
+        "model_state": {k: v.detach().cpu() for k, v in source.items()},
         "opt_state": optimizer.state_dict() if optimizer is not None else None,
         "cfg": dict(cfg),
         "model_cfg": dict(model_cfg),

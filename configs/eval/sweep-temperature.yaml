@@ -1,0 +1,41 @@
+# El barrido otra vez, muestreando la distribución en vez de su moda.
+#
+# Toda la suite juega con `temperature: 0.05, top_k: 1`, que es la moda: el modelo hace siempre su
+# jugada más probable. Y la diferencia entre un 1200 y un 2400 no está en la moda -- los dos hacen
+# la recaptura obvia -- sino en la cola, en cada cuánto eligen algo malo. Los datos del hito lo
+# dicen solos: la entropía de la primera jugada, que lee la distribución entera, es monótona en las
+# seis condiciones; los puzles y el Elo, que leen la moda, son planos.
+#
+# Así que esta tirada cambia una sola cosa respecto de `greedy-sweep.yaml`: muestrea a temperatura
+# 1,0 con top-k 20, que es el ajuste "humano" de la demo. Si la brecha entre `<w1200>` y `<w2400>`
+# se abre, la cabecera controla la fuerza y lo que faltaba era dejar de muestrear el pico. Si sale
+# plana, es un segundo resultado nulo y también dice algo.
+#
+# NO sustituye a nada publicado: D-047 fija el muestreo casi determinista como el de todos los
+# números del proyecto, así que esto es una medición aparte, con su caché aparte, y se publica
+# diciendo a qué temperatura se leyó.
+
+games: data/uci/year=2025/month=02/games.parquet
+puzzles: data/puzzles/puzzles.parquet
+puzzle_split: test
+legality_positions: 1000
+accuracy_positions: 1000
+position_pool: 20000
+puzzles_per_band: 2000
+force_header: true
+elo_games: 20
+elo_move_time: 0.1
+bootstrap: 500
+temperature: 1.0
+top_k: 20
+block: 200
+seed: 42
+header_elo: 1800
+diversity_games: 200
+diversity_plies: 12
+diversity_temperature: 1.0
+diversity_top_k: 20
+out_dir: artifacts/eval
+web_results: null
+cache_db: artifacts/eval/cache-sweep-t1.sqlite
+track: false
