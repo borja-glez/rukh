@@ -1,0 +1,80 @@
+---
+license: {{ license }}
+library_name: peft
+base_model: {{ base_model }}
+tags:
+  - chess
+  - rukh
+  - lora
+  - qlora
+  - adapter
+---
+
+# {{ repo_id }}
+
+A QLoRA adapter that fine-tunes [`{{ base_model }}`](https://huggingface.co/{{ base_model }}) on
+chess games written as PGN text. It exists to answer one question with a number: **is a general
+language model, fine-tuned on the same games, a substitute for a model built for the job?**
+
+It is part of [Rukh]({{ repository_url }}), a course that builds a chess language model end to
+end. The model it is compared against, and how: [{{ course_url }}]({{ course_url }}).
+
+## How it was trained
+
+| | |
+|---|---|
+| Base model | `{{ base_model }}` ({{ "{:,}".format(total_params) }} parameters) |
+| Precision | {{ "4-bit NF4 (QLoRA)" if four_bit else "bfloat16" }} |
+| Rank `r` | {{ lora.r }}, `alpha` {{ lora.lora_alpha }} |
+| Adapted matrices | `{{ targets }}` |
+| Trainable parameters | {{ "{:,}".format(trainable_params) }} ({{ "%.3f"|format(100 * trainable_params / total_params) }} %) |
+| Training samples | {{ "{:,}".format(train_samples) }} games |
+| Steps | {{ "{:,}".format(steps) }} |
+{%- if weights_memory_mb %}
+| Weights on the device | {{ "%.0f"|format(weights_memory_mb) }} MB |
+{%- endif %}
+{%- if peak_memory_mb %}
+| Peak memory while training | {{ "%.0f"|format(peak_memory_mb) }} MB |
+{%- endif %}
+
+The games are the same ones the project's own decoder trains on, from the same month, held out
+against the same validation split. Each is rendered as the movetext a human would paste into a
+chess site, with the two ratings as PGN tags:
+
+```
+[WhiteElo "2015"] [BlackElo "2028"]
+1. e4 c6 2. d4 d5 3. exd5 cxd5 4. Bd3 Nf6 ... 1-0
+```
+
+{% if results -%}
+## Results
+
+Measured with the project's own harness -- the same validation positions, the same puzzle split
+and the same Stockfish ladder as every other stage -- so the two sides differ in their
+representation and in nothing else.
+
+| Metric | Value |
+|---|---|
+{%- for name, value in results %}
+| {{ name }} | {{ value }} |
+{%- endfor %}
+
+### How its answers failed
+
+A model whose vocabulary *is* the set of legal moves can only be wrong one way: a legal move in
+the wrong position. A model writing SAN has three more.
+
+| Outcome | Share |
+|---|---:|
+{%- for name, value in failures %}
+| {{ name }} | {{ value }} |
+{%- endfor %}
+{%- else -%}
+## Results
+
+Not evaluated yet.
+{%- endif %}
+
+## Licence
+
+{{ license }}.

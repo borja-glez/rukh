@@ -24,11 +24,11 @@ from pydantic import BaseModel, ConfigDict
 from rukh.config import BaseConfig
 from rukh.models.lora import ADAPTER_CONFIG, ADAPTER_FILE, LoraConfig
 from rukh.paths import resolve
-from rukh.publish.model import README_NAME, ModelPublishConfig, _api, render_card
+from rukh.publish.model import README_NAME, ModelPublishConfig, _api, read_eval, render_card
 
 log = logging.getLogger(__name__)
 
-__all__ = ["AdapterPublishResult", "publish_adapter"]
+__all__ = ["AdapterPublishResult", "publish_adapter", "publish_qwen_adapter"]
 
 REPO_TYPE = "model"
 ADAPTER_CARD_TEMPLATE = "adapter.md.jinja"
@@ -150,5 +150,134 @@ def publish_adapter(
         card_path=card_path.as_posix(),
         files=files,
         params=params,
+        bytes=weights.stat().st_size,
+    )
+
+
+QWEN_CARD_TEMPLATE = "qwen-adapter.md.jinja"
+
+
+def _percent(value: float | None) -> str:
+    return "n/a" if value is None else f"{value * 100:.1f} %"
+
+
+def qwen_card_context(
+    repo_id: str,
+    run_dir: Path,
+    cfg: ModelPublishConfig,
+    evaluation: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Everything the Qwen adapter's card says, read off the run and the evaluation.
+
+    Nothing here is written by hand. ``run.json`` is what ``rukh train qwen`` recorded about
+    itself -- including whether four bits were actually used -- and the evaluation is the report
+    of ``rukh eval qwen``, which ran the project's own harness. A card that quoted the intended
+    recipe instead of the executed one would be the wrong kind of document.
+    """
+    run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    peft_config = json.loads((run_dir / ADAPTER_CONFIG).read_text(encoding="utf-8"))
+    results: list[tuple[str, str]] = []
+    failures: list[tuple[str, str]] = []
+    if evaluation:
+        written = evaluation.get("written") or {}
+        asked = int(written.get("asked") or 0)
+
+        def share(count: int) -> str:
+            return f"{100 * count / asked:.2f} %" if asked else "n/a"
+
+        elo = evaluation.get("elo") or {}
+        results = [
+            ("Legal moves written, no mask", share(int(written.get("legal") or 0))),
+            ("Top-1 next move", _percent(evaluation.get("top1"))),
+            ("Puzzles solved", _percent((evaluation.get("puzzles") or {}).get("rate"))),
+            ("Estimated Elo", _elo_text(elo)),
+        ]
+        failures = [
+            ("legal", share(int(written.get("legal") or 0))),
+            ("illegal here", share(int(written.get("illegal") or 0))),
+            ("not a move at all", share(int(written.get("unparseable") or 0))),
+            ("ambiguous SAN", share(int(written.get("ambiguous") or 0))),
+            ("nothing written", share(int(written.get("empty") or 0))),
+        ]
+    return {
+        "repo_id": repo_id,
+        "base_model": str(peft_config.get("base_model_name_or_path", run.get("model"))),
+        "license": cfg.license,
+        "lora": peft_config,
+        "targets": ", ".join(sorted(peft_config.get("target_modules") or [])),
+        "trainable_params": int(run.get("trainable_params") or 0),
+        "total_params": int(run.get("total_params") or 1),
+        "train_samples": int(run.get("train_samples") or 0),
+        "steps": int(run.get("steps") or 0),
+        "four_bit": bool(run.get("four_bit")),
+        "weights_memory_mb": run.get("weights_memory_mb"),
+        "peak_memory_mb": run.get("peak_memory_mb"),
+        "results": results,
+        "failures": failures,
+        "course_url": cfg.course_url,
+        "repository_url": cfg.repository_url,
+    }
+
+
+def _elo_text(elo: dict[str, Any]) -> str:
+    if not elo:
+        return "n/a"
+    if elo.get("separated"):
+        if elo.get("elo_lower") is not None:
+            return f"> {elo['elo_lower']:.0f} (one-sided 95 % bound; every game won)"
+        if elo.get("elo_upper") is not None:
+            return f"< {elo['elo_upper']:.0f} (one-sided 95 % bound; every game lost)"
+    low, high = elo.get("ci_low"), elo.get("ci_high")
+    if low is None or high is None:
+        return f"{elo.get('elo', 0):.0f} (no interval)"
+    return f"{elo['elo']:.0f} (95 % CI {low:.0f}-{high:.0f})"
+
+
+def publish_qwen_adapter(
+    run_dir: Path | str,
+    repo: str,
+    cfg: ModelPublishConfig | None = None,
+    stage: str = "qwen3-pgn-qlora",
+    dry_run: bool = False,
+) -> AdapterPublishResult:
+    """Upload a ``peft`` adapter folder as it stands, plus a card built from the run's own record.
+
+    Unlike the project's own adapters this one is **not** re-staged: ``peft`` already wrote a
+    valid ``adapter_config.json`` and ``adapter_model.safetensors``, and the Hub knows that
+    format. Rewriting them into our format would make the file unusable with the two lines of
+    ``peft`` that every reader would actually type.
+    """
+    cfg = cfg or ModelPublishConfig()
+    source = Path(run_dir)
+    weights = source / "adapter_model.safetensors"
+    if not weights.is_file():
+        raise FileNotFoundError(f"no peft adapter at {weights}")
+    repo_id = repo if "/" in repo else f"{cfg.owner}/{repo}"
+
+    evaluation = read_eval(stage, cfg)
+    context = qwen_card_context(repo_id, source, cfg, evaluation)
+    (source / README_NAME).write_text(
+        render_card(context, QWEN_CARD_TEMPLATE), encoding="utf-8", newline="\n"
+    )
+    files = sorted(path.name for path in source.iterdir() if path.is_file())
+
+    if not dry_run:
+        api = _api()
+        api.create_repo(repo_id, repo_type=REPO_TYPE, exist_ok=True)
+        api.upload_folder(
+            repo_id=repo_id,
+            folder_path=str(source),
+            repo_type=REPO_TYPE,
+            commit_message=f"Publish {stage}",
+        )
+    return AdapterPublishResult(
+        repo_id=repo_id,
+        base_repo=str(context["base_model"]),
+        stage=stage,
+        dry_run=dry_run,
+        folder=source.as_posix(),
+        card_path=(source / README_NAME).as_posix(),
+        files=files,
+        params=int(context["trainable_params"]),
         bytes=weights.stat().st_size,
     )

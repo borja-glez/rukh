@@ -161,3 +161,94 @@ def test_the_owner_is_only_added_when_the_repo_has_none(rukh_home: Path, run_dir
         dry_run=True,
     )
     assert (result.repo_id, result.base_repo) == ("someone/else", "another/base")
+
+
+def _peft_run(tmp_path: Path, four_bit: bool = True) -> Path:
+    """A folder shaped like what `rukh train qwen` leaves behind."""
+    import json
+
+    from safetensors.torch import save_file
+
+    run = tmp_path / "qwen-run"
+    run.mkdir(parents=True, exist_ok=True)
+    save_file({"a": torch.zeros(4, 4)}, (run / "adapter_model.safetensors").as_posix())
+    (run / ADAPTER_CONFIG).write_text(
+        json.dumps(
+            {
+                "base_model_name_or_path": "Qwen/Qwen3-0.6B",
+                "r": 16,
+                "lora_alpha": 32,
+                "target_modules": ["v_proj", "q_proj", "k_proj", "o_proj"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run / "run.json").write_text(
+        json.dumps(
+            {
+                "model": "Qwen/Qwen3-0.6B",
+                "four_bit": four_bit,
+                "trainable_params": 4_587_520,
+                "total_params": 600_637_440,
+                "train_samples": 100_000,
+                "steps": 1500,
+                "weights_memory_mb": 851.0,
+                "peak_memory_mb": 1956.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return run
+
+
+def test_the_qwen_adapter_is_published_in_the_format_peft_wrote(
+    rukh_home: Path, tmp_path: Path
+) -> None:
+    """Re-staging it into our own format would break the two lines of `peft` a reader would type."""
+    from rukh.publish.adapter import publish_qwen_adapter
+
+    run = _peft_run(tmp_path)
+    result = publish_qwen_adapter(run, "rukh-qwen3-pgn-qlora", dry_run=True)
+    assert "adapter_model.safetensors" in result.files
+    assert result.base_repo == "Qwen/Qwen3-0.6B"
+    assert not (run / ADAPTER_FILE).exists()  # our format is not forced onto it
+
+
+def test_the_qwen_card_quotes_the_run_that_happened_not_the_one_configured(
+    rukh_home: Path, tmp_path: Path
+) -> None:
+    """`four_bit` in the card is what the run *used*, which is not always what it asked for."""
+    from rukh.publish.adapter import publish_qwen_adapter
+
+    card = Path(
+        publish_qwen_adapter(_peft_run(tmp_path, four_bit=True), "r", dry_run=True).card_path
+    ).read_text(encoding="utf-8")
+    assert "4-bit NF4 (QLoRA)" in card
+    assert "851 MB" in card and "1956 MB" in card
+    assert "4,587,520" in card and "0.764 %" in card
+
+    fell_back = Path(
+        publish_qwen_adapter(
+            _peft_run(tmp_path / "second", four_bit=False), "r", dry_run=True
+        ).card_path
+    ).read_text(encoding="utf-8")
+    assert "bfloat16" in fell_back
+    assert "QLoRA" not in fell_back.split("## How it was trained")[1].split("|")[4]
+
+
+def test_an_unevaluated_qwen_adapter_says_so(rukh_home: Path, tmp_path: Path) -> None:
+    from rukh.publish.adapter import publish_qwen_adapter
+
+    card = Path(publish_qwen_adapter(_peft_run(tmp_path), "r", dry_run=True).card_path).read_text(
+        encoding="utf-8"
+    )
+    assert "Not evaluated yet." in card
+
+
+def test_a_folder_without_a_peft_adapter_says_where_it_looked(
+    rukh_home: Path, tmp_path: Path
+) -> None:
+    from rukh.publish.adapter import publish_qwen_adapter
+
+    with pytest.raises(FileNotFoundError, match="no peft adapter at"):
+        publish_qwen_adapter(tmp_path, "r", dry_run=True)

@@ -1298,6 +1298,44 @@ def publish_adapter_cmd(
         typer.echo(f"  {path}")
 
 
+@publish_app.command("qwen")
+def publish_qwen_cmd(
+    run_dir: Annotated[
+        Path,
+        typer.Option("--run", exists=True, file_okay=False, help="The peft output folder."),
+    ],
+    repo: Annotated[str, typer.Option("--repo", help="Hub repository for the adapter.")],
+    stage: Annotated[
+        str, typer.Option("--stage", help="Evaluation row the card reads.")
+    ] = "qwen3-pgn-qlora",
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Write the card locally; touch no network.")
+    ] = False,
+) -> None:
+    """Publish the QLoRA adapter of the general model, in the format `peft` wrote it.
+
+    Not re-staged into this project's own adapter format: `peft` already wrote a valid
+    `adapter_config.json` and `adapter_model.safetensors`, and rewriting them would make the file
+    unusable with the two lines of `peft` any reader would actually type. What gets added is the
+    card, built from the run's own record and from the evaluation, never by hand.
+    """
+    from rukh.publish.adapter import publish_qwen_adapter
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    try:
+        result = publish_qwen_adapter(run_dir, repo, stage=stage, dry_run=dry_run)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"repo:     {result.repo_id}")
+    typer.echo(f"base:     {result.base_repo}")
+    typer.echo(f"mode:     {'dry-run (card written, nothing uploaded)' if dry_run else 'uploaded'}")
+    typer.echo(f"trained:  {result.params:,} parameters ({result.bytes / 1048576:.1f} MB)")
+    typer.echo(f"card:     {result.card_path}")
+    for path in result.files:
+        typer.echo(f"  {path}")
+
+
 @mlflow_app.command("ui")
 def mlflow_ui(
     host: Annotated[str, typer.Option("--host", help="Interface to bind.")] = "127.0.0.1",
