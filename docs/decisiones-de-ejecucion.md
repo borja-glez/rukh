@@ -2133,14 +2133,24 @@ Evidencia obtenida por el controlador, no por subagentes:
   | GRPO lr 1e-6 | **+44** (IC 23 a 66) | 1,92 % · **1,66×** la base | 0,472 | 0,122 |
   | GRPO lr 5e-6 | **+68** (IC 46 a 90) | 3,12 % · **2,08×** la base | 0,560 | 0,555 |
 
-- **Y la decisión no se toma con esta tabla.** Decidir cuál de las dos es mejor restando lo que cada
+- **Y la decisión no se toma con esa tabla.** Decidir cuál de las dos es mejor restando lo que cada
   una hizo contra un tercero es exactamente el error que el hito entero desaconseja (D-110, D-120).
-  Se enfrentan entre sí, en las dos direcciones, y eso es lo que decide.
-- **Y se dice lo que es:** un punto elegido de una curva, no un óptimo encontrado. La curva de
-  D-125 sube, se dobla y baja, y el indicador de colapso sube en todo su recorrido; dónde pararse
-  es una decisión que hay que declarar, no un resultado que se descubre.
-- **La regla que deja:** cuando dos configuraciones se diferencian en una ganancia que está dentro
-  del intervalo y en un coste que no, la comparación ya está hecha.
+  Se enfrentaron entre sí, en las dos direcciones. **Resultado: +7 Elo para la rápida, IC −23 a +35,
+  incluye el cero.** Son indistinguibles.
+- **O sea: los 24 puntos de la tabla de arriba no están ahí.** Restando contra la base parecían una
+  diferencia; medida de frente, no hay ninguna. Es la tesis del hito por tercera vez en el mismo
+  hito, y la tercera fue la que decidió.
+- **Qué se publica:** la de **1e-6**. Mismo Elo que la rápida —indistinguibles— y estrictamente
+  menos de todo lo demás: menos colapso (0,472 contra 0,560), menos KL (0,122 contra 0,555) y menos
+  propuestas ilegales (1,66× la base contra 2,08×). Cuando dos modelos empatan en lo que se busca,
+  gana el que cuesta menos en lo que no.
+- **Y se dice lo que es:** un punto elegido de una curva, no un óptimo encontrado. La curva de D-125
+  sube, se dobla y baja, y el indicador de colapso sube en todo su recorrido; dónde pararse es una
+  decisión que hay que declarar, no un resultado que se descubre.
+- **La regla que deja:** la conclusión correcta a partir de datos insuficientes sigue siendo suerte.
+  La primera lectura de esta entrada acertó el modelo que se publica y se equivocó en el número, en
+  el instrumento y en el razonamiento; tres cuartas partes de una decisión pueden estar mal y el
+  resultado salir bien, y eso no la convierte en una buena decisión.
 
 ### D-127 · El criterio se queda a 0,26 Elo, y ahí se para
 - **Qué se hizo:** el criterio 1 pide «≥ +50 Elo con intervalo». Con 800 partidas agrupadas, el
