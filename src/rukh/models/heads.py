@@ -33,7 +33,6 @@ HEADS = ("value", "blunder", "result")
 RESULT_CLASSES = 3
 
 
-
 def pairwise_rank_loss(pred: Tensor, target: Tensor, margin: float = 0.0) -> Tensor:
     """A differentiable stand-in for "did the ordering come out right?".
 
@@ -54,6 +53,7 @@ def pairwise_rank_loss(pred: Tensor, target: Tensor, margin: float = 0.0) -> Ten
         return torch.zeros((), device=pred.device, dtype=pred.dtype)
     penalty = F.softplus(-(sign * diff_pred - margin))
     return (weight * penalty).sum() / total
+
 
 class HeadWeights(BaseConfig):
     """Weight of each head in the joint loss; ``0`` switches a head off without removing it."""
