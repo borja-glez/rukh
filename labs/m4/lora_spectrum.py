@@ -1,7 +1,8 @@
 """How many directions a rank-8 adapter really moves, measured with an SVD.
 
-Lab 5b of M4. "The correction has to pass through eight dimensions" is easy to write and easy to
-believe without checking. The check is one line of linear algebra: the singular values of
+The figure of M4's LoRA section, and the check labs 4 and 5 lean on. "The correction has to pass
+through eight dimensions" is easy to write and easy to believe without checking.
+The check is one line of linear algebra: the singular values of
 ``delta W = (alpha / r) B A`` are the lengths of the directions that correction can push along, and
 there are exactly ``r`` of them that are not zero. Next to the singular values of ``W`` itself --
 seven hundred and sixty-eight of them, all non-zero -- the picture is the whole method.

@@ -8,7 +8,7 @@ repository root.
 | `header_histogram.py` | a packed token stream | 1 · mirar el corpus antes de culpar al modelo |
 | `lora_check.py` | nothing (check 4 needs the `hf` extra) | 4 y 5 · LoRA a mano y la prueba contra `peft` |
 | `games_needed.py` | a sweep's `results.json` | 6 · ¿faltan partidas o no hay diferencia? |
-| `lora_spectrum.py` | a checkpoint and a trained adapter | 5 · el rango, medido con una SVD |
+| `lora_spectrum.py` | a checkpoint and a trained adapter | la figura de la sección de LoRA |
 
 Both are copies of the code the lesson shows, and both print the numbers the lesson quotes. If you
 edit one, edit the other.
