@@ -630,6 +630,70 @@ def eval_cmd(
         typer.echo(f"table:    {report.web}")
 
 
+@eval_app.command("sweep")
+def eval_sweep_cmd(
+    model: Annotated[
+        str, typer.Option("--model", help="Checkpoint path or Hub id to evaluate per condition.")
+    ],
+    elos: Annotated[
+        str,
+        typer.Option("--elos", help="Increasing Elo headers to ask for, comma separated."),
+    ] = "1200,1500,1800,2100,2400",
+    suite: Annotated[str, typer.Option("--suite", help="Suite name: full or quick.")] = "full",
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Suite YAML override."
+        ),
+    ] = None,
+    stage: Annotated[str | None, typer.Option("--stage", help="Name of the sweep.")] = None,
+    no_cache: Annotated[bool, typer.Option("--no-cache", help="Recompute every game.")] = False,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+    web: Annotated[
+        bool, typer.Option("--web/--no-web", help="Also write the JSON the course reads.")
+    ] = True,
+) -> None:
+    """Run the suite once per Elo header and say whether the ratings come out monotonic.
+
+    Every row is the same evaluation with one number changed, so anything that differs between
+    them is the condition. The verdict is printed twice on purpose: whether the point estimates
+    rise, and whether the confidence intervals actually separate. Only the second is evidence.
+    """
+    from rukh.eval import load_suite
+    from rukh.eval.suite import SUITES, is_hub_id
+    from rukh.eval.sweep import WEB_FILE, elo_summary, run_sweep, write_sweep
+    from rukh.paths import resolve
+
+    if suite not in SUITES:
+        typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
+        raise typer.Exit(code=2)
+    if not Path(model).is_file() and not is_hub_id(model):
+        typer.echo(f"error: --model {model!r} is neither a checkpoint nor a Hub id", err=True)
+        raise typer.Exit(code=2)
+    try:
+        wanted = [int(part) for part in elos.split(",") if part.strip()]
+    except ValueError as exc:
+        typer.echo(f"error: --elos must be a comma-separated list of integers: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_suite(suite, config)
+    try:
+        result = run_sweep(
+            model, cfg, wanted, suite=suite, use_cache=not no_cache, device=device, stage=stage
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    markdown = write_sweep(result, resolve(cfg.out_dir), WEB_FILE if web else None)
+    typer.echo(f"stage:      {result.stage} ({result.params:,} parameters)")
+    typer.echo(elo_summary(result.rows))
+    typer.echo(f"monotonic:  {'yes' if result.monotonic else 'no'} (point estimates)")
+    typer.echo(f"separated:  {'yes' if result.separated else 'no'} (confidence intervals)")
+    if result.span is not None:
+        typer.echo(f"span:       {result.span:.0f} Elo")
+    typer.echo(f"report:     {markdown}")
+
+
 @eval_app.command("encoder")
 def eval_encoder_cmd(
     model: Annotated[

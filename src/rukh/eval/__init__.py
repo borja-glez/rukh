@@ -70,6 +70,7 @@ from rukh.eval.suite import (
     resolve_model,
     run_suite,
 )
+from rukh.eval.sweep import SweepResult, SweepRow, run_sweep, write_sweep
 
 __all__ = [
     "DEFAULT_RUNGS",
@@ -94,6 +95,8 @@ __all__ = [
     "ReportPaths",
     "RungResult",
     "SuiteResult",
+    "SweepResult",
+    "SweepRow",
     "WebRow",
     "accuracy",
     "board_of",
@@ -128,6 +131,7 @@ __all__ = [
     "run_encoder_suite",
     "run_puzzles",
     "run_suite",
+    "run_sweep",
     "sample_positions",
     "score_of",
     "separation",
@@ -135,4 +139,5 @@ __all__ = [
     "spearman",
     "upsert_row",
     "write_report",
+    "write_sweep",
 ]
