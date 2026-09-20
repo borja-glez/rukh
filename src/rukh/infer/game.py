@@ -226,6 +226,13 @@ def play_game(
     )
 
 
+def _tell(opponent: Opponent, move: chess.Move) -> None:
+    """Show a move to an opponent that keeps state; a no-op for one that does not."""
+    observe = getattr(opponent, "observe", None)
+    if callable(observe):
+        observe(move)
+
+
 def play_game_with(
     player: Player,
     opponent: Opponent,
@@ -239,6 +246,13 @@ def play_game_with(
     board = board if board is not None else chess.Board()
     limit = max_plies if max_plies is not None else player.limit
     player.start(white_elo, black_elo)
+    # A board handed in with moves already on it is a position the player has to *know about*:
+    # its prompt is the game so far, not the game from here. Without this a match that starts
+    # from an opening book plays every move blind to the opening, which reads as a model that
+    # forgot how to play. The match harness of P5 found it with a model against itself.
+    for played in board.move_stack:
+        player.observe(played)
+        _tell(opponent, played)
     moves: list[str] = []
     illegal = 0
 
@@ -253,6 +267,9 @@ def play_game_with(
             move = opponent.choose(board)
         moves.append(move.uci())
         player.observe(move)
+        # An opponent that keeps state -- another model, in a head-to-head match -- has to see
+        # the moves too. Stockfish and the random mover have no `observe` and are unaffected.
+        _tell(opponent, move)
         board.push(move)
 
     outcome = board.outcome(claim_draw=True)

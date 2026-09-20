@@ -780,6 +780,96 @@ def eval_benchmarks_cmd(
     typer.echo(f"{target}: {written} stage(s) from {source}")
 
 
+@eval_app.command("match")
+def eval_match_cmd(
+    a: Annotated[str, typer.Option("--a", help="Checkpoint or Hub id of the first model.")],
+    b: Annotated[str, typer.Option("--b", help="Checkpoint or Hub id of the second model.")],
+    games: Annotated[
+        int, typer.Option("--games", help="Games to play; must be even (colours are mirrored).")
+    ] = 200,
+    opening_plies: Annotated[
+        int, typer.Option("--opening-plies", help="Random plies both games of a pair start from.")
+    ] = 6,
+    header_elo: Annotated[
+        int, typer.Option("--elo", help="Elo header both models are prompted with.")
+    ] = 1800,
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", exists=True, dir_okay=False, help="Suite YAML for the sampling."),
+    ] = None,
+    seed: Annotated[int, typer.Option("--seed", help="Seed of the opening book.")] = 0,
+    out: Annotated[
+        Path | None, typer.Option("--out", help="Where to write the report (default: artifacts).")
+    ] = None,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """Play two models against each other and report the Elo difference with its interval.
+
+    This is the instrument for "is A stronger than B", and it is not the ladder. A 50-Elo edge
+    takes 185 games head to head and 757 games *per side* off the ladder, before adding the
+    ladder's own irreproducibility (about 40 Elo of one sigma, D-107). To measure a difference,
+    measure the difference -- do not measure two absolutes and subtract them.
+
+    Run `uv run python labs/m5/games_needed_match.py <elo>` first: it says how many games the edge
+    you expect would take, which is a decision to make before paying for them rather than after.
+    """
+    from rukh.config import load_yaml
+    from rukh.eval.match import games_for_edge, play_match, summarise
+    from rukh.eval.suite import EvalConfig, resolve_model
+    from rukh.infer import SampleConfig
+    from rukh.infer.game import DecoderPlayer
+    from rukh.tokenize.uci_vocab import UciTokenizer
+    from rukh.train import load_model, pick_device
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    if games % 2 or games < 2:
+        typer.echo("error: --games must be even and at least 2 (colours are mirrored)", err=True)
+        raise typer.Exit(code=2)
+
+    suite = load_yaml(config, EvalConfig) if config else EvalConfig()
+    where = device or pick_device()
+    tok = UciTokenizer()
+    try:
+        model_a, _ = load_model(resolve_model(a), map_location=where)
+        model_b, _ = load_model(resolve_model(b), map_location=where)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    sampling = SampleConfig(
+        temperature=suite.temperature, top_k=suite.top_k, mask_illegal=False, seed=suite.seed
+    )
+    names = (Path(a).parent.name or a, Path(b).parent.name or b)
+    player_a = DecoderPlayer(model_a.to(where).eval(), tok, sampling)
+    player_b = DecoderPlayer(model_b.to(where).eval(), tok, sampling)
+
+    typer.echo(f"match:    {names[0]} vs {names[1]}, {games} games, header <w{header_elo:04d}>")
+    played = play_match(
+        player_a,
+        player_b,
+        games=games,
+        opening_plies=opening_plies,
+        seed=seed,
+        header_elo=header_elo,
+    )
+    result = summarise(played, names=names, seed=suite.seed)
+
+    from rukh.eval.match import write_match
+
+    path = write_match(result, played, out or Path(suite.out_dir) / "matches")
+    sign = "+" if result.elo >= 0 else ""
+    typer.echo(f"score:    {result.score:.4f} ({result.wins}W {result.draws}D {result.losses}L)")
+    typer.echo(
+        f"elo:      {sign}{result.elo:.0f} (95 % CI {result.ci_low:.0f} to {result.ci_high:.0f})"
+        if result.ci_low is not None and result.ci_high is not None
+        else f"elo:      {sign}{result.elo:.0f}"
+    )
+    typer.echo(f"verdict:  {'separated from zero' if result.separated else 'includes zero'}")
+    typer.echo(f"illegal:  {result.a_illegal} by {names[0]}, {result.b_illegal} by {names[1]}")
+    typer.echo(f"would need {games_for_edge(result.elo)} games to call this edge, played {games}")
+    typer.echo(f"report:   {path}")
+
+
 @eval_app.command("openings")
 def eval_openings_cmd(
     model: Annotated[str, typer.Option("--model", help="Checkpoint or Hub id to read.")],
