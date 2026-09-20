@@ -12,31 +12,35 @@
 
 | Metric | Value |
 |---|---|
-| Legality without the mask, argmax | 99.7 % |
-| Legality without the mask, sampled (T=0.05, top-k 1) | 99.7 % |
-| Top-1 next move | 54.9 % |
-| Top-3 next move | 82.5 % |
+| Legality without the mask, argmax | 100.0 % |
+| Legality without the mask, sampled (T=0.05, top-k 1) | 100.0 % |
+| Top-1 next move | 51.4 % |
+| Top-3 next move | 79.7 % |
 | Puzzles solved | 37.0 % |
 | Estimated Elo | 1425 (95 % CI 1361-1479) |
 | Mean centipawn loss | n/a |
-| Opening diversity | -0.000 |
+| Opening diversity | 1.000 |
 
 ## Opening diversity
 
-200 self-play openings of 12 plies, drawn at temperature 1.0 with top-k 1. **Not** the suite's sampling: at the near-deterministic setting every stage plays one single opening and scores 0, which measures the sampler and not the weights (D-047).
+200 self-play openings of 12 plies, drawn at temperature 1.0 with top-k 20. **Not** the suite's sampling: at the near-deterministic setting every stage plays one single opening and scores 0, which measures the sampler and not the weights (D-047).
 
 | Metric | Value |
 |---|---:|
-| Distinct opening lines | 1 of 200 |
-| Line entropy | -0.000 bits of 7.644 |
-| Normalised | -0.000 |
+| Distinct opening lines | 200 of 200 |
+| Line entropy | 7.644 bits of 7.644 |
+| Normalised | 1.000 |
 | First-move entropy (no sampling) | 1.596 bits |
 
 Most played lines:
 
 | Line | Games |
 |---|---:|
-| `e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 f3g5 d7d5 e4d5 f6d5 g5f7 e8f7` | 200 |
+| `e2e4 e7e5 g1f3 b8c6 f1b5 g8f6 b5c6 b7c6 e1g1 f8c5 f3e5 d7d6` | 1 |
+| `e2e4 d7d5 e4e5 d5d4 g1f3 b8c6 d2d3 f7f5 c1g5 h7h6 g5f4 g7g5` | 1 |
+| `d2d4 g8f6 g1f3 g7g6 e2e3 f8g7 f1d3 e8g8 e1g1 d7d6 e3e4 b8d7` | 1 |
+| `g1f3 a7a6 d2d3 b7b5 c2c3 c8b7 b1d2 c7c5 g2g3 e7e6 f1g2 f8d6` | 1 |
+| `e2e4 e7e6 d2d4 d7d5 e4d5 d8d5 b1c3 d5d8 g1f3 g8f6 c1g5 f8e7` | 1 |
 
 ## Legality
 
@@ -44,18 +48,14 @@ Two rates, because they answer different questions. **argmax** is the share of v
 
 | Definition | Positions | Legal | Rate |
 |---|---:|---:|---:|
-| argmax | 1000 | 997 | 99.7 % |
-| sampled | 1000 | 997 | 99.7 % |
+| argmax | 1000 | 1000 | 100.0 % |
+| sampled | 1000 | 1000 | 100.0 % |
 
 ## Next-move accuracy by Elo band
 
 | Band | Positions | Top-1 | Top-3 |
 |---|---:|---:|---:|
-| 1800-2000 | 543 | 52.3 % | 80.7 % |
-| 2000-2200 | 328 | 57.6 % | 84.1 % |
-| 2200-2400 | 97 | 58.8 % | 85.6 % |
-| 2400-2600 | 28 | 57.1 % | 85.7 % |
-| 2600+ | 4 | 75.0 % | 100.0 % |
+| <1800 | 1000 | 51.4 % | 79.7 % |
 
 ## Puzzles by difficulty band
 

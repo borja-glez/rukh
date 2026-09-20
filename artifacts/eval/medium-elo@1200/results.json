@@ -9,54 +9,30 @@
   "run_id": null,
   "legality_argmax": {
     "positions": 1000,
-    "legal": 997,
-    "rate": 0.997,
+    "legal": 1000,
+    "rate": 1.0,
     "mode": "argmax",
     "temperature": null,
     "top_k": null
   },
   "legality_sampled": {
     "positions": 1000,
-    "legal": 997,
-    "rate": 0.997,
+    "legal": 1000,
+    "rate": 1.0,
     "mode": "sampled",
     "temperature": 0.05,
     "top_k": 1
   },
   "accuracy": {
     "positions": 1000,
-    "top1": 0.549,
-    "top3": 0.825,
+    "top1": 0.514,
+    "top3": 0.797,
     "bands": [
       {
-        "band": "1800-2000",
-        "positions": 543,
-        "top1": 0.5230202578268877,
-        "top3": 0.8066298342541437
-      },
-      {
-        "band": "2000-2200",
-        "positions": 328,
-        "top1": 0.5762195121951219,
-        "top3": 0.8414634146341463
-      },
-      {
-        "band": "2200-2400",
-        "positions": 97,
-        "top1": 0.5876288659793815,
-        "top3": 0.8556701030927835
-      },
-      {
-        "band": "2400-2600",
-        "positions": 28,
-        "top1": 0.5714285714285714,
-        "top3": 0.8571428571428571
-      },
-      {
-        "band": "2600+",
-        "positions": 4,
-        "top1": 0.75,
-        "top3": 1.0
+        "band": "<1800",
+        "positions": 1000,
+        "top1": 0.514,
+        "top3": 0.797
       }
     ]
   },
@@ -189,21 +165,37 @@
     "elo_upper": null
   },
   "delta_cp": null,
-  "diversity": -0.0,
+  "diversity": 1.0,
   "diversity_detail": {
     "games": 200,
     "plies": 12,
-    "distinct_lines": 1,
-    "entropy_bits": -0.0,
+    "distinct_lines": 200,
+    "entropy_bits": 7.643856189774724,
     "max_entropy_bits": 7.643856189774724,
-    "normalised": -0.0,
-    "first_move_entropy_bits": 1.5955005884170532,
+    "normalised": 1.0,
+    "first_move_entropy_bits": 1.5955005966393512,
     "temperature": 1.0,
-    "top_k": 1,
+    "top_k": 20,
     "top_lines": [
       [
-        "e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 f3g5 d7d5 e4d5 f6d5 g5f7 e8f7",
-        200
+        "e2e4 e7e5 g1f3 b8c6 f1b5 g8f6 b5c6 b7c6 e1g1 f8c5 f3e5 d7d6",
+        1
+      ],
+      [
+        "e2e4 d7d5 e4e5 d5d4 g1f3 b8c6 d2d3 f7f5 c1g5 h7h6 g5f4 g7g5",
+        1
+      ],
+      [
+        "d2d4 g8f6 g1f3 g7g6 e2e3 f8g7 f1d3 e8g8 e1g1 d7d6 e3e4 b8d7",
+        1
+      ],
+      [
+        "g1f3 a7a6 d2d3 b7b5 c2c3 c8b7 b1d2 c7c5 g2g3 e7e6 f1g2 f8d6",
+        1
+      ],
+      [
+        "e2e4 e7e6 d2d4 d7d5 e4d5 d8d5 b1c3 d5d8 g1f3 g8f6 c1g5 f8e7",
+        1
       ]
     ]
   },
@@ -221,7 +213,7 @@
     "accuracy_positions": 1000,
     "position_pool": 20000,
     "puzzles_per_band": 2000,
-    "puzzles_use_header": true,
+    "force_header": true,
     "header_elo": 1200,
     "elo_games": 20,
     "elo_rungs": [
@@ -280,6 +272,7 @@
     "diversity_games": 200,
     "diversity_plies": 12,
     "diversity_temperature": 1.0,
+    "diversity_top_k": 20,
     "temperature": 0.05,
     "top_k": 1,
     "block": 200,
