@@ -1451,6 +1451,34 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **El adaptador pesa 1,6 MB**, que es exactamente lo que predice `2 · r · d_model · capas ·
   objetivos` = 393 216 números en `float32`.
 
+### D-098 · M1 prometía lo que M4 tuvo que desmentir, y se corrige donde estaba escrito
+- **Qué decía la lección de M1**, publicada y en `vigente`: «en M4, cuando quieras que juegue como
+  un 1500, no habrá que entrenar nada nuevo: bastará con poner `<w1500>` al principio y muestrear».
+  La ficha de M1 repetía la misma frase.
+- **Por qué era falso:** tres secciones más abajo, en esa misma página, está el recorte con
+  `min_elo: 1800`. El mecanismo que M1 explica es correcto —el Elo va delante, condiciona todas las
+  jugadas— y la promesa daba por hecho que los datos lo alimentaban.
+- **Qué se hace:** se borra la promesa y se pone en su lugar un aviso que cuenta el error, cómo se
+  encontró (contando: cero de doce cabeceras en 1 681 069 636 tokens) y lo que costó (un corpus
+  nuevo y un afinado). No se reescribe la historia: se deja dicho qué decía antes.
+- **Lo que no había que tocar:** los Elo de M1 y M2 ya son los corregidos de D-070 (1425 y 1397
+  para `small` v3 a `<w1800>` y `<w2600>`; 1359 para `small` v1), y M2 ya cuenta su propia
+  corrección. El problema estaba solo en la promesa.
+
+### D-099 · La tabla única servía Elo retractados en `/proyecto/`
+- **Qué pasaba:** `configs/eval/greedy.yaml` tenía `web_results: null`, así que ninguna de las
+  corridas deterministas —las que producen todos los números publicados— escribía en
+  `artifacts/web/results.json`. La tabla se quedó con las filas de la suite `full`, medidas antes
+  de que D-070 corrigiera la escalera: **1091** para `medium`, **1007** y **785** para `small`,
+  **64** para `tiny`. La página en inglés del proyecto las servía.
+- **Qué se hace:** `greedy.yaml` escribe en la tabla; las etapas publicadas se vuelven a evaluar
+  (las partidas y los puzles están en `cache-greedy.sqlite`, así que son minutos y no otra hora de
+  Stockfish); y las filas que ninguna corrida corregida reemplaza se **retractan** con
+  `rukh eval drop`, que es una operación que faltaba.
+- **Por qué existe el comando en vez de editar el JSON:** una medición puede resultar equivocada, y
+  cuando lo es la tabla tiene que poder dejar de llevarla. Es explícito y por etapa a propósito:
+  tirar una fila es tirar una medición, y debería costar decir su nombre.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
