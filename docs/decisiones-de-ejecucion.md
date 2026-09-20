@@ -2142,6 +2142,30 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **La regla que deja:** cuando dos configuraciones se diferencian en una ganancia que está dentro
   del intervalo y en un coste que no, la comparación ya está hecha.
 
+### D-127 · El criterio se queda a 0,26 Elo, y ahí se para
+- **Qué se hizo:** el criterio 1 pide «≥ +50 Elo con intervalo». Con 800 partidas agrupadas, el
+  brazo `off-policy` daba **+67 (IC 45 a 89)**: el punto pasa de 50 y el extremo inferior no. El
+  backlog decía que 1 600 partidas bajarían el intervalo a unos ±16 y lo cruzarían. Se jugaron: 800
+  más con otra semilla de libro de aperturas, en las dos direcciones.
+- **Qué salió, con 1 600 partidas:**
+
+  ```
+  score 0,59281   elo +65,25   IC 49,74 a 80,76   separado del cero
+  ```
+
+  El extremo inferior es **49,74**. El criterio, leído estrictamente, **no se cumple, por 0,26 Elo**.
+- **Y aquí se para.** La cuenta dice que harían falta unas **56 partidas más** para cruzarlo. Es
+  media hora de nada y sería exactamente lo que este hito lleva doce entradas desaconsejando: jugar
+  hasta que el número cruce el umbral es ajustar el experimento al criterio, no medir. El presupuesto
+  se fijó en 1 600 partidas antes de jugarlas y el resultado es el que hay.
+- **Lo que sí se puede afirmar, y es bastante:** los tres métodos baten a su base con el intervalo
+  separado del cero, con 800 o 1 600 partidas y en las dos direcciones. Es la primera vez en el
+  proyecto que este criterio se mide separado del cero. Lo que no se puede afirmar es el «≥ 50» en
+  su lectura fuerte, y se dice con el decimal delante.
+- **La regla que deja:** fija el presupuesto antes de mirar el resultado, y cuando el resultado cae
+  a un pelo del umbral, el pelo es la respuesta. Un criterio que se cumple añadiendo partidas hasta
+  que se cumple no era un criterio.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

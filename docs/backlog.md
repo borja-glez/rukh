@@ -72,10 +72,11 @@ Se limpia al cerrar cada hito; lo que entra en un plan sale de aquí.
   puerta nunca se dispara. `grpo-legality.yaml` existe para probar si GRPO puede devolver el peaje
   que DPO se gastó (D-121), y esa corrida se queda para cuando haya presupuesto de motor: el
   gradiente de legalidad es minúsculo porque solo el 0,25 % de las candidatas salen ilegales.
-- **El criterio de +50 Elo se cumple en la estimación puntual y no en el extremo del intervalo.**
-  Con 800 partidas agrupadas, `off-policy` da +67 (45 a 89). Llevarlo a 1 600 partidas bajaría el
-  intervalo a unos ±16 y cruzaría el 50 por el extremo. Son siete minutos de máquina y se hace
-  cuando haya una tanda libre.
+- ~~**El criterio de +50 Elo se cumple en la estimación puntual y no en el extremo del intervalo.**
+  Llevarlo a 1 600 partidas cruzaría el 50 por el extremo.~~ **Hecho, y no cruzó**: 1 600 partidas
+  dan +65,25 con el intervalo de **49,74** a 80,76. Se queda a 0,26 Elo y **no se juegan más**
+  (D-127): añadir partidas hasta que el número cruce el umbral es ajustar el experimento al
+  criterio.
 - **`rukh eval match` no reutiliza partidas entre corridas.** Cada dirección juega sus 400 desde
   cero aunque el libro de aperturas sea el mismo. Un caché por `(modelo A, modelo B, apertura,
   color)` ahorraría la mitad al repetir una dirección, y es lo que hace falta para subir a 1 600
