@@ -2135,8 +2135,15 @@ Evidencia obtenida por el controlador, no por subagentes:
 
 - **Y la decisión no se toma con esa tabla.** Decidir cuál de las dos es mejor restando lo que cada
   una hizo contra un tercero es exactamente el error que el hito entero desaconseja (D-110, D-120).
-  Se enfrentaron entre sí, en las dos direcciones. **Resultado: +7 Elo para la rápida, IC −23 a +35,
-  incluye el cero.** Son indistinguibles.
+  Se enfrentaron entre sí, en las dos direcciones. Las dos dan el mismo veredicto y las dos lo dan
+  a favor de quien va como A —+7 para la rápida en un sentido, +9 para la lenta en el otro—, que es
+  la firma del ruido simétrico. Agrupadas sobre 800 partidas:
+
+  ```
+  score 0,49875   elo -0,87   IC -22,2 a +20,4   incluye el cero
+  ```
+
+  **Empate, con dos décimas de Elo y un intervalo centrado en cero.**
 - **O sea: los 24 puntos de la tabla de arriba no están ahí.** Restando contra la base parecían una
   diferencia; medida de frente, no hay ninguna. Es la tesis del hito por tercera vez en el mismo
   hito, y la tercera fue la que decidió.
