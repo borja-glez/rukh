@@ -13,6 +13,7 @@ from rukh.data.elite import EliteConfig
 from rukh.data.elo_bins import EloBinsConfig
 from rukh.data.evals import EvalsConfig
 from rukh.data.pairs import PairsConfig
+from rukh.data.pgn_text import PgnTextConfig
 from rukh.data.positions import PositionsConfig
 from rukh.data.publish import PublishConfig
 from rukh.data.puzzles import PuzzlesConfig
@@ -67,6 +68,7 @@ class PipelineConfig(BaseConfig):
     elite: EliteConfig = Field(default_factory=EliteConfig)
     elo_bins: EloBinsConfig = Field(default_factory=EloBinsConfig)
     style: StyleConfig = Field(default_factory=StyleConfig)
+    pgn_text: PgnTextConfig = Field(default_factory=PgnTextConfig)
     publish: PublishConfig = Field(default_factory=PublishConfig)
 
     @model_validator(mode="after")

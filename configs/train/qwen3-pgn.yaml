@@ -1,0 +1,26 @@
+# Qwen3-0.6B fine-tuned on the same games the decoder trains on, written as PGN text.
+#
+# The point is the comparison, so the budget is chosen to be *generous* to Qwen rather than fair
+# to us: 1 500 steps of 32 sequences of up to 512 tokens is about 24 M tokens of chess for a model
+# that already speaks, against the 1.68 B the decoder needed from scratch. If it still loses by a
+# wide margin, nobody can say it was starved.
+#
+# `r = 16` on all four attention projections is the usual QLoRA recipe, twice the rank the
+# project's own adapters use, for the same reason: this side gets the benefit of the doubt.
+model: Qwen/Qwen3-0.6B
+data_dir: data/pgn-text
+out_dir: checkpoints
+run_name: qwen3-pgn-qlora
+max_length: 512
+batch_size: 8
+grad_accum: 4
+lr: 2.0e-4
+max_steps: 1500
+warmup: 100
+r: 16
+alpha: 32
+dropout: 0.05
+targets: [q_proj, k_proj, v_proj, o_proj]
+four_bit: true
+n_train: 100000
+seed: 42

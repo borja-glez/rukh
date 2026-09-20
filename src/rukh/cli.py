@@ -296,6 +296,22 @@ def data_elo_bins(config: PipelineOption = None, as_json: JsonOption = False) ->
     _echo_manifest(run(cfg), as_json, cfg.out_dir)
 
 
+@data_app.command("pgn-text")
+def data_pgn_text(config: PipelineOption = None, as_json: JsonOption = False) -> None:
+    """Render the same games as PGN text, for the general-model comparison of M4."""
+    from rukh.data.pgn_text import PgnTextConfig, build
+    from rukh.data.pipeline import load_pipeline
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_pipeline(config).pgn_text if config is not None else PgnTextConfig()
+    try:
+        manifest = build(cfg)
+    except FileNotFoundError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    _echo_manifest(manifest, as_json, cfg.out_dir)
+
+
 @data_app.command("style")
 def data_style(config: PipelineOption = None, as_json: JsonOption = False) -> None:
     """Cut one parquet per style: the games a LoRA adapter is trained to sound like."""
@@ -310,9 +326,7 @@ def data_style(config: PipelineOption = None, as_json: JsonOption = False) -> No
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     if as_json:
-        typer.echo(
-            "[" + ", ".join(m.model_dump_json(indent=2) for m in manifests.values()) + "]"
-        )
+        typer.echo("[" + ", ".join(m.model_dump_json(indent=2) for m in manifests.values()) + "]")
         return
     typer.echo(f"out_dir:  {cfg.out_dir}")
     typer.echo("styles:")
@@ -455,6 +469,46 @@ def train_encoder_cmd(
     )
     typer.echo(f"steps:      {cfg.max_steps}")
     typer.echo(f"checkpoint: {checkpoint}")
+
+
+@train_app.command("qwen")
+def train_qwen_cmd(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", exists=True, dir_okay=False, readable=True, help="YAML config."),
+    ] = None,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """QLoRA a general language model on PGN text, for the comparison table of M4.
+
+    Four-bit is attempted and not required: at 0.6 B parameters on a 32 GB card it saves nothing
+    that matters, so if `bitsandbytes` will not load the run falls back to bf16 and says so in
+    its report instead of claiming a technique it did not use.
+    """
+    from rukh.config import load_yaml
+    from rukh.train.qwen import QwenConfig, train_qwen
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_yaml(config, QwenConfig) if config is not None else QwenConfig()
+    try:
+        report = train_qwen(cfg, device=device)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"model:     {report.model}")
+    typer.echo(f"precision: {'4-bit NF4' if report.four_bit else 'bf16'}")
+    if report.fallback_reason:
+        typer.echo(f"fallback:  {report.fallback_reason}")
+    typer.echo(
+        f"trainable: {report.trainable_params:,} of {report.total_params:,} "
+        f"({100 * report.trainable_share:.3f} %)"
+    )
+    typer.echo(f"samples:   {report.train_samples:,} over {report.steps:,} steps")
+    if report.final_loss is not None:
+        typer.echo(f"loss:      {report.final_loss:.4f}")
+    if report.peak_memory_mb is not None:
+        typer.echo(f"peak mem:  {report.peak_memory_mb:,.0f} MB")
+    typer.echo(f"adapter:   {report.adapter_dir}")
 
 
 @train_app.command("heads")
