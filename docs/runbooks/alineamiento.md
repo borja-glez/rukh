@@ -35,7 +35,8 @@ Requisitos: `uv sync --extra cu128 --extra hf --group dev`, los pares de P1 en
 | 7 | La comparación que vale, **en las dos direcciones** | `uv run rukh eval match --a <dpo> --b <base> --games 400 --seed 7` y luego con `--a` y `--b` intercambiados | ~4 min cada una | `artifacts/eval/*/results.json` y `report.md` |
 | 7b | Agrupar las dos direcciones | `uv run python labs/m5/pooled_match.py` | segundos | la tabla agrupada y el residuo del triángulo |
 | 8 | Galería de reward hacking | `uv run python labs/m5/reward_hacking.py --depth 10` | ~2 min | las tres tablas y la de profundidades |
-| 9 | GRPO | `uv run rukh train grpo --config configs/train/grpo.yaml` | ~40 min | `checkpoints/medium-v4-grpo/grpo.pt` |
+| 9 | GRPO, **dos tasas** | `uv run rukh train grpo --config configs/train/grpo.yaml` y otra con `--run-name medium-v4-grpo-fast` y `lr` 5e-6 | ~12 min cada una (1 500 pasos) | `checkpoints/medium-v4-grpo*/grpo.pt` |
+| 9b | Cuál de las dos, enfrentándolas | `uv run rukh eval match --a <rápida> --b <lenta> --games 400 --seed 7`, y al revés | ~4 min cada una | la única comparación directa entre las dos candidatas |
 | 10 | Evaluación canónica de cada etapa | `uv run rukh eval --model <ckpt> --config configs/eval/greedy.yaml --stage <nombre>` | ~26 min | `artifacts/eval/<nombre>/` |
 | 11 | Tabla de benchmarks | `uv run rukh eval benchmarks` | segundos | `docs/benchmarks.md` |
 | 12 | Exportar | `uv run rukh export --ckpt <ckpt> --out artifacts/onnx/<nombre> --fp16 --int8 --check-parity` | ~12 min cada uno | `model{,-fp16,-int8}.onnx`, `parity.json` |
@@ -93,17 +94,30 @@ dos corridas con semillas distintas no dice nada del modelo.
 ### `rukh train grpo`
 
 ```
-reward:     +0.5241 -> +0.6013
-illegal:    0.0180 -> 0.0164
-kl:         0.00412 against the frozen start
-groups:     1,847 useful, 553 flat
-engine:     9,204 analyses, 71.4 % from cache
+reward:     +0.8657 -> +0.8937 (group best)
+            +0.8250 -> +0.8529 (engine best -- this is the score)
+flat:       0.385 -> 0.472
+illegal:    0.0000 -> 0.0000
+kl:         0.12169 against the frozen start
+groups:     6,743 useful, 5,257 flat
+engine:     analyses, % from cache
 ```
 
-Lo que **no** hay que celebrar es la primera línea sola. Una recompensa verificable siempre puede
-subir; lo que dice si subió jugando mejor o cultivando el número es que suba **y** la KL se quede
-pequeña. `flat` cuenta los grupos donde las ocho candidatas puntuaron igual: el motor se pagó y no
-salió gradiente, así que es la parte del presupuesto que se lleva la propia confianza del modelo.
+**La segunda línea es la que puntúa, no la primera.** La primera toma `cp_best` dentro del grupo,
+así que se maximiza proponiendo la misma jugada ocho veces: sube cuando el modelo colapsa (D-123).
+La segunda toma la evaluación del motor con mejor juego y no se puede falsear así.
+
+`flat` es el detector de colapso: la proporción de grupos de validación donde las ocho candidatas
+eran la misma jugada. Si sube mucho mientras sube la recompensa, la recompensa se está comprando con
+determinismo (D-124).
+
+`illegal` sale 0,0000 con `restrict_to_legal: true`, que es lo normal: las candidatas se muestrean
+entre jugadas legales y la puerta nunca se dispara. Para que enseñe algo hay que usar
+`grpo-legality.yaml`.
+
+Y la elección entre dos corridas **no se hace con esta salida**: se hace enfrentándolas (paso 9b).
+Restar lo que cada una hizo contra la base es el error que el hito entero desaconseja, y se cometió
+una vez antes de darse cuenta (D-126).
 
 ## Lo que se aprendió montándolo
 
@@ -124,4 +138,9 @@ salió gradiente, así que es la parte del presupuesto que se lleva la propia co
   47 Elo a 2,4 σ: la fuerza no es un solo número por modelo cuando los emparejamientos interactúan.
   Y un veredicto binario leído del borde de un intervalo se da la vuelta con el ruido normal.
 - **Alinear cuesta legalidad** (D-121). Los dos DPO doblan la tasa de propuestas ilegales de su
-  base, y `nll_weight: 0.1` no lo evitó. Mide el coste en la misma corrida que el beneficio.
+  base, y `nll_weight: 0.1` no lo evitó. GRPO paga menos, 1,66×. Mide el coste en la misma corrida
+  que el beneficio.
+- **La recompensa que optimizas y la que publicas no son la misma** (D-123 a D-125). La del grupo se
+  maximiza colapsando la política; la del motor no. Publica las dos y `flat_share` con ellas.
+- **Un criterio que se cumple añadiendo partidas hasta que se cumple no era un criterio** (D-127).
+  El extremo inferior quedó en 49,74 con 1 600 partidas, y no se jugaron las 56 que faltaban.
