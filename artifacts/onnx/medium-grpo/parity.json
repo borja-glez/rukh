@@ -11,17 +11,17 @@
     "fp32": {
       "file": "model.onnx",
       "agreement": 1.0,
-      "max_abs_logit_delta": 2.8848648071289062e-05
+      "max_abs_logit_delta": 2.6702880859375e-05
     },
     "fp16": {
       "file": "model-fp16.onnx",
       "agreement": 0.998,
-      "max_abs_logit_delta": 0.015731334686279297
+      "max_abs_logit_delta": 0.014772176742553711
     },
     "int8": {
       "file": "model-int8.onnx",
-      "agreement": 0.963,
-      "max_abs_logit_delta": 1.6979060173034668
+      "agreement": 0.97,
+      "max_abs_logit_delta": 1.344590187072754
     }
   }
 }

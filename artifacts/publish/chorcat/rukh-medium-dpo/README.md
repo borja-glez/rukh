@@ -17,34 +17,34 @@ tags:
 # chorcat/rukh-medium-dpo
 
 A GPT decoder written from scratch that plays chess by predicting the next move of a game
-written in UCI. This is the `medium-v4-dpo-greedy` stage of [Rukh](https://github.com/borja-glez/rukh), a course
+written in UCI. This is the `medium-v4-dpo-onpolicy-greedy` stage of [Rukh](https://github.com/borja-glez/rukh), a course
 that builds a chess language model end to end: 115,120,128 parameters, a
 vocabulary of 2030 fixed tokens and a context of
 200 moves.
 
-The demo at [https://rukh.borjaglez.com](https://rukh.borjaglez.com) serves the `tiny` and `small` stages, not this one; this repository is for running the weights yourself · read how it was built:
+Play against it in the browser: [https://rukh.borjaglez.com/?stage=medium-dpo-fp16](https://rukh.borjaglez.com/?stage=medium-dpo-fp16) · read how it was built:
 [https://lab.rukh.borjaglez.com](https://lab.rukh.borjaglez.com)
 
 ## Results
 
-Measured with `rukh eval --suite full` on 2026-09-19.
+Measured with `rukh eval --suite full` on 2026-09-20.
 
 | Metric | Value |
 |---|---|
-| Legality without the mask, argmax | 99.8 % |
-| Legality without the mask, sampled (T=0.05, top-k 1) | 99.8 % |
-| Top-1 next move | 53.4 % |
-| Top-3 next move | 80.5 % |
-| Puzzles solved | 38.8 % |
-| Estimated Elo | 1529 (95 % CI 1470-1583) |
+| Legality without the mask, argmax | 99.2 % |
+| Legality without the mask, sampled (T=0.05, top-k 1) | 99.2 % |
+| Top-1 next move | 52.3 % |
+| Top-3 next move | 79.9 % |
+| Puzzles solved | 39.1 % |
+| Estimated Elo | 1560 (95 % CI 1500-1617) |
 
 Puzzles by difficulty band:
 
 | Band | Solved |
 |---|---|
-| 1000-1500 | 58.3 % |
-| 1500-2000 | 39.9 % |
-| 2000+ | 18.1 % |
+| 1000-1500 | 59.0 % |
+| 1500-2000 | 40.3 % |
+| 2000+ | 17.8 % |
 
 Legality is measured **without** the legality mask, twice, because the two numbers answer
 different questions:
@@ -65,8 +65,8 @@ flattering or not.
 
 | Bar | Target | Measured | Verdict |
 |---|---|---|---|
-| Legality without the mask, argmax | at least 99 % | 99.8 % | met |
-| Estimated Elo | at least 1200 | 1529 (95 % CI 1470-1583) | met |
+| Legality without the mask, argmax | at least 99 % | 99.2 % | met |
+| Estimated Elo | at least 1200 | 1560 (95 % CI 1500-1617) | met |
 
 ### The ratings on this card replace lower ones
 
@@ -93,7 +93,7 @@ How to read these numbers:
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
-- 4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws
+- 5 of 160 games hit the context limit and were adjudicated (5 of them) instead of being scored as draws
 
 
 ## Input and output
@@ -136,17 +136,17 @@ repository is that measurement, as the exporter wrote it.
 
 | File | Same move as PyTorch | Worst logit drift |
 |---|---|---|
-| `model.onnx` (fp32) | 100.0 % | 2.13e-05 |
-| `model-fp16.onnx` (fp16) | 99.7 % | 0.015 |
-| `model-int8.onnx` (int8) | 96.7 % | 2.85 |
+| `model.onnx` (fp32) | 100.0 % | 2.88e-05 |
+| `model-fp16.onnx` (fp16) | 99.8 % | 0.0157 |
+| `model-int8.onnx` (int8) | 96.3 % | 1.7 |
 
 The bar the project set itself is 99.9 %.
 
-`model-fp16.onnx` does not reach it: it picks a different move in 0.3 % of
-positions, roughly one in 333.
+`model-fp16.onnx` does not reach it: it picks a different move in 0.2 % of
+positions, roughly one in 500.
 
-`model-int8.onnx` does not reach it: it picks a different move in 3.3 % of
-positions, roughly one in 30. That is the file the WASM fallback loads, so a phone on the
+`model-int8.onnx` does not reach it: it picks a different move in 3.7 % of
+positions, roughly one in 27. That is the file the WASM fallback loads, so a phone on the
 int8 build is playing a measurably different model from the one in the results table above: the
 weights are the same, the arithmetic is not.
 
@@ -166,8 +166,8 @@ the model is in `config.json`.
   "model_type": "rukh-move-decoder",
   "library_name": "rukh",
   "rukh_version": "0.0.1",
-  "stage": "medium-v4-dpo-greedy",
-  "step": 519,
+  "stage": "medium-v4-dpo-onpolicy-greedy",
+  "step": 180,
   "params": 115120128,
   "tokenizer": "uci",
   "vocab_hash": "527c5dda224cab570cb84da8f7dcda0f43fe53edaf86822f899568f5dd824b46",

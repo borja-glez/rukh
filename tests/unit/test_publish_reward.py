@@ -62,10 +62,13 @@ def _run_dir(tmp_path: Path) -> Path:
     return folder
 
 
-def test_the_card_carries_the_bands_and_both_correlations(tmp_path, monkeypatch):
-    monkeypatch.setenv("RUKH_ROOT", str(tmp_path))
+def test_the_card_carries_the_bands_and_both_correlations(rukh_home, tmp_path):
     result = publish_reward(_run_dir(tmp_path), "chorcat/rukh-rm", dry_run=True)
     assert result.uploaded is False
+    # The env var is RUKH_HOME, not RUKH_ROOT. Getting it wrong is silent -- the test passes and
+    # stages into the real `artifacts/publish/`, quietly replacing a published folder with toy
+    # weights. It happened once; this line is why it cannot happen twice.
+    assert Path(result.folder).is_relative_to(rukh_home)
     card = (Path(result.folder) / "README.md").read_text(encoding="utf-8")
 
     # The number, and the number that is not the same number.
@@ -81,20 +84,18 @@ def test_the_card_carries_the_bands_and_both_correlations(tmp_path, monkeypatch)
     assert "same seed" in card, "and so does the part of it that is not the split"
 
 
-def test_the_run_has_to_have_been_measured(tmp_path, monkeypatch):
+def test_the_run_has_to_have_been_measured(rukh_home, tmp_path):
     """A card written from a missing file would be a card of defaults."""
-    monkeypatch.setenv("RUKH_ROOT", str(tmp_path))
     folder = _run_dir(tmp_path)
     (folder / "run.json").unlink()
     with pytest.raises(FileNotFoundError):
         publish_reward(folder, "chorcat/rukh-rm", dry_run=True)
 
 
-def test_nothing_reaches_the_network_on_a_dry_run(tmp_path, monkeypatch):
+def test_nothing_reaches_the_network_on_a_dry_run(rukh_home, tmp_path, monkeypatch):
     def _boom():
         raise AssertionError("a dry run must not build an API client")
 
-    monkeypatch.setenv("RUKH_ROOT", str(tmp_path))
     monkeypatch.setattr("rukh.publish.reward._api", _boom)
     result = publish_reward(_run_dir(tmp_path), "chorcat/rukh-rm", dry_run=True)
     assert set(result.files) == {"model.safetensors", "config.json", "README.md"}

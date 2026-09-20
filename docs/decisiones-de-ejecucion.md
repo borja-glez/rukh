@@ -2220,6 +2220,24 @@ Evidencia obtenida por el controlador, no por subagentes:
   afirma con el fuerte y se apoya con los otros tres. Al revés —afirmarla porque tres débiles
   coinciden— es contar el mismo ruido tres veces.
 
+### D-129 · Un test escribió en el árbol del proyecto y nadie se enteró
+- **Qué pasó:** `tests/unit/test_publish_reward.py` aislaba el sistema de ficheros con
+  `monkeypatch.setenv("RUKH_ROOT", tmp_path)`. La variable del proyecto es **`RUKH_HOME`**
+  (`src/rukh/paths.py`), así que el aislamiento no existía: los tres tests escribieron en
+  `artifacts/publish/chorcat/rukh-rm/` de verdad y dejaron el `model.safetensors` del modelo de
+  juguete —**25 KB**— donde estaban los 151,7 MB del modelo que se iba a publicar.
+- **Por qué no saltó nada:** el test pasa igual. `resolve()` devuelve una ruta válida en los dos
+  casos, la carpeta se crea, la card se renderiza y las aserciones sobre su contenido se cumplen.
+  Un aislamiento que falla en silencio es peor que no tenerlo: da la sensación de que lo hay.
+- **Cómo se vio:** contando bytes. `ls -la` sobre la carpeta staged antes de subirla, porque 33 KB
+  para un modelo de 37,9 M de parámetros no cuadra con nada.
+- **El arreglo:** usar el fixture `rukh_home` que el resto de los tests ya usaba, y **añadir la
+  aserción que faltaba**: que la carpeta devuelta esté dentro del directorio temporal. El fallo era
+  invisible precisamente porque nadie comprobaba dónde había escrito.
+- **La regla que deja:** un test que aísla algo tiene que **afirmar que lo aisló**. Y antes de subir
+  una carpeta a ningún sitio, mira su tamaño: es la comprobación más barata que existe y la única
+  que habría pillado esto.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
