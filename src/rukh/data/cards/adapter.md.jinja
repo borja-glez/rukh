@@ -75,7 +75,7 @@ from rukh.models.lora import load_adapter
 from rukh.train import load_model
 
 model, _ = load_model("<the base checkpoint>")
-load_adapter(model, "adapter.safetensors")   # the config travels next to it
+load_adapter(model, "adapter.safetensors")  # the config travels next to it
 ```
 
 `rukh.models.lora.merge_lora(model)` folds it into the weights, after which the model is an
