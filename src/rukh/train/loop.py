@@ -41,6 +41,7 @@ from rukh.train.common import (
     RunConfig,
     autocast_for,
     forever,
+    load_init_weights,
     load_resume,
     log_metrics,
     maybe_compile,
@@ -59,6 +60,7 @@ __all__ = [
     "TrainConfig",
     "evaluate",
     "forever",
+    "load_init_weights",
     "log_metrics",
     "maybe_compile",
     "param_groups",
@@ -74,6 +76,19 @@ class TrainConfig(RunConfig):
 
     preset: Literal["tiny", "small", "medium"] = "small"
     model: DecoderConfig | None = None  # overrides the preset when given
+    init_from: str | None = None
+    """Checkpoint to start the weights from, for a fine-tune.
+
+    Deliberately not ``--resume``, which is for a run that was interrupted: resuming restores the
+    optimizer moments, the step counter, the RNG and the MLflow run so the curve carries on as if
+    nothing had stopped. A fine-tune wants the opposite -- the weights and nothing else -- because
+    it is a **new** run, with its own data, its own learning rate and its own schedule, and the
+    Adam moments of a 48 000-step cosine that has already decayed would fight the warmup of the
+    one that starts now. Asking for both at once is a contradiction and is refused.
+
+    It lives here and not on ``RunConfig`` because the encoder's runs already have their own way
+    in (``HeadsConfig.encoder_ckpt``), and a field that three configs accept but only one honours
+    is a silent no-op waiting to be written into a YAML."""
 
     @property
     def default_name(self) -> str:
@@ -150,7 +165,10 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
     best_val = math.inf
     run_id: str | None = None
     if resume is not None:
+        if cfg.init_from is not None:
+            raise ValueError("--resume continues a run; init_from starts a new one: pick one")
         start_step, best_val, run_id = load_resume(resume, model, optimizer, where)
+    initialised_from = load_init_weights(cfg.init_from, model, where)
 
     autocast, use_bf16 = autocast_for(cfg, where)
     warmup = torch.ones((cfg.batch_size, cfg.block), dtype=torch.long, device=where)
@@ -175,6 +193,7 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
         "data_manifest_sha": manifest_sha,
         "device": str(where),
         "num_params": model.num_params(),
+        "init_from": initialised_from,
     }
     with start_run(out_dir.name, params, tags={"preset": cfg.preset}, run_id=run_id) as run:
         log.info("run %s in %s on %s", run.info.run_id, out_dir, where)

@@ -214,6 +214,53 @@ def test_resume_continues_from_the_saved_step(rukh_home: Path, tokens_dir: Path)
         assert not torch.allclose(before, moved.eval()(idx)[0], atol=1e-5)
 
 
+def test_init_from_takes_the_weights_and_leaves_the_schedule_alone(
+    rukh_home: Path, tokens_dir: Path
+) -> None:
+    """A fine-tune starts where a previous run ended, but as a run of its own.
+
+    `--resume` restores the optimizer moments, the step counter and the MLflow run, which is
+    exactly what a fine-tune must not inherit: its data, its learning rate and its warmup are
+    different, and half-decayed Adam moments would fight the schedule that starts now.
+    """
+    pretrained = train(toy_config(max_steps=3, ckpt_every=3, run_name="base"), device="cpu")
+    tuned = train(
+        toy_config(max_steps=2, ckpt_every=2, run_name="tuned", init_from=str(pretrained)),
+        device="cpu",
+    )
+    payload = load_checkpoint(tuned)
+    assert tuned.parent.name == "tuned"  # its own folder, not the base run's
+    assert payload["step"] == 2  # its own step count, not 3 + 2
+    assert payload["run_id"] != load_checkpoint(pretrained)["run_id"]
+
+
+def test_init_from_actually_starts_at_the_given_weights(
+    rukh_home: Path, tokens_dir: Path
+) -> None:
+    """With zero steps of training the fine-tune is the checkpoint it was pointed at."""
+    pretrained = train(toy_config(max_steps=3, ckpt_every=3, run_name="base"), device="cpu")
+    tuned = train(
+        toy_config(
+            max_steps=1, ckpt_every=1, lr=0.0, run_name="tuned", init_from=str(pretrained)
+        ),
+        device="cpu",
+    )
+    before = load_checkpoint(pretrained)["model_state"]["tokens.weight"]
+    after = load_checkpoint(tuned)["model_state"]["tokens.weight"]
+    torch.testing.assert_close(before, after)
+
+
+def test_init_from_and_resume_together_are_refused(rukh_home: Path, tokens_dir: Path) -> None:
+    first = train(toy_config(max_steps=3, ckpt_every=3), device="cpu")
+    with pytest.raises(ValueError, match="pick one"):
+        train(toy_config(max_steps=6, init_from=str(first)), resume=first, device="cpu")
+
+
+def test_init_from_a_missing_checkpoint_says_so(rukh_home: Path, tokens_dir: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="init_from"):
+        train(toy_config(init_from="nowhere/best.pt"), device="cpu")
+
+
 def test_a_mismatched_vocabulary_is_refused(rukh_home: Path, tokens_dir: Path) -> None:
     cfg = toy_config(model=TOY.model_copy(update={"vocab_size": 64}))
     with pytest.raises(ValueError, match="vocab_size"):

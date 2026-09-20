@@ -29,7 +29,7 @@ from torch.utils.data import DataLoader
 
 from rukh import paths
 from rukh.config import BaseConfig
-from rukh.train.checkpoint import load_checkpoint, restore, save_checkpoint
+from rukh.train.checkpoint import load_checkpoint, load_state, restore, save_checkpoint
 from rukh.train.schedule import lr_at
 
 log = logging.getLogger(__name__)
@@ -198,6 +198,23 @@ def load_resume(
     run_id = str(previous) if isinstance(previous, str) and previous else None
     log.info("resumed %s at step %d (mlflow run %s)", resume, start_step, run_id or "new")
     return start_step, best_val, run_id
+
+
+def load_init_weights(init_from: str | None, model: nn.Module, where: torch.device) -> str | None:
+    """Load ``init_from`` into ``model`` and return the resolved path, or None when there is none.
+
+    Only ``model_state`` is read. The optimizer, the step counter and the MLflow run of the
+    checkpoint are ignored on purpose: this is where a fine-tune starts, not where a run left off.
+    """
+    if init_from is None:
+        return None
+    path = paths.resolve(init_from)
+    if not path.is_file():
+        raise FileNotFoundError(f"init_from checkpoint not found: {path}")
+    payload = load_checkpoint(path, map_location=where)
+    load_state(model, payload["model_state"])
+    log.info("initialised from %s (step %s), fresh optimizer", path, payload.get("step", "?"))
+    return path.as_posix()
 
 
 def write_checkpoint(
