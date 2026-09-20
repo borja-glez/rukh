@@ -179,6 +179,7 @@ DEMO_STAGES = {
     "small": "small-fp16",
     "medium": "medium-fp16",
     "medium-dpo": "medium-dpo-fp16",
+    "medium-grpo": "medium-grpo-fp16",
     "medium-elo": "medium-elo-fp16",
     "medium-lora": "medium-lora-fp16",
 }
