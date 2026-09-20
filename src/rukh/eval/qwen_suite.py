@@ -142,7 +142,10 @@ def evaluate_qwen(
             result.elo = estimate(records, bootstrap=cfg.bootstrap, seed=cfg.seed)
     finally:
         cache.close()
-    result.written = player.stats
+    # `result.written` stays the snapshot taken over the validation positions and nothing else.
+    # The player keeps counting through the puzzles and the games, and folding those in would
+    # give a legality rate over a different denominator than the decoder's -- which is the one
+    # number in this report that has to face the decoder's directly.
     result.notes = notes
     return result
 

@@ -37,6 +37,12 @@ log = logging.getLogger(__name__)
 __all__ = ["QwenPlayer", "QwenStats", "parse_san_answer", "qwen_source"]
 
 MAX_NEW_TOKENS = 6
+DECODER_PLIES = 196
+"""Plies the decoder can carry (``block`` 200 minus its three header tokens and the move it is
+about to make). The text model gets the same number, not the 120 its fine-tuning corpus was cut
+at: a harness that let one side play longer games than the other would be measuring the harness.
+Past 120 plies the prompt is longer than anything Qwen was fine-tuned on, and that is a property
+of the model rather than of the measurement -- it belongs in the result, not in the setup."""
 MOVE_NUMBER = re.compile(r"^\d+\.+")
 """``12.`` or ``12...`` at the head of the answer: bookkeeping, not a move."""
 TRAILING = "!?"
@@ -107,7 +113,7 @@ class QwenPlayer:
         tokenizer: Any,
         stats: QwenStats | None = None,
         max_new_tokens: int = MAX_NEW_TOKENS,
-        max_plies: int = 120,
+        max_plies: int = DECODER_PLIES,
     ) -> None:
         self.model, self.tokenizer = model, tokenizer
         self.stats = stats if stats is not None else QwenStats()
@@ -117,7 +123,7 @@ class QwenPlayer:
 
     @property
     def limit(self) -> int:
-        """Plies before the prompt outgrows what the model was fine-tuned on."""
+        """Plies this player can carry; the decoder's number, so both play the same game."""
         return self.max_plies
 
     def start(self, white_elo: int, black_elo: int) -> None:
