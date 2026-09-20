@@ -46,6 +46,13 @@ medibles (50-150 Elo) con Elo-conditioning, DPO y GRPO.
 
 - **Completo con maestros**: seguir preentrenando con `rukh-games-elite` (lr 1e-4). Medir: sube el
   Elo, baja la diversidad.
+
+> **Nota (2026-09-20, P4):** «baja la diversidad» sale **del revés**. La entropía analítica de la
+> primera jugada a `<w1800>` pasa de 1,7695 a 1,8850 bits y `1. e4` baja del 59,6 % al 55,1 %: la
+> élite juega **más** aperturas distintas que el jugador medio de 1800, así que afinar sobre ella
+> ensancha el repertorio en vez de estrecharlo. Lo que sí se estrecha es el eje por arriba —entre
+> `<w2100>` y `<w2400>` el base separa 0,107 bits y el de maestros 0,010— y lo que se deteriora es
+> el tramo bajo, que este corpus tampoco cubre: 2,856 → 3,307 bits a `<w1200>`.
 - **Elo-conditioning** (instruction tuning): reentrenar/afinar con `rukh-elo-bins` y evaluar que
   `<w1500>` juega peor que `<w2400>` de forma medible (Elo estimado por condición). Comparar con Maia.
 
