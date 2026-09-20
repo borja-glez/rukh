@@ -1215,6 +1215,135 @@ Evidencia obtenida por el controlador, no por subagentes:
   presupuesto de reintentos sube de 3 a 8. Firmar las peticiones también sube el límite del
   anfitrión, así que es lo correcto aunque no hubiera 429.
 
+### D-081 · El corpus balanceado es plano a propósito, y se estrecha donde se estrecha el mundo
+- **Construido:** `data/elo-bins-v2`, bandas de 200 Elo de 1000 a 2600 sobre las dos mitades del eje
+  (`data/uci-low` y `data/uci`), 150 000 partidas por banda.
+- **Medido:** siete bandas llenas (1000-2200), 146 232 en la de 2400 y **23 191** en la de 2600.
+  Total **1 219 423 partidas, 95 722 318 tokens**. La cabecera queda plana entre 59 335 y 87 662
+  partidas por bin de 100 desde `<w1000>` hasta `<w2400>`, frente a la pirámide 20:1 del corpus real.
+- **Por qué plano:** un corpus con la forma real enseña que `<w1500>` es *raro*, que no es lo mismo
+  que enseñar qué *significa*. La frecuencia de una condición y su contenido son cosas distintas y
+  aquí solo interesa la segunda.
+- **Lo que no se puede arreglar:** no hay 150 000 partidas de 2600+ en dos meses de Lichess. El
+  manifiesto publica el reparto real. El criterio de `GOAL.md` (1500 < 2000 < 2400) vive entero
+  dentro de la parte plana, así que la cola fina no lo compromete.
+- **Ancho de banda 200 y no 100:** con 100 las cuatro bandas de club tendrían la misma resolución
+  que las de maestro y se quedarían sin partidas; con 400 se difuminaría la diferencia entre 1500 y
+  1800, que es justo la que hay que enseñar.
+
+### D-082 · `val_remainder_trains`: una regla razonable que habría deshecho el experimento
+- **Qué pasaba:** el empaquetador parte el mes de validación en dos y suma el resto al
+  entrenamiento (es lo que recuperó 238 M de tokens en D-062). Sobre el corpus balanceado eso añade
+  **2,85 millones** de partidas de 1800+ encima del reparto plano y lo deshace en silencio.
+- **Qué se hace:** `val_remainder_trains: false` en la config del afinado. El conjunto de
+  validación sigue siendo exactamente el mismo con el que se miden las demás corridas —para que las
+  pérdidas sean comparables— y el de entrenamiento es el corpus balanceado y nada más.
+- **Por qué no se quita la regla:** para un preentrenamiento sigue siendo correcta y valiosa. Lo que
+  hacía falta era un interruptor, no una marcha atrás.
+
+### D-083 · El afinado por Elo cuesta 0,025 nats de imitación fuerte
+- **Medido** sobre el mismo conjunto de validación (100 000 partidas de 2025-02, 1800+) y con el
+  mismo medidor:
+
+  | Modelo | pérdida val | top-1 val |
+  |---|---|---|
+  | `medium-v4` (paso 48 000) | 1,3733 | 54,73 % |
+  | `medium-elo` (paso 3 800) | **1,3987** | **54,66 %** |
+
+- **Es el precio esperado y es pequeño.** La validación mide imitación de juego 1800+, que es
+  precisamente lo que este afinado deja de optimizar: dos tercios de su corpus son partidas de club.
+  Que suba no es un defecto, es la definición de lo que se está haciendo.
+- **Receta:** 3 800 pasos × 51 200 tokens = 194,56 M (unas dos pasadas), `lr` 1e-4 (dieciséis veces
+  por debajo del preentrenamiento), warmup 200, coseno a 0,1. ~20 min en la 5090.
+- **Lo que decide el hito no es esta tabla** sino el barrido por condición: lo que importa es qué
+  compró ese cuarto de nat.
+
+### D-084 · `best.pt` no es el resultado de un afinado, y ahora el bucle lo dice
+- **Qué pasó:** `best.pt` se quedó congelado en el **paso 200** de `medium-elo`. Es correcto según
+  su definición (menor pérdida de validación) y es la trampa: en un afinado que cambia de corpus a
+  propósito la pérdida de validación sube desde el principio, así que «el mejor» es el modelo casi
+  sin tocar.
+- **Por qué es peligroso:** quien evaluara ese fichero después estaría midiendo los pesos
+  equivocados, y los números saldrían perfectamente plausibles. No hay excepción que lo delate.
+- **Qué se hace:** cuando hay `init_from` y `best.pt` no es el último paso, el bucle escribe un
+  aviso que nombra el checkpoint que **sí** es el resultado y explica por qué. Con test.
+
+### D-085 · La LoRA escrita a mano es LoRA: comprobado contra `peft`, paso a paso
+- **Por qué hacía falta:** un `alpha` en el sitio equivocado, `A` y `B` intercambiadas o una
+  inicialización distinta dan un modelo que entrena, converge y produce números creíbles. Ninguna da
+  LoRA.
+- **Cómo se comprueba:** dos modelos sobre los mismos pesos base, uno con `apply_lora` y otro con
+  `peft.get_peft_model`; se copia nuestra `A` en la suya (`B` es cero en los dos por construcción) y
+  los dos dan pasos de SGD sobre el mismo lote. Las pérdidas se comparan **paso a paso** con
+  tolerancia 1e-5.
+- **Medido:** iguales en los seis pasos, y el recuento de parámetros entrenables coincide.
+- **Detalle que obliga a elegir el objetivo con cuidado:** la comparación se hace sobre `attn.proj`
+  y no sobre `q`/`v`, porque `peft` no puede expresar lo mismo que nosotros sobre una matriz `qkv`
+  fusionada: con `target_modules=["qkv"]` adapta las tres proyecciones con **una** pareja `A`/`B` de
+  2304 filas, mientras que nuestra implementación da una por rango. Son parametrizaciones distintas
+  y compararlas mediría esa diferencia, no la corrección del código.
+
+### D-086 · Tres cosas que exige `PreTrainedModel` y que no salen en los tutoriales
+- **`_tied_weights_keys` es un diccionario** `{copia: origen}` en `transformers` 5, no una lista. Con
+  una lista, `save_pretrained` revienta con `'list' object has no attribute 'keys'`.
+- **Hay que llamar a `post_init()`** al final del constructor. Sin él no existe
+  `all_tied_weights_keys` y cualquier guardado o carga falla con un `AttributeError` sobre un
+  atributo que uno nunca escribió. En esta versión `post_init` no toca los pesos, así que llamarlo
+  después de construir el decoder es seguro.
+- **La config no puede tener un miembro llamado `decoder`.** `transformers` lo lee como la mitad
+  decodificadora de un par encoder-decoder e intenta llamarle `to_dict()`; un método enlazado se
+  convierte en una excepción la primera vez que algo pide una `GenerationConfig`. Se llama
+  `decoder_config()`.
+- **`labels` no se vuelve a desplazar.** El flujo empaquetado ya guarda `y` un paso por delante de
+  `x`; desplazarlas otra vez dentro de `forward`, como hace casi todo `transformers`, entrenaría al
+  modelo a predecir la jugada de después de la siguiente, con una pérdida de aspecto normal.
+
+### D-087 · El harness se abre a cualquier jugador, sin mover una coma del camino del decoder
+- **Por qué:** M4 tiene que pasar un modelo de lenguaje general por la misma escalera que el
+  decoder. Una comparación cuyas dos mitades corren por código distinto mide también el código.
+- **Cómo:** `play_game` se parte en `play_game_with(player, opponent, ...)` más un `DecoderPlayer`
+  que es el camino original palabra por palabra. `play_rung`/`play_rungs` aceptan un `player`
+  opcional. Los 639 tests siguieron verdes sin tocar ninguno, que es la comprobación de que la
+  refactorización no cambió comportamiento.
+- **Lo que el protocolo obliga a decir:** `choose` devuelve la jugada **y** si la propuesta sin
+  máscara era legal. Son dos preguntas distintas: la partida tiene que seguir, así que una propuesta
+  ilegal se rescata, pero el rescate no puede esconder que ocurrió.
+
+### D-088 · Un modelo de texto puede fallar de tres maneras que el decoder no tiene
+- **El decoder** solo puede equivocarse de una forma: jugada legal en la posición equivocada. Su
+  vocabulario *es* el conjunto de jugadas.
+- **Un modelo que escribe SAN** puede además escribir algo que no es una jugada (`Nf9`), una jugada
+  bien formada que esta posición no permite, o SAN **ambigua** que dos piezas podrían satisfacer y
+  que no desambiguó (`Nd2` en vez de `Nbd2`).
+- **Se cuentan por separado**, nunca sumadas en «ilegal». Sumarlas escondería justo lo que cuesta la
+  representación, que es la mitad de lo que enseña la comparación.
+
+### D-089 · Los puzles llevan el Elo real de sus jugadores, y eso habría falseado el barrido
+- **Qué habría pasado:** casi todos los puzles del conjunto traen `white_elo`/`black_elo` de la
+  partida de la que salieron, y `start_history` los usa cuando están. En un barrido por condición
+  eso deja la columna de puzles **idéntica en las cinco filas** — correcto por su propia definición,
+  e indistinguible de la evidencia de que la condición no hace nada.
+- **Qué se hace:** `puzzles_use_header`, activo solo en el barrido, fuerza la cabecera de la
+  condición en todos los puzles; y la caché del barrido es otra, porque estas tentativas responden a
+  otra pregunta.
+- **La caché vieja no se invalida:** el campo entra en la clave **solo cuando está activo**. Una
+  clave de caché es la promesa de que dos corridas midieron lo mismo, y un interruptor apagado *es*
+  el comportamiento con el que se jugaron las partidas cacheadas de P2 y P3.
+
+### D-090 · Se mide y se publica la entropía de aperturas, que llevaba desde el spec en `n/a`
+- **Por qué ahora:** el spec predice del afinado con maestros que «sube el Elo y baja la
+  diversidad». Una tabla que solo mide la primera mitad no puede comprobar esa frase.
+- **Dos números, porque fallan distinto.** La **entropía de líneas** (N auto-partidas, entropía de
+  Shannon de las líneas distintas) es la que pide el spec y depende del muestreo: al ajuste casi
+  determinista con el que se comparan las etapas, cualquier decoder juega una sola partida y saca 0.
+  La **entropía de la primera jugada** es analítica, no tiene varianza entre tiradas y es la
+  comparable entre etapas tal cual; su techo es log₂(20) = 4,32 bits.
+- **La primera se publica siempre con la temperatura a la que se leyó** (D-047 otra vez).
+- **Detalle de implementación que este modelo obliga:** las auto-partidas van en lote y el lote es
+  rectangular por construcción. Las posiciones son *aprendidas*, así que rellenar por la izquierda
+  desplazaría cada token real a una posición en la que nunca se entrenó, y rellenar por la derecha
+  dejaría un `<pad>` en la columna que predice. El código falla antes que rellenar.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
