@@ -1,22 +1,22 @@
 {
   "model_type": "rukh-reward",
   "stage": "rm",
-  "params": 37913601,
+  "params": 5937,
   "pooling": "mean",
   "encoder": {
     "input": "squares",
     "vocab_size": 2030,
     "square_vocab": 47,
-    "n_layer": 12,
-    "n_head": 8,
-    "d_model": 512,
+    "n_layer": 1,
+    "n_head": 2,
+    "d_model": 16,
     "d_ff": null,
     "block": 200,
-    "dropout": 0.1,
+    "dropout": 0.0,
     "pos": "learned",
     "tie_embeddings": true
   },
   "square_tokens": 69,
   "objective": "bradley-terry",
-  "training": "checkpoints/rm-20260920-223655/reward.pt"
+  "training": "checkpoints/rm-toy/reward.pt"
 }

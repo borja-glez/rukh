@@ -18,8 +18,8 @@ tags:
 A **reward model**: it reads a chess position and answers with one number, trained on
 13,838 pairs of moves that a chess engine had already ranked. This is the
 `rm` stage of [Rukh](https://github.com/borja-glez/rukh), a course that builds a chess language model
-end to end: 37,913,601 parameters over 12 layers of width
-512, reading the 69 square tokens of a board.
+end to end: 5,937 parameters over 1 layers of width
+16, reading the 69 square tokens of a board.
 
 Read how it was built: [https://lab.rukh.borjaglez.com](https://lab.rukh.borjaglez.com)
 
@@ -38,11 +38,11 @@ few plies apart cannot straddle the split.
 
 | Metric | Value |
 |---|---|
-| Accuracy on held-out pairs | 74.21 % |
-| Accuracy over pairs an evaluation can decide | 75.77 % |
-| Preference loss | 0.5232 |
-| Margin vs engine gap (Pearson) | -0.148 |
-| Margin vs engine gap, without mates (Pearson) | +0.081 |
+| Accuracy on held-out pairs | 72.91 % |
+| Accuracy over pairs an evaluation can decide | 73.62 % |
+| Preference loss | 0.5244 |
+| Margin vs engine gap (Pearson) | -0.034 |
+| Margin vs engine gap, without mates (Pearson) | +0.058 |
 
 ### Where it is right and where it is wrong
 
@@ -51,11 +51,8 @@ first: it is the largest slice after the narrowest band, and it is where the mod
 
 | Engine gap | Pairs | Accuracy |
 |---|---:|---:|
-| 100-200 cp | 616 | 76.30 % |
-| 200-400 cp | 247 | 74.09 % |
-| 400-800 cp | 101 | 79.21 % |
-| 800-2000 cp | 14 | 57.14 % |
-| mate | 484 | 71.07 % |
+| 100-200 cp | 616 | 74.19 % |
+| mate | 484 | 71.49 % |
 
 Read the `Pairs` column before the `Accuracy` one. A band of a dozen pairs reports whatever those
 dozen did: across five runs of this configuration the `800-2000` band gave 90 %, 68 %, 90 %, 50 %
@@ -80,7 +77,7 @@ publishing at all.
 
 13,838 pairs, 12,376 for training and
 1,462 held out, 10 epochs, batch 64, learning rate
-0.0001, seed 42.
+0.0003, seed 42.
 
 Trained **from a random initialisation**, and that was measured rather than
 assumed: starting from the project's pretrained position encoder scored about 6.5 points *worse*.
