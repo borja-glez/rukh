@@ -204,7 +204,13 @@ def month_shards(cfg: FetchConfig, month: str) -> list[str]:
 
 
 def _download(cfg: FetchConfig, shard: str) -> Path:
-    """One shard on local disk, resumed from the cache when it is already partly there."""
+    """One shard as a real file on disk, resumed if a previous run was cut off partway.
+
+    ``local_dir`` and not ``cache_dir``. The Hub cache stores the bytes under ``blobs/`` and hands
+    back a link into ``snapshots/``, so deleting what this returns frees nothing: the first run
+    that way left 5.7 GB of shards behind after claiming to have cleaned up. With ``local_dir``
+    the path *is* the file, and ``unlink`` means what it says.
+    """
     from huggingface_hub import hf_hub_download
 
     return Path(
@@ -212,7 +218,7 @@ def _download(cfg: FetchConfig, shard: str) -> Path:
             cfg.dataset,
             shard,
             repo_type="dataset",
-            cache_dir=paths.resolve(cfg.cache_dir).as_posix(),
+            local_dir=paths.resolve(cfg.cache_dir).as_posix(),
         )
     )
 
