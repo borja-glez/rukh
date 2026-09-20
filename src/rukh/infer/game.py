@@ -1,7 +1,14 @@
-"""Playing a whole game: the model against an opponent, counting illegal proposals.
+"""Playing a whole game: a player against an opponent, counting illegal proposals.
 
 An opponent is anything with ``choose(board) -> chess.Move``: the seeded ``RandomOpponent``
 used by the unit tests, ``StockfishOpponent`` for the Elo harness, or the browser in the demo.
+
+The *player* -- the side being measured -- is a protocol too, and for one reason: M4 has to put
+a general language model through the same ladder as the decoder, and a comparison where the two
+sides are measured by different code is not a comparison. ``DecoderPlayer`` is the original path,
+unchanged and still the default; ``rukh.eval.qwen_source`` supplies the other one. Everything
+around them -- the opponent, termination, adjudication, how a cut game is scored -- stays here,
+which is exactly the part that must not differ between the two.
 """
 
 from __future__ import annotations
@@ -36,6 +43,57 @@ class Opponent(Protocol):
     """Whatever plays the other side."""
 
     def choose(self, board: chess.Board) -> chess.Move: ...
+
+
+class Player(Protocol):
+    """Whatever plays the side being measured.
+
+    ``choose`` returns the move the player will actually make **and** whether its unmasked
+    proposal was legal. The two are different questions: a game has to keep going, so an illegal
+    proposal is rescued with a masked draw, but the rescue must not hide the fact that it
+    happened -- that count is the legality signal the whole harness is built around.
+    """
+
+    @property
+    def limit(self) -> int:
+        """Plies this player can carry before it runs out of context."""
+
+    def start(self, white_elo: int, black_elo: int) -> None:
+        """Begin a new game at the given ratings."""
+
+    def choose(self, board: chess.Board) -> tuple[chess.Move | None, bool]: ...
+
+    def observe(self, move: chess.Move) -> None:
+        """Record a move that was played, by either side."""
+
+
+class DecoderPlayer:
+    """``MoveDecoder`` as a ``Player``: the path every published number was measured on."""
+
+    def __init__(self, model: MoveDecoder, tok: UciTokenizer, cfg: SampleConfig) -> None:
+        self.model, self.tok, self.cfg = model, tok, cfg
+        self.masked = cfg.model_copy(update={"mask_illegal": True})
+        self.generator = model_generator(model, cfg)
+        self.history: list[int] = []
+
+    @property
+    def limit(self) -> int:
+        return self.model.cfg.block - HEADER_TOKENS - 1
+
+    def start(self, white_elo: int, black_elo: int) -> None:
+        self.history = _history(self.tok, white_elo, black_elo)
+
+    def choose(self, board: chess.Board) -> tuple[chess.Move | None, bool]:
+        move, _ = pick_move(self.model, self.tok, board, self.history, self.cfg, self.generator)
+        if move is not None:
+            return move, True
+        rescued, _ = pick_move(
+            self.model, self.tok, board, self.history, self.masked, self.generator
+        )
+        return rescued, False
+
+    def observe(self, move: chess.Move) -> None:
+        self.history.append(self.tok.vocab.get(move.uci(), self.tok.unk_id))
 
 
 class RandomOpponent:
@@ -156,27 +214,45 @@ def play_game(
     A game that hits ``max_plies`` comes back with ``result="*"`` and the final ``fen``: scoring
     it as a draw would flatter (or punish) the model, so the Elo harness adjudicates it instead.
     """
+    player = DecoderPlayer(model, tok, cfg)
+    return play_game_with(
+        player,
+        opponent,
+        model_color=model_color,
+        white_elo=white_elo,
+        black_elo=black_elo,
+        max_plies=max_plies,
+        board=board,
+    )
+
+
+def play_game_with(
+    player: Player,
+    opponent: Opponent,
+    model_color: chess.Color = chess.WHITE,
+    white_elo: int = 1800,
+    black_elo: int = 1800,
+    max_plies: int | None = None,
+    board: chess.Board | None = None,
+) -> GameResult:
+    """``play_game`` for any ``Player``; the decoder's version is the one-line wrapper above."""
     board = board if board is not None else chess.Board()
-    limit = max_plies if max_plies is not None else model.cfg.block - HEADER_TOKENS - 1
-    generator = model_generator(model, cfg)
-    masked = cfg.model_copy(update={"mask_illegal": True})
-    history = _history(tok, white_elo, black_elo)
+    limit = max_plies if max_plies is not None else player.limit
+    player.start(white_elo, black_elo)
     moves: list[str] = []
     illegal = 0
 
     while len(moves) < limit and not is_over(board):
         if board.turn == model_color:
-            move, report = pick_move(model, tok, board, history, cfg, generator)
-            if move is None:
+            move, was_legal = player.choose(board)
+            if not was_legal:
                 illegal += 1
-                move, _ = pick_move(model, tok, board, history, masked, generator)
             if move is None:
                 break
         else:
             move = opponent.choose(board)
-        uci = move.uci()
-        moves.append(uci)
-        history.append(tok.vocab.get(uci, tok.unk_id))
+        moves.append(move.uci())
+        player.observe(move)
         board.push(move)
 
     outcome = board.outcome(claim_draw=True)
