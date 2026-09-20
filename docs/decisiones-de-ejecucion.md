@@ -1344,6 +1344,33 @@ Evidencia obtenida por el controlador, no por subagentes:
   desplazaría cada token real a una posición en la que nunca se entrenó, y rellenar por la derecha
   dejaría un `<pad>` en la columna que predice. El código falla antes que rellenar.
 
+### D-091 · El eje pasó de ruido a significado, y se ve sin jugar una sola partida
+- **Medido** con `rukh eval openings`: la distribución del propio modelo sobre las veinte primeras
+  jugadas legales, sin temperatura, sin top-k y sin semilla. Es analítica, así que no tiene varianza
+  entre tiradas y no hay que promediar cientos de auto-partidas para leerla.
+
+  | Cabecera | `medium-v4` entropía | su jugada preferida | `medium-elo` entropía | su jugada preferida |
+  |---|---|---|---|---|
+  | `<w1200>` | 2,8556 | e2e4 43,7 % | **1,5955** | e2e4 66,9 % |
+  | `<w1500>` | **2,9369** | e2e4 41,8 % | **1,6470** | e2e4 64,8 % |
+  | `<w1800>` | 1,7695 | e2e4 59,6 % | 1,7408 | e2e4 60,5 % |
+  | `<w2100>` | 1,9033 | e2e4 52,6 % | 1,8809 | e2e4 53,5 % |
+  | `<w2400>` | 2,0104 | e2e4 46,1 % | 1,9916 | e2e4 47,2 % |
+
+- **La huella del suelo del corpus está en los pesos.** En `medium-v4` hay un escalón entre
+  `<w1500>` (2,9369 bits) y `<w1800>` (1,7695): **1,17 bits** de discontinuidad exactamente donde
+  `min_elo: 1800` cortaba los datos. Por debajo del suelo el modelo está *menos* decidido que en
+  cualquier cabecera entrenada, que es la firma del ruido y no la de la debilidad: un prefijo
+  aleatorio no le pide nada, le confunde.
+- **Después del afinado el eje es monótono y tiene el signo correcto:** 1,5955 → 1,6470 → 1,7408 →
+  1,8809 → 1,9916 bits. Un jugador de club abre con `1. e4` o `1. d4` y poco más; el repertorio se
+  ensancha con la fuerza. El modelo condicionado reproduce esa forma, y lo hace **en orden**.
+- **Por encima de 1800 los dos modelos coinciden** (1,74 frente a 1,77; 1,99 frente a 2,01): el
+  afinado no deshizo lo que ya estaba, solo llenó lo que faltaba.
+- **Por qué esta medida vale aparte del Elo:** no cuesta una sola partida, no tiene ruido de
+  muestreo y no depende de Stockfish. Si la escalera de Elo saliera ambigua, esto seguiría siendo
+  evidencia de que la cabecera dejó de ser ruido.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

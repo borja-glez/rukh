@@ -6,6 +6,7 @@ Every command is a thin shell over the library: parse options, call one function
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import Annotated
 
@@ -706,6 +707,64 @@ def eval_cmd(
     typer.echo(f"results:  {report.results}")
     if report.web:
         typer.echo(f"table:    {report.web}")
+
+
+@eval_app.command("openings")
+def eval_openings_cmd(
+    model: Annotated[str, typer.Option("--model", help="Checkpoint or Hub id to read.")],
+    against: Annotated[
+        str | None,
+        typer.Option("--against", help="A second model to compare the distribution with."),
+    ] = None,
+    header_elo: Annotated[
+        int, typer.Option("--elo", help="Elo header to ask the distribution at.")
+    ] = 1800,
+    top: Annotated[int, typer.Option("--top", help="How many first moves to print.")] = 8,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """Print what the model would open with, as probabilities rather than as sampled games.
+
+    No temperature, no top-k, no seed: the softmax over the twenty legal first moves as the
+    weights produce it. That is what makes it the right instrument for an adapter's effect --
+    the share it moved is a property of the weights and does not have to be averaged out of
+    hundreds of self-play games.
+    """
+    from rukh.eval.diversity import first_move_distribution, first_move_entropy
+    from rukh.eval.suite import resolve_model
+    from rukh.tokenize.uci_vocab import UciTokenizer
+    from rukh.train import load_model, pick_device
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    where = device or pick_device()
+    tok = UciTokenizer()
+
+    def read(path: str) -> tuple[dict[str, float], float]:
+        loaded, _ = load_model(resolve_model(path), map_location=where)
+        loaded = loaded.to(where).eval()
+        return first_move_distribution(loaded, tok, header_elo), first_move_entropy(
+            loaded, tok, header_elo
+        )
+
+    try:
+        probs, entropy = read(model)
+        other = read(against) if against is not None else None
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"header:   <w{header_elo:04d}>")
+    typer.echo(f"entropy:  {entropy:.4f} bits of {math.log2(20):.4f}")
+    if other is not None:
+        typer.echo(f"          {other[1]:.4f} bits for {against}")
+    order = sorted(probs, key=lambda move: probs[move], reverse=True)[:top]
+    header_row = "move      share" + ("     other     delta" if other is not None else "")
+    typer.echo(header_row)
+    for move in order:
+        line = f"{move:<9s} {probs[move] * 100:6.2f} %"
+        if other is not None:
+            mine, theirs = probs[move], other[0].get(move, 0.0)
+            line += f"  {theirs * 100:6.2f} %  {(theirs - mine) * 100:+6.2f}"
+        typer.echo(line)
 
 
 @eval_app.command("qwen")
