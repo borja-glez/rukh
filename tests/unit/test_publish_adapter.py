@@ -87,7 +87,8 @@ def test_a_measured_adapter_publishes_what_it_changed_and_what_it_cost(
         share_after=0.93,
         elo_base=1504.0,
         elo_adapted=1488.0,
-        games=200,
+        entropy_before=1.7695,
+        entropy_after=0.0209,
         train_games=200_000,
         predicate="split_part(uci, ' ', 1) = 'e2e4'",
     )
@@ -101,7 +102,8 @@ def test_a_measured_adapter_publishes_what_it_changed_and_what_it_cost(
             dry_run=True,
         )
     )
-    assert "41.0 %" in card and "93.0 %" in card
+    assert "41.00 %" in card and "93.00 %" in card
+    assert "1.7695 bits" in card and "0.0209 bits" in card
     assert "1504" in card and "1488" in card
     assert "200,000 games" in card
     assert "split_part(uci, ' ', 1) = 'e2e4'" in card

@@ -49,11 +49,18 @@ class AdapterEffect(BaseConfig):
     """UCI of the opening move the style is about, e.g. ``e2e4``."""
     share_before: float | None = None
     share_after: float | None = None
-    """Share of self-play games opening with ``first_move``, base and adapted."""
+    """Probability the model gives ``first_move`` from the opening position, base and adapted.
+
+    Read straight off the softmax over the twenty legal first moves, with no sampling, no
+    temperature and no seed -- so two readings agree to the last decimal and the number says
+    something about the weights rather than about a draw. Counting self-play openings instead
+    would answer the same question with sampling noise on top, which for a card is strictly
+    worse: a published number that moves between runs invites the reader to average it."""
     elo_base: float | None = None
     elo_adapted: float | None = None
-    games: int | None = None
-    """Self-play games behind the two shares."""
+    entropy_before: float | None = None
+    entropy_after: float | None = None
+    """First-move entropy in bits, the same measurement in one number instead of one move."""
     train_games: int | None = None
     """Games in the style slice the adapter was trained on."""
     predicate: str | None = None

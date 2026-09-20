@@ -1608,6 +1608,55 @@ Evidencia obtenida por el controlador, no por subagentes:
   prueba que lo destapó cuesta catorce segundos; la que no se escribió habría costado cuarenta y
   cinco minutos de exportación y una demo rota en el navegador.
 
+### D-105 · La familia de P4 se construye sobre `medium-v4` y no sobre `small`
+- **Qué dice `GOAL.md`:** publicar `rukh-small-masters` y `rukh-small-elo`. Lo que se publica es
+  `rukh-medium-masters` y `rukh-medium-elo`.
+- **Por qué:** `medium-v4` es el modelo que la demo sirve y el que tiene margen para que el eje se
+  note. `small` saca 1007 de Elo y 51,1 % de top-1; pedirle además que el estilo cambie con la
+  cabecera es pedirle que mueva una aguja que apenas se ve. Los dos afinados y los dos adaptadores
+  parten del mismo `medium-v4-20260919-174623/best.pt`, que es también la base sobre la que la card
+  de cada adaptador dice que se monta.
+- **Coste de la desviación:** 221 MB por etapa en la demo en vez de 75, y la descarga se pide con
+  el consentimiento delante. A cambio, las mediciones del hito se hacen sobre el modelo cuyos
+  números ya están publicados, así que cada comparación es contra una fila que existe.
+- **Lo que cambia con el nombre:** nada más. El recorte, la receta, la suite y los criterios son
+  los del plan; lo único que se sustituye es el tamaño del modelo base, y queda escrito aquí para
+  que nadie busque `rukh-small-elo` en el Hub.
+
+### D-106 · El control que impide cantar victoria: el modelo **sin** afinar mueve el mismo Elo
+- **Por qué se hizo:** `medium-elo` puntúa 1425 pidiéndole 1200 y 1606 pidiéndole 2100, un salto de
+  181 Elo con los intervalos separados. Leído solo, eso es «el condicionamiento da fuerza». Hay una
+  segunda explicación: que **cualquier** modelo puntúe menos con una cabecera baja, y entonces el
+  salto no diría nada del afinado. Se distinguen con un control, y el control es correr el mismo
+  barrido sobre el modelo **base**, que por debajo de 1800 no tiene cabecera ninguna: `<w1200>` es
+  para él un vector de la inicialización.
+- **Lo que salió:**
+
+  | cabecera | modelo | Elo | IC 95 % | legal | top-1 | puzles | entropía 1.ª |
+  |---|---|---:|---|---:|---:|---:|---:|
+  | `<w1200>` | `medium-v4` (base) | 1419 | 1358-1479 | 99,60 % | 49,80 % | 36,42 % | 2,856 |
+  | `<w1200>` | `medium-elo` | **1425** | 1361-1479 | **100,00 %** | **51,40 %** | **37,02 %** | **1,596** |
+  | `<w2100>` | `medium-v4` (base) | 1580 | 1512-1649 | 99,80 % | 53,80 % | 38,27 % | 1,903 |
+  | `<w2100>` | `medium-elo` | 1606 | 1543-1670 | 99,70 % | 53,40 % | 38,08 % | 1,881 |
+
+- **La conclusión, que es incómoda y es la correcta:** el modelo **base** también recorre el eje,
+  161 Elo, con los intervalos separados. Y no puede ser condicionamiento, porque su `<w1200>` nunca
+  recibió un gradiente. Lo que le pasa al base es otra cosa: un prefijo desconocido le **estorba**,
+  y estorbarle cuesta unos ciento sesenta puntos. El afinado mueve 181, que está dentro del ruido
+  de los 161. **La columna de Elo no distingue las dos causas**, así que por sí sola no es evidencia
+  de que la cabecera signifique algo.
+- **Dónde sí se distinguen, en la misma tirada:** a `<w1200>`, con el mismo Elo, el modelo afinado
+  escribe **cero** jugadas ilegales contra cuatro de mil del base, acierta 1,6 puntos más de top-1,
+  resuelve 0,6 puntos más de puzles y —lo más claro— tiene **1,26 bits menos** de entropía de
+  primera jugada: 1,596 contra 2,856. Es decir, el afinado convirtió «ruido en la entrada» en «un
+  jugador de club decidido», y eso se ve en todo menos en el resultado contra Stockfish.
+- **Y a `<w2100>` los dos modelos coinciden** en las cinco columnas, como tenía que ser: esa
+  cabecera siempre estuvo entrenada y el afinado no debía tocarla. Que no la tocara es la prueba de
+  que no hubo olvido catastrófico.
+- **La regla que deja:** cuando una métrica sube con el tratamiento, córrela también sobre el
+  modelo sin tratar. Si sube igual, la métrica no mide el tratamiento. Cuesta una hora de máquina y
+  es la diferencia entre publicar un hallazgo y publicar un artefacto.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

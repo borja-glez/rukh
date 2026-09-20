@@ -35,12 +35,14 @@ through {{ lora.r }} dimensions per matrix.
 ## What it changed
 
 {% if effect.share_before is not none and effect.share_after is not none -%}
-Measured over {{ effect.games }} self-play openings, base and adapted, same sampling and same seed:
+The model's own probability for `{{ effect.first_move }}` from the opening position, read off the
+softmax over the twenty legal first moves with no sampling -- so the number is a property of the
+weights and two readings agree to the last decimal:
 
-| | share of games opening `{{ effect.first_move }}` |
-|---|---:|
-| `{{ base_repo }}` | {{ "%.1f"|format(effect.share_before * 100) }} % |
-| with this adapter | {{ "%.1f"|format(effect.share_after * 100) }} % |
+| | P(`{{ effect.first_move }}`) | first-move entropy |
+|---|---:|---:|
+| `{{ base_repo }}` | {{ "%.2f"|format(effect.share_before * 100) }} % | {% if effect.entropy_before is not none %}{{ "%.4f"|format(effect.entropy_before) }} bits{% else %}n/a{% endif %} |
+| with this adapter | {{ "%.2f"|format(effect.share_after * 100) }} % | {% if effect.entropy_after is not none %}{{ "%.4f"|format(effect.entropy_after) }} bits{% else %}n/a{% endif %} |
 {%- else %}
 Not measured yet.
 {%- endif %}

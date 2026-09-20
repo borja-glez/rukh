@@ -1,0 +1,11 @@
+{
+  "first_move": "d2d4",
+  "share_before": 0.2667805850505829,
+  "share_after": 0.9988288283348083,
+  "entropy_before": 1.769469157122429,
+  "entropy_after": 0.01601952259750735,
+  "elo_base": null,
+  "elo_adapted": null,
+  "train_games": 200000,
+  "predicate": "split_part(uci, ' ', 1) = 'd2d4' AND white_elo >= 1800 AND black_elo >= 1800"
+}

@@ -1,0 +1,11 @@
+{
+  "first_move": "e2e4",
+  "share_before": 0.5964496731758118,
+  "share_after": 0.9984527826309204,
+  "entropy_before": 1.769469157122429,
+  "entropy_after": 0.02094167262476914,
+  "elo_base": null,
+  "elo_adapted": null,
+  "train_games": 200000,
+  "predicate": "split_part(uci, ' ', 1) = 'e2e4' AND white_elo >= 1800 AND black_elo >= 1800"
+}
