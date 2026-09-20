@@ -12,5 +12,6 @@ de ellas.
 | Post | Hito | Estado |
 |---|---|---|
 | `2026-09-20-p4-que-cambia-un-afinado.md` | P4 · Fine-tuning e instrucción | borrador |
+| `2026-09-21-p5-para-medir-una-diferencia.md` | P5 · Alineamiento | borrador |
 
 El «post 1» de P2 que `GOAL.md` menciona no llegó a escribirse.

@@ -1,0 +1,34 @@
+# GRPO asked to pay back the legality that DPO spent.
+#
+# D-121 measured the toll: aligning with DPO doubled the base model's illegal-proposal rate, from
+# 1.3-1.5 % to 2.9-3.8 % for the off-policy arm. This run starts from that model and draws its
+# candidate groups from the **whole vocabulary** instead of from the legal moves, so an illegal
+# proposal can land in a group and score the floor -- which is the only configuration in which a
+# legality gate can teach anything at all.
+#
+# The number to watch is not the reward. It is `illegal` before and after, with the KL small.
+prompts: data/pairs/dpo-prompts.parquet
+checkpoint: checkpoints/medium-v4-dpo-offpolicy/dpo.pt
+out_dir: checkpoints
+run_name: medium-v4-dpo-offpolicy-grpo-legality
+
+group_size: 8
+temperature: 1.0
+top_k: 20
+restrict_to_legal: false
+
+beta_kl: 0.02
+lr: 1.0e-6
+positions_per_step: 8
+steps: 1500
+depth: 8
+cache: artifacts/grpo-engine-cache.json
+val_positions: 400
+
+weights:
+  quality: 1.0
+  mate: 0.25
+  repetition: 0.25
+  cp_scale: 200.0
+
+seed: 42

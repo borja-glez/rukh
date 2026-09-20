@@ -226,6 +226,48 @@ DATASETS: dict[str, DatasetSpec] = {
             exclude_counts=["candidates"],
         ),
         DatasetSpec(
+            name="rukh-pairs-onpolicy",
+            repo_type="dataset",
+            local_dir="data/pairs-onpolicy",
+            patterns=["pairs.parquet", "manifest.json"],
+            command="onpolicy",
+            pretty_name="Rukh on-policy pairs",
+            description=(
+                "Preference pairs built from the moves the model itself proposes. The positions "
+                "are exactly those of `rukh-pairs-dpo`, so the only thing that differs between the "
+                "two datasets is where the two moves came from -- which is what makes a DPO run on "
+                "each of them a comparison. Four moves sampled per position at temperature 1.0, "
+                "scored by Stockfish at a fixed depth of 10, keeping the best and the worst when "
+                "they are at least 100 centipawns apart.\n\n"
+                "Of the 13 838 positions, 6 386 produced a pair. The rest is the interesting half: "
+                "3 743 (27 %) because the model proposed a single distinct legal move, and 3 709 "
+                "(27 %) because its best and worst candidate were less than a pawn apart. And only "
+                "2.9 % of these pairs involve a mate, against a third of the off-policy ones: a "
+                "multi-PV search finds mates the model was never going to propose, so the two "
+                "datasets are two distributions of difficulty and not two sources of one thing."
+            ),
+            columns=[
+                ("game_id", "game the position came from, for splitting without leakage"),
+                ("ply", "half-move index of the position"),
+                ("prefix", "moves played up to the position (UCI, space separated)"),
+                ("chosen", "best of the sampled moves (UCI)"),
+                ("rejected", "worst of the sampled moves (UCI)"),
+                ("cp_chosen", "score of `chosen` for the side to move (mate = +/-10000)"),
+                ("cp_rejected", "score of `rejected` for the side to move"),
+                ("phase", "`opening`, `middlegame` or `endgame`"),
+                ("white_elo", "Elo header the model was prompted with"),
+                ("black_elo", "Elo header the model was prompted with"),
+                ("candidates", "distinct legal moves the model proposed here (2 to 4)"),
+            ],
+            source="`rukh-pairs-dpo` for the positions, `chorcat/rukh-medium` for the moves",
+            source_datasets=["original"],
+            task_categories=["text-generation"],
+            tags=["dpo", "preferences", "on-policy"],
+            # `positions` counts what was *visited*, not what was written: 13 838 against 6 386
+            # rows. Summing it into the row count would double the size of the dataset on the card.
+            exclude_counts=["positions"],
+        ),
+        DatasetSpec(
             name="rukh-tokenizer",
             repo_type="model",
             local_dir="artifacts/tokenizer",

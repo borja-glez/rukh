@@ -1,0 +1,21 @@
+# DPO on the moves the model itself proposed: on-policy, and the arm under test.
+# Everything below is identical to `dpo-offpolicy.yaml` on purpose -- if the two runs differ, it
+# has to be the pairs and nothing else. The pair counts are matched at run time by the lab script.
+pairs: data/pairs-onpolicy/pairs.parquet
+checkpoint: checkpoints/medium-v4-20260919-174623/best.pt
+out_dir: checkpoints
+run_name: medium-v4-dpo-onpolicy
+
+# beta is the distance the policy is allowed to travel from its frozen reference. 0.1 is the
+# published default and the one P5 measured at +40 Elo head-to-head against the base model.
+beta: 0.1
+lr: 5.0e-6
+
+# A little next-token loss on the chosen move. Pure DPO can raise the margin while the model
+# forgets how to play at all: the margin says "chosen beats rejected", not "chosen is good".
+nll_weight: 0.1
+
+batch_size: 32
+epochs: 1
+val_fraction: 0.1
+seed: 42

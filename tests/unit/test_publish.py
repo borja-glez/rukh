@@ -30,11 +30,12 @@ EXPECTED = {
     "rukh-positions-eval",
     "rukh-puzzles-split",
     "rukh-pairs-dpo",
+    "rukh-pairs-onpolicy",
     "rukh-tokenizer",
 }
 
 
-def test_registry_covers_six_datasets_and_tokenizer() -> None:
+def test_registry_covers_seven_datasets_and_tokenizer() -> None:
     assert set(DATASETS) == EXPECTED
     assert DATASETS["rukh-tokenizer"].repo_type == "model"
     assert all(s.repo_type == "dataset" for n, s in DATASETS.items() if n != "rukh-tokenizer")

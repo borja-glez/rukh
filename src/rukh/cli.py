@@ -277,6 +277,42 @@ def data_pairs(config: PipelineOption = None, as_json: JsonOption = False) -> No
     _echo_manifest(run(cfg), as_json, cfg.out_dir)
 
 
+@data_app.command("onpolicy")
+def data_onpolicy(
+    config: Annotated[
+        Path,
+        typer.Option("--config", exists=True, dir_okay=False, help="On-policy pair run YAML."),
+    ],
+    checkpoint: Annotated[
+        str | None, typer.Option("--checkpoint", help="Override the proposing model.")
+    ] = None,
+    max_positions: Annotated[
+        int | None, typer.Option("--max-positions", help="Stop after this many positions.")
+    ] = None,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Print the manifest as JSON only.")
+    ] = False,
+) -> None:
+    """Build preference pairs out of the moves the model itself proposes.
+
+    The pairs the project already has are off-policy: Lichess evaluated two moves and one was
+    better, whether or not this model was ever going to play either. On-policy pairs ask the
+    narrower question that actually changes a model -- *of the moves you were going to consider
+    here, which is best and which is worst?* -- and are the second half of M5's comparison.
+    """
+    from rukh.config import load_yaml
+    from rukh.data.onpolicy import OnPolicyConfig, build_on_policy
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_yaml(config, OnPolicyConfig)
+    if checkpoint:
+        cfg = cfg.model_copy(update={"checkpoint": checkpoint})
+    if max_positions is not None:
+        cfg = cfg.model_copy(update={"max_positions": max_positions})
+    manifest = build_on_policy(cfg)
+    _echo_manifest(manifest, as_json, Path(cfg.out).parent)
+
+
 @data_app.command("elite")
 def data_elite(config: PipelineOption = None, as_json: JsonOption = False) -> None:
     """Download the Lichess Elite Database months and convert them to UCI."""
@@ -778,6 +814,259 @@ def eval_benchmarks_cmd(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"{target}: {written} stage(s) from {source}")
+
+
+@train_app.command("dpo")
+def train_dpo_cmd(
+    config: Annotated[
+        Path, typer.Option("--config", exists=True, dir_okay=False, help="DPO run YAML.")
+    ],
+    pairs: Annotated[
+        str | None, typer.Option("--pairs", help="Override the preference pairs to train on.")
+    ] = None,
+    run_name: Annotated[str | None, typer.Option("--run-name", help="Name the output.")] = None,
+    device: Annotated[str | None, typer.Option("--device", help="Where to train.")] = None,
+) -> None:
+    """Align the decoder on preference pairs, with the frozen start as its own reference.
+
+    The reference is implicit: a copy of the starting weights, never trained. That is what lets
+    DPO skip the reward model entirely, and it is also what the ``beta`` knob is measured against
+    -- push too hard and the policy leaves a reference that cannot follow it.
+    """
+    from rukh.config import load_yaml
+    from rukh.train.dpo import DpoConfig, train
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_yaml(config, DpoConfig)
+    updates = {k: v for k, v in (("pairs", pairs), ("run_name", run_name), ("device", device)) if v}
+    if updates:
+        cfg = cfg.model_copy(update=updates)
+    typer.echo(f"wrote {train(cfg)}")
+
+
+@train_app.command("grpo")
+def train_grpo_cmd(
+    config: Annotated[
+        Path, typer.Option("--config", exists=True, dir_okay=False, help="GRPO run YAML.")
+    ],
+    steps: Annotated[
+        int | None, typer.Option("--steps", help="Override the number of steps.")
+    ] = None,
+    run_name: Annotated[str | None, typer.Option("--run-name", help="Name the output.")] = None,
+    device: Annotated[str | None, typer.Option("--device", help="Where to train.")] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Align the decoder against a reward *function*, using the group as its own baseline.
+
+    No pairs and no reward model: the policy proposes a group of moves, a verifiable reward scores
+    them, and each is pushed up or down relative to its group's mean. What to watch is not the
+    reward going up -- it always can -- but whether it went up *and* the KL stayed small.
+    """
+    from rukh.config import load_yaml
+    from rukh.train.grpo import GrpoConfig, train_grpo
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_yaml(config, GrpoConfig)
+    updates: dict[str, object] = {}
+    if steps is not None:
+        updates["steps"] = steps
+    if run_name:
+        updates["run_name"] = run_name
+    if device:
+        updates["device"] = device
+    if updates:
+        cfg = cfg.model_copy(update=updates)
+    result = train_grpo(cfg)
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(f"checkpoint: {result.checkpoint}")
+    typer.echo(
+        f"reward:     {result.reward_before:+.4f} -> {result.reward_after:+.4f} (group best)"
+    )
+    typer.echo(
+        f"            {result.reward_absolute_before:+.4f} -> "
+        f"{result.reward_absolute_after:+.4f} (engine best -- this is the score)"
+    )
+    typer.echo(f"flat:       {result.flat_share_before:.3f} -> {result.flat_share_after:.3f}")
+    typer.echo(f"illegal:    {result.illegal_before:.4f} -> {result.illegal_after:.4f}")
+    typer.echo(f"kl:         {result.kl_after:.5f} against the frozen start")
+    spent = result.engine_calls + result.cache_hits
+    share = result.cache_hits / spent if spent else 0.0
+    typer.echo(f"groups:     {result.groups:,} useful, {result.flat_groups:,} flat")
+    typer.echo(f"engine:     {result.engine_calls:,} analyses, {share * 100:.1f} % from cache")
+
+
+@train_app.command("reward")
+def train_reward_cmd(
+    config: Annotated[
+        Path,
+        typer.Option("--config", exists=True, dir_okay=False, help="Reward-model run YAML."),
+    ],
+    device: Annotated[str | None, typer.Option("--device", help="Where to train.")] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Train the reward model on preference pairs and measure it on pairs it never saw.
+
+    The reward model is **not** what DPO uses -- DPO's reference is implicit and needs no reward
+    model at all. It is here because it is the piece that makes PPO make sense, because its
+    accuracy on held-out pairs is a bar `GOAL.md` puts a number on, and because a learned reward
+    is what GRPO's verifiable ones are compared against.
+    """
+    from rukh.config import load_yaml
+    from rukh.train.reward import RewardConfig, train_reward
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_yaml(config, RewardConfig)
+    if device:
+        cfg.device = device
+    try:
+        result = train_reward(cfg)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(f"checkpoint: {result.checkpoint}")
+    split = f"{result.train_pairs:,} train, {result.val_pairs:,} val"
+    typer.echo(f"pairs:      {result.pairs:,} ({split})")
+    typer.echo(f"accuracy:   {result.accuracy * 100:.2f} % on held-out pairs")
+    if result.accuracy_without_mates is not None:
+        clean = result.accuracy_without_mates * 100
+        typer.echo(f"            {clean:.2f} % over the pairs an evaluation can decide")
+    for row in result.bands:
+        typer.echo(f"  {row.band:>9} cp  {row.pairs:>5} pairs  {row.accuracy * 100:6.2f} %")
+    typer.echo(f"loss:       {result.loss:.4f}")
+    if result.pearson is not None and result.spearman is not None:
+        correlations = f"Pearson {result.pearson:+.3f}, Spearman {result.spearman:+.3f}"
+        typer.echo(f"margin vs delta cp: {correlations}")
+    if result.pearson_without_mates is not None and result.spearman_without_mates is not None:
+        # Printed beside the other one because the two do not share a sign (D-119).
+        clean_correlations = (
+            f"Pearson {result.pearson_without_mates:+.3f}, "
+            f"Spearman {result.spearman_without_mates:+.3f}"
+        )
+        typer.echo(f"        without mates: {clean_correlations}")
+    origin = "from scratch" if result.from_scratch else "from the encoder"
+    typer.echo(f"started:    {origin}")
+
+
+@eval_app.command("match")
+def eval_match_cmd(
+    a: Annotated[str, typer.Option("--a", help="Checkpoint or Hub id of the first model.")],
+    b: Annotated[str, typer.Option("--b", help="Checkpoint or Hub id of the second model.")],
+    games: Annotated[
+        int, typer.Option("--games", help="Games to play; must be even (colours are mirrored).")
+    ] = 200,
+    opening_plies: Annotated[
+        int, typer.Option("--opening-plies", help="Random plies both games of a pair start from.")
+    ] = 6,
+    header_elo: Annotated[
+        int, typer.Option("--elo", help="Elo header both models are prompted with.")
+    ] = 1800,
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", exists=True, dir_okay=False, help="Suite YAML for the sampling."),
+    ] = None,
+    seed: Annotated[int, typer.Option("--seed", help="Seed of the opening book.")] = 0,
+    mask: Annotated[
+        bool,
+        typer.Option("--mask/--no-mask", help="Mask illegal moves for both sides from the start."),
+    ] = False,
+    out: Annotated[
+        Path | None, typer.Option("--out", help="Where to write the report (default: artifacts).")
+    ] = None,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """Play two models against each other and report the Elo difference with its interval.
+
+    This is the instrument for "is A stronger than B", and it is not the ladder. A 50-Elo edge
+    takes 185 games head to head and 750 games *per side* off the ladder, before adding the
+    ladder's own irreproducibility (about 40 Elo of one sigma, D-107). To measure a difference,
+    measure the difference -- do not measure two absolutes and subtract them.
+
+    Run `uv run python labs/m5/games_needed_match.py <elo>` first: it says how many games the edge
+    you expect would take, which is a decision to make before paying for them rather than after.
+
+    `--mask` exists as a **control**, not as a setting. By default both models propose from the
+    unmasked distribution and an illegal proposal is rescued with a masked draw, which is how every
+    published number of this project is read. But the rescue is a second draw restricted to legal
+    moves, so a model that proposes illegally more often gets that second draw more often -- and
+    the two DPO models of M5 propose about twice as many illegal moves as their base. `--mask`
+    removes the rescue path entirely by masking from the first draw, so the edge can be read again
+    with that confound gone. If the two numbers agree, the edge was strength; if they do not, the
+    edge was the rescue.
+    """
+    from rukh.config import load_yaml
+    from rukh.eval.match import MatchSettings, games_for_edge, play_match, summarise
+    from rukh.eval.suite import EvalConfig, resolve_model
+    from rukh.infer import SampleConfig
+    from rukh.infer.game import DecoderPlayer
+    from rukh.tokenize.uci_vocab import UciTokenizer
+    from rukh.train import load_model, pick_device
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    if games % 2 or games < 2:
+        typer.echo("error: --games must be even and at least 2 (colours are mirrored)", err=True)
+        raise typer.Exit(code=2)
+
+    suite = load_yaml(config, EvalConfig) if config else EvalConfig()
+    where = device or pick_device()
+    tok = UciTokenizer()
+    try:
+        model_a, _ = load_model(resolve_model(a), map_location=where)
+        model_b, _ = load_model(resolve_model(b), map_location=where)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    sampling = SampleConfig(
+        temperature=suite.temperature, top_k=suite.top_k, mask_illegal=mask, seed=suite.seed
+    )
+    names = (Path(a).parent.name or a, Path(b).parent.name or b)
+    player_a = DecoderPlayer(model_a.to(where).eval(), tok, sampling)
+    player_b = DecoderPlayer(model_b.to(where).eval(), tok, sampling)
+
+    typer.echo(f"match:    {names[0]} vs {names[1]}, {games} games, header <w{header_elo:04d}>")
+    played = play_match(
+        player_a,
+        player_b,
+        games=games,
+        opening_plies=opening_plies,
+        seed=seed,
+        header_elo=header_elo,
+    )
+    result = summarise(
+        played,
+        names=names,
+        seed=suite.seed,
+        settings=MatchSettings(
+            games=games,
+            opening_plies=opening_plies,
+            opening_seed=seed,
+            header_elo=header_elo,
+            temperature=suite.temperature,
+            top_k=suite.top_k,
+            masked=mask,
+            bootstrap_samples=2_000,
+        ),
+    )
+
+    from rukh.eval.match import write_match
+
+    path = write_match(result, played, out or Path(suite.out_dir) / "matches")
+    sign = "+" if result.elo >= 0 else ""
+    typer.echo(f"score:    {result.score:.4f} ({result.wins}W {result.draws}D {result.losses}L)")
+    typer.echo(
+        f"elo:      {sign}{result.elo:.0f} (95 % CI {result.ci_low:.0f} to {result.ci_high:.0f})"
+        if result.ci_low is not None and result.ci_high is not None
+        else f"elo:      {sign}{result.elo:.0f}"
+    )
+    typer.echo(f"verdict:  {'separated from zero' if result.separated else 'includes zero'}")
+    typer.echo(f"illegal:  {result.a_illegal} by {names[0]}, {result.b_illegal} by {names[1]}")
+    typer.echo(f"would need {games_for_edge(result.elo)} games to call this edge, played {games}")
+    typer.echo(f"report:   {path}")
 
 
 @eval_app.command("openings")
@@ -1291,6 +1580,38 @@ def publish_model_cmd(
     typer.echo("files:")
     for path in result.files:
         typer.echo(f"  {path}")
+
+
+@publish_app.command("reward")
+def publish_reward_cmd(
+    run: Annotated[
+        Path,
+        typer.Option("--run", exists=True, help="Reward run directory or `reward.pt` checkpoint."),
+    ],
+    repo: Annotated[str, typer.Option("--repo", help="Hub repository, e.g. chorcat/rukh-rm.")],
+    stage: Annotated[str | None, typer.Option("--stage", help="Stage name for the card.")] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Stage the folder locally; touch no network.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
+) -> None:
+    """Publish the reward model, with the band table and both correlations on the card.
+
+    It gets its own command because it is not a policy: no ONNX, because nothing serves it in a
+    browser, and no Elo, because it does not play. What it has is an ordering accuracy, and that
+    number is only honest next to the split it was measured on.
+    """
+    from rukh.publish.reward import publish_reward
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    result = publish_reward(run, repo, stage=stage, dry_run=dry_run)
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    where = "uploaded to" if result.uploaded else "staged for"
+    typer.echo(f"{where} {result.repo_id}: {', '.join(result.files)}")
+    typer.echo(f"accuracy: {result.accuracy * 100:.2f} % on held-out pairs")
+    typer.echo(f"folder:   {result.folder}")
 
 
 @publish_app.command("adapter")
