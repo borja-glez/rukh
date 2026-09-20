@@ -298,4 +298,35 @@ def train(cfg: TrainConfig, resume: Path | None = None, device: str | None = Non
             # reader already has, next to the merged checkpoint the rest of the toolchain reads.
             adapter = save_adapter(model, out_dir / ADAPTER_FILE, cfg.lora)
             log.info("adapter written to %s (%.1f MB)", adapter, adapter.stat().st_size / 1e6)
+        _warn_if_best_is_not_the_result(cfg, out_dir, final, best_val)
     return final
+
+
+def _warn_if_best_is_not_the_result(
+    cfg: TrainConfig, out_dir: Path, final: Path, best_val: float
+) -> None:
+    """Say out loud when ``best.pt`` is not this run's answer, because usually it is.
+
+    ``best.pt`` means "lowest validation loss", and validation is imitation of 1800+ play. For a
+    pretraining run that is the objective and the two coincide. For a fine-tune whose whole point
+    is to shift the corpus somewhere else -- the Elo-balanced sample, masters only, one opening --
+    the validation loss is *expected* to rise, so ``best.pt`` freezes an almost-untouched model a
+    few hundred steps in. Anyone evaluating it later would be measuring the wrong weights, and the
+    numbers would look plausible, which is the dangerous kind of wrong.
+    """
+    best = out_dir / BEST_NAME
+    if cfg.init_from is None or not best.is_file():
+        return
+    from rukh.train.checkpoint import load_checkpoint
+
+    best_step = int(load_checkpoint(best).get("step", 0))
+    if best_step >= cfg.max_steps:
+        return
+    log.warning(
+        "%s holds step %d (val/loss %.4f), not the end of this fine-tune. The result of this run "
+        "is %s; validation measures imitation of the old corpus, which is not what it optimised.",
+        best,
+        best_step,
+        best_val,
+        final,
+    )

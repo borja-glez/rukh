@@ -431,3 +431,42 @@ def test_a_lora_run_cannot_be_resumed(rukh_home: Path, tokens_dir: Path) -> None
     first = train(toy_config(max_steps=2, ckpt_every=2), device="cpu")
     with pytest.raises(ValueError, match="cannot continue a LoRA run"):
         train(toy_config(max_steps=4, lora=LoraConfig(r=2)), resume=first, device="cpu")
+
+
+def test_a_fine_tune_says_when_best_is_not_its_result(
+    rukh_home: Path, tokens_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`best.pt` means lowest validation loss, and a fine-tune is allowed to raise it.
+
+    The Elo-balanced run of M4 does exactly that on purpose -- it trades imitation of 1800+ play
+    for coverage of the whole rating axis -- so `best.pt` freezes a model a few hundred steps in.
+    Evaluating it later would measure the wrong weights and the numbers would look plausible.
+    """
+    import logging
+
+    base = train(toy_config(max_steps=2, ckpt_every=2, run_name="base"), device="cpu")
+    with caplog.at_level(logging.WARNING, logger="rukh.train.loop"):
+        final = train(
+            toy_config(
+                max_steps=6,
+                eval_every=2,
+                ckpt_every=6,
+                lr=5.0,  # large enough that validation gets worse, which is the case under test
+                run_name="tuned",
+                init_from=str(base),
+            ),
+            device="cpu",
+        )
+    warnings = [record.message for record in caplog.records if record.levelno >= logging.WARNING]
+    assert any(str(final) in message for message in warnings), warnings
+
+
+def test_a_pretraining_run_says_nothing_about_best(
+    rukh_home: Path, tokens_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Without `init_from` the validation loss *is* the objective and the two agree."""
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="rukh.train.loop"):
+        train(toy_config(max_steps=4, eval_every=2, ckpt_every=4), device="cpu")
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING and "best" in r.message]
