@@ -1,0 +1,24 @@
+{
+  "architectures": [
+    "MoveDecoder"
+  ],
+  "model_type": "rukh-move-decoder",
+  "library_name": "rukh",
+  "rukh_version": "0.0.1",
+  "stage": "medium-v4-greedy",
+  "step": 48000,
+  "params": 115120128,
+  "tokenizer": "uci",
+  "vocab_hash": "527c5dda224cab570cb84da8f7dcda0f43fe53edaf86822f899568f5dd824b46",
+  "data_manifest_sha": "2274906c04342b8fc1632d3e1c3bff82e33f535936af742c7a7f9e4b052afa31",
+  "git_sha": "386e45f0378bf97456c4faaaf712ea91b57f0dce",
+  "vocab_size": 2030,
+  "n_layer": 16,
+  "n_head": 12,
+  "d_model": 768,
+  "d_ff": null,
+  "block": 200,
+  "dropout": 0.0,
+  "pos": "learned",
+  "tie_embeddings": true
+}

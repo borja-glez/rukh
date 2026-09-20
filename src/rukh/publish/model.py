@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -515,6 +516,13 @@ def _drift(entry: dict[str, Any]) -> str:
     return "n/a"
 
 
+def _run_name(name: object) -> str | None:
+    """``lora-e4-20260920-160133`` -> ``lora-e4``: a card names an adapter, not a directory."""
+    if not name:
+        return None
+    return re.sub(r"-\d{8}-\d{6}$", "", str(name))
+
+
 def parity_context(payload: dict[str, Any] | None) -> dict[str, Any] | None:
     """The measured parity of the published ONNX files, as the card shows it.
 
@@ -545,6 +553,17 @@ def parity_context(payload: dict[str, Any] | None) -> dict[str, Any] | None:
         )
     if not rows:
         return None
+    adapted = payload.get("with_adapter") or {}
+    adapted_rows = [
+        {
+            "precision": name,
+            "agreement": _percent(float(entry["agreement"])),
+            "drift": _drift(entry),
+        }
+        for name in PRECISIONS
+        if isinstance(entry := (adapted.get("precisions") or {}).get(name), dict)
+        and entry.get("agreement") is not None
+    ]
     return {
         "rows": rows,
         "below": [row for row in rows if not row["met"]],
@@ -555,6 +574,11 @@ def parity_context(payload: dict[str, Any] | None) -> dict[str, Any] | None:
         "exporter": payload.get("exporter"),
         "bar": _percent(PARITY_BAR),
         "warning": payload.get("warning"),
+        # A graph that takes its LoRA factors as inputs makes two claims, not one: fed zeros it is
+        # the checkpoint, and fed a real adapter it is that style. Both are in `parity.json`.
+        "adapter_inputs": bool(payload.get("adapter_inputs")),
+        "adapter_name": _run_name(adapted.get("adapter")),
+        "adapter_rows": adapted_rows,
     }
 
 
