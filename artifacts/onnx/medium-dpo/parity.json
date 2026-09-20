@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "kind": "decoder",
+  "measures": "the argmax move",
+  "positions": 1000,
+  "source": "validation",
+  "exporter": "dynamo",
+  "rukh_version": "0.0.1",
+  "warning": null,
+  "precisions": {
+    "fp32": {
+      "file": "model.onnx",
+      "agreement": 1.0,
+      "max_abs_logit_delta": 2.8848648071289062e-05
+    },
+    "fp16": {
+      "file": "model-fp16.onnx",
+      "agreement": 0.998,
+      "max_abs_logit_delta": 0.015731334686279297
+    },
+    "int8": {
+      "file": "model-int8.onnx",
+      "agreement": 0.963,
+      "max_abs_logit_delta": 1.6979060173034668
+    }
+  }
+}

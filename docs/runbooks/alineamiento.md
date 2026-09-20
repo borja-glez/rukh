@@ -40,7 +40,14 @@ Requisitos: `uv sync --extra cu128 --extra hf --group dev`, los pares de P1 en
 | 10 | Evaluación canónica de cada etapa | `uv run rukh eval --model <ckpt> --config configs/eval/greedy.yaml --stage <nombre>` | ~26 min | `artifacts/eval/<nombre>/` |
 | 11 | Tabla de benchmarks | `uv run rukh eval benchmarks` | segundos | `docs/benchmarks.md` |
 | 12 | Exportar | `uv run rukh export --ckpt <ckpt> --out artifacts/onnx/<nombre> --fp16 --int8 --check-parity` | ~12 min cada uno | `model{,-fp16,-int8}.onnx`, `parity.json` |
-| 13 | Publicar | `uv run rukh publish model --ckpt <ckpt> --repo rukh-<nombre> --onnx artifacts/onnx/<nombre>` | minutos | repo en el Hub |
+| 13 | Publicar los modelos | `uv run rukh publish model --ckpt <ckpt> --repo chorcat/rukh-<nombre> --stage <el mismo del paso 10> --onnx artifacts/onnx/<nombre>` | minutos | repo en el Hub |
+| 14 | Publicar el reward model | `uv run rukh publish reward --run checkpoints/rm-* --repo chorcat/rukh-rm` | segundos | repo con card, sin ONNX |
+| 15 | Publicar el dataset on-policy | `uv run rukh data publish --name rukh-pairs-onpolicy` | minutos | dataset en el Hub |
+
+El `--stage` del paso 13 tiene que ser **el mismo** con el que se corrió la evaluación del paso 10,
+o la card sale sin números: `read_eval` los busca por nombre de etapa. Y `check_eval_matches`
+compara el sha del checkpoint contra el que se midió, así que poner el `--stage` de otro modelo
+falla en vez de publicar los números equivocados (D-074).
 
 El paso 2 no es ceremonia. Se corrió el día que se escribió `rukh eval match` y salió **0,975 con
 999 jugadas ilegales**, que destapó dos errores reales en `infer/game.py` (D-111). Un instrumento
