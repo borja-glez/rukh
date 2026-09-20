@@ -1,0 +1,47 @@
+# The sweep again with twice the games, for the conditions the acceptance criterion names.
+#
+# Only run when the first pass leaves overlapping intervals and the point estimates still go the
+# right way -- doubling the games shrinks the interval by root two, which is worth an hour when
+# the gap is real and worth nothing when it is not. The plan of this milestone commits to it
+# before declaring anything.
+#
+# Its own cache, and not out of tidiness: `elo_games` is part of the cache key, so a 40-game run
+# cannot read back the 20 games already played even though game `rung:index` is literally the same
+# game (its seed is `seed + index`, independent of the total). That is a real waste and it is
+# written down in `docs/backlog.md`; fixing it belongs to P6, not to the middle of a milestone.
+#
+# The suite the Elo sweep of M4 runs once per condition.
+#
+# Identical to `greedy.yaml` -- the sampling every published number was read at (D-047) -- with
+# one change: `force_header`. Validation positions carry their own players' ratings and almost
+# every puzzle carries its game's, so with it off the legality, the accuracy and the puzzle rate
+# come out identical in every row of the sweep. Correct by their own definition, and
+# indistinguishable from evidence that the condition does nothing, which is the one thing this
+# table must not be ambiguous about.
+#
+# Its own cache, for the same reason: these puzzle attempts answer a different question from the
+# ones `cache-greedy.sqlite` holds and must not be confused with them.
+games: data/uci/year=2025/month=02/games.parquet
+puzzles: data/puzzles/puzzles.parquet
+puzzle_split: test
+legality_positions: 1000
+accuracy_positions: 1000
+position_pool: 20000
+puzzles_per_band: 2000
+force_header: true
+elo_games: 40
+elo_move_time: 0.1
+bootstrap: 500
+temperature: 0.05
+top_k: 1
+block: 200
+seed: 42
+header_elo: 1800
+diversity_games: 200
+diversity_plies: 12
+diversity_temperature: 1.0
+diversity_top_k: 20
+out_dir: artifacts/eval
+web_results: null
+cache_db: artifacts/eval/cache-sweep40.sqlite
+track: false
