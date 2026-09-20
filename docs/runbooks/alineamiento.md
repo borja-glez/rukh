@@ -44,6 +44,10 @@ Requisitos: `uv sync --extra cu128 --extra hf --group dev`, los pares de P1 en
 | 14 | Publicar el reward model | `uv run rukh publish reward --run checkpoints/rm-* --repo chorcat/rukh-rm` | segundos | repo con card, sin ONNX |
 | 15 | Publicar el dataset on-policy | `uv run rukh data publish --name rukh-pairs-onpolicy` | minutos | dataset en el Hub |
 
+**Antes de subir nada, mira el tamaño de la carpeta staged.** Un `model.safetensors` de 25 KB donde
+debería haber 151 MB es lo que dejó un test cuyo aislamiento no funcionaba (D-129), y `ls -la` es la
+única comprobación que lo habría pillado. Cuesta un segundo.
+
 El `--stage` del paso 13 tiene que ser **el mismo** con el que se corrió la evaluación del paso 10,
 o la card sale sin números: `read_eval` los busca por nombre de etapa. Y `check_eval_matches`
 compara el sha del checkpoint contra el que se midió, así que poner el `--stage` de otro modelo
