@@ -46,6 +46,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from rukh.tokenize.uci_vocab import UciTokenizer
 
 __all__ = [
+    "MatchSettings",
     "MatchGame",
     "MatchResult",
     "elo_difference",
@@ -75,6 +76,28 @@ class MatchGame(BaseModel):
     b_illegal: int
 
 
+class MatchSettings(BaseModel):
+    """Everything that would change the number, written beside the number.
+
+    ``masked`` is the one worth a sentence. By default both models propose from the unmasked
+    distribution and an illegal proposal is rescued with a masked draw -- so a model that proposes
+    illegally more often gets that second, legal-only draw more often. With ``masked`` the rescue
+    path does not exist for either side. The two readings answer different questions and the file
+    has to say which one it is.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    games: int
+    opening_plies: int
+    opening_seed: int
+    header_elo: int
+    temperature: float
+    top_k: int | None
+    masked: bool
+    bootstrap_samples: int
+
+
 class MatchResult(BaseModel):
     """What the match measured: a score, an Elo difference and its interval."""
 
@@ -96,6 +119,10 @@ class MatchResult(BaseModel):
     """Whether the interval excludes zero, which is the claim the criterion is read on."""
     a_illegal: int = 0
     b_illegal: int = 0
+    settings: MatchSettings = None  # type: ignore[assignment]
+    """How the match was played. A measurement that does not carry its settings cannot be compared
+    to another one, and D-118 is the entry that says so with numbers: every reward in the gallery
+    changed when the engine depth did, and nothing in the log would have said why."""
 
     @property
     def decisive(self) -> int:
@@ -253,6 +280,7 @@ def summarise(
     samples: int = 2_000,
     seed: int = 0,
     level: float = 0.95,
+    settings: MatchSettings | None = None,
 ) -> MatchResult:
     """The match as one number with its interval, bootstrapped over games."""
     if not played:
@@ -277,6 +305,17 @@ def summarise(
         separated=bool(low > 0 or high < 0),
         a_illegal=int(sum(game.a_illegal for game in played)),
         b_illegal=int(sum(game.b_illegal for game in played)),
+        settings=settings
+        or MatchSettings(
+            games=len(played),
+            opening_plies=len(played[0].opening.split()),
+            opening_seed=-1,
+            header_elo=-1,
+            temperature=float("nan"),
+            top_k=None,
+            masked=False,
+            bootstrap_samples=samples,
+        ),
     )
 
 
@@ -296,6 +335,12 @@ def render_markdown(result: MatchResult, played: Sequence[MatchGame]) -> str:
     needed = games_for_edge(result.elo) if result.elo else 0
     white = [game for game in played if game.a_white]
     black = [game for game in played if not game.a_white]
+    settings = result.settings
+    rescue = (
+        "masked from the first draw"
+        if settings.masked
+        else "proposed unmasked, rescued with a masked draw"
+    )
     lines = [
         f"# `{result.a}` against `{result.b}`",
         "",
@@ -332,6 +377,18 @@ def render_markdown(result: MatchResult, played: Sequence[MatchGame]) -> str:
             if result.games >= needed
             else "So the number above is a hint, not a measurement: play more games or say so."
         ),
+        "",
+        "## How it was played",
+        "",
+        "Two numbers from different settings are two numbers, not a comparison.",
+        "",
+        "| Setting | Value |",
+        "|---|---|",
+        f"| Opening book | {settings.opening_plies} plies, seed {settings.opening_seed} |",
+        f"| Elo header | `<w{settings.header_elo}>` for both |",
+        f"| Sampling | temperature {settings.temperature}, top-k {settings.top_k} |",
+        f"| Illegal moves | {rescue} |",
+        f"| Bootstrap | {settings.bootstrap_samples} resamples |",
         "",
     ]
     return "\n".join(lines) + "\n"

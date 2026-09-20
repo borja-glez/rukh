@@ -1,0 +1,25 @@
+# Preference pairs sampled from the model itself, for the second half of M5's comparison.
+#
+# The positions are exactly the ones the off-policy pairs use, so the only thing that differs
+# between the two datasets is where the two moves came from. That is what makes the DPO runs
+# on them comparable at all.
+source: data/pairs/dpo-prompts.parquet
+checkpoint: checkpoints/medium-v4-20260919-174623/best.pt
+out: data/pairs-onpolicy/pairs.parquet
+
+# Four candidates is what `docs/spec/02` asks for. Each one costs an engine analysis, so this
+# is the knob that sets the price of the dataset.
+candidates: 4
+
+# Temperature 1.0, not the 0.3 every published number is read at: at the near-deterministic
+# setting the model proposes the same move four times and there is no pair to build.
+temperature: 1.0
+top_k: 20
+
+# Depth, not time. P4 measured that a time-limited Stockfish makes a run irreproducible
+# (D-107): the same ladder twice gave 1498 and 1558 Elo.
+depth: 10
+
+# Below a pawn apart the two moves are not a preference, they are noise with a sign.
+min_delta_cp: 100
+seed: 42

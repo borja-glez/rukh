@@ -34,9 +34,11 @@ from pydantic import Field
 from rukh.config import BaseConfig
 
 __all__ = [
-    "ILLEGAL",
+    "ILLEGAL_MARGIN",
     "RewardBreakdown",
     "RewardWeights",
+    "illegal_value",
+    "legal_bounds",
     "legality_gate",
     "mate_bonus",
     "normalised_delta_cp",
@@ -44,8 +46,16 @@ __all__ = [
     "repetition_penalty",
 ]
 
-ILLEGAL = 0.0
-"""What an illegal move scores, before anything else is computed."""
+ILLEGAL_MARGIN = 1.0
+"""How far below every legal move an illegal one scores. See ``illegal_value``.
+
+A flat ``0.0`` was the obvious choice and was wrong, and the gallery in `labs/m5` is what caught
+it: with the default weights a legal move that walks into a repetition scores ``-0.25``, so a
+zero for illegal moves put **illegal above legal** for exactly the moves the repetition term was
+written to discourage. A gate that the thing it gates can score better than is not a gate.
+
+The margin is a whole unit rather than an epsilon so the ordering survives any reweighting that
+keeps the other terms in their documented ranges."""
 
 
 class RewardWeights(BaseConfig):
@@ -144,7 +154,7 @@ def reward(
     """
     weights = weights or RewardWeights()
     if not legality_gate(board, move):
-        return RewardBreakdown(total=ILLEGAL, legal=False)
+        return RewardBreakdown(total=illegal_value(weights), legal=False)
 
     quality = 0.0
     if cp_move is not None and cp_best is not None:
@@ -158,7 +168,22 @@ def reward(
     )
 
 
-def bounds(weights: RewardWeights | None = None) -> tuple[float, float]:
-    """The closed interval every reward falls in, which is what makes the design auditable."""
+def legal_bounds(weights: RewardWeights | None = None) -> tuple[float, float]:
+    """The closed interval a **legal** move falls in."""
     weights = weights or RewardWeights()
     return (-weights.repetition, weights.quality + weights.mate)
+
+
+def illegal_value(weights: RewardWeights | None = None) -> float:
+    """What an illegal move scores: strictly below anything a legal move can reach.
+
+    This is the number that makes legality a gate rather than a preference. It is derived from the
+    weights instead of being a constant, because a constant is a promise that quietly stops being
+    true the first time somebody raises ``repetition``.
+    """
+    return legal_bounds(weights)[0] - ILLEGAL_MARGIN
+
+
+def bounds(weights: RewardWeights | None = None) -> tuple[float, float]:
+    """The closed interval every reward falls in, which is what makes the design auditable."""
+    return (illegal_value(weights), legal_bounds(weights)[1])

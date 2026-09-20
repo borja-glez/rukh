@@ -15,6 +15,25 @@ recompensas verificables con tests, GRPO, y la lección M5 con su galería de *r
 
 ---
 
+## Cómo quedaron los criterios (al cerrar el hito)
+
+1. **+50 Elo con intervalo:** cumplido en la estimación puntual por los tres métodos y por el
+   camino que no se había probado nunca en el proyecto — enfrentamiento directo, dos direcciones,
+   agrupadas. DPO off-policy **+67** (IC 45-89), DPO on-policy **+57** (IC 36-79), GRPO **+43**
+   (IC 13-72). Los tres separados del cero. En la lectura estricta —extremo inferior por encima de
+   50— se queda en 45, 36 y 13, y eso se dice con todas las letras.
+2. **RM ≥ 75 %:** rozado. Cinco corridas dan 72,91 / 74,21 / 74,71 / 74,76 / 75,19 %. Y **dos de
+   ellas son la misma semilla**, así que 1,3 puntos de esa dispersión no son la partición: son el
+   suelo de reproducibilidad de la propia medición (D-113). El criterio está por debajo del ruido
+   del instrumento que lo mide.
+3. **Publicados con card:** sí, con la desviación de nombre de D-122.
+
+Lo que el hito enseñó **además** de lo que pedía: que restar dos absolutos arrastra los dos ruidos
+(D-110), que el triángulo de tres modelos no cierra (D-120), que alinear cuesta legalidad (D-121),
+y que la recompensa que GRPO optimiza se maximiza colapsando la política (D-123 a D-125).
+
+---
+
 ## El hallazgo que ordena el hito: la resta de dos ruidos
 
 P4 terminó midiendo su propio instrumento y el número da miedo: **dos tiradas idénticas de la
@@ -192,14 +211,26 @@ cheatsheet), glosario, figuras e islas.
 Misma línea que M1-M4: qué vas a construir, el mecanismo antes que la receta, números medidos y
 nunca inventados, y los criterios cumplidos y no cumplidos con todas las letras.
 
-Figuras e islas:
+Figuras e islas. Las cuatro planeadas se convirtieron en seis, y dos de ellas no estaban previstas
+porque la medición las pidió:
 
-- `RewardCurves` — recompensa por función a lo largo del entrenamiento.
-- `GrpoGroup` — las G jugadas de un grupo con su ventaja coloreada sobre el tablero.
-- **Galería de hacking** — los atajos encontrados, con la posición y la corrección.
-- Una figura sobre **por qué restar dos absolutos es mal instrumento**, que es el hallazgo del hito.
+- `SubtractingNoise` — **por qué restar dos absolutos es mal instrumento**, que era el hallazgo con
+  el que se abrió el hito.
+- `GroupBaseline` — lo que planeaba `GrpoGroup`: un grupo con dispersión y uno plano, con la media
+  del propio grupo como línea base. En barras y no sobre el tablero, porque lo que hay que ver es
+  la **distancia a la media**, y un tablero la esconde.
+- `RewardBands` — el acierto del reward model por banda, con la de mate desplomándose y la de diez
+  pares dibujada hueca.
+- `HackedShape` — la galería, pero midiendo **ventajas** y no coronas: las seis recompensas coronan
+  la misma jugada, así que la figura planeada («los atajos encontrados con la posición») no tenía
+  nada que enseñar. Lo que enseña es que sin suelo, una jugada ilegal puntúa por encima de una
+  legal mala.
+- `Intransitive` — **no estaba en el plan**. Las tres aristas de 800 partidas dejan un residuo de
+  47 Elo a 2,4 σ, y eso hacía falta dibujarlo.
+- `OverOptimised` — lo que planeaba `RewardCurves`, con la forma que salió: la recompensa que no se
+  puede falsear sube, se dobla y baja, mientras el indicador de colapso sube monótono.
 
-- [ ] Cheatsheet y términos nuevos (Bradley-Terry, DPO, β, GRPO, ventaja, KL, RLVR, reward hacking,
+- [x] Cheatsheet y términos nuevos (Bradley-Terry, DPO, β, GRPO, ventaja, KL, RLVR, reward hacking,
       on-policy vs off-policy, enfrentamiento directo).
 - [ ] `m5.json` a `live` con los resultados reales.
 - [ ] `pnpm check`, `test`, `build`, E2E y Lighthouse verdes en las dos webs.
@@ -212,9 +243,9 @@ Figuras e islas:
 - [ ] **Desviación a registrar:** `GOAL.md` nombra `rukh-small-dpo` y `-small-grpo`. Se trabaja
       sobre `medium-v4` por lo mismo que en P4 (D-105): es el modelo que la demo sirve y el que
       tiene margen. Si `medium` resulta demasiado lento para GRPO, se cae a `small` y se dice.
-- [ ] Ledger desde **D-110**.
+- [x] Ledger desde **D-110** (llega hasta D-125).
 - [ ] `docs/benchmarks.md` regenerado con `rukh eval benchmarks`.
-- [ ] Runbook de alineamiento, como el de P4.
+- [x] Runbook de alineamiento, como el de P4.
 
 ---
 

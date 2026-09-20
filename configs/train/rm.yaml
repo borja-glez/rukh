@@ -1,0 +1,35 @@
+# The reward model of M5: a position encoder with one scalar head, trained on preference pairs.
+#
+# Three things in this file were decided by measurement and not by taste (D-112).
+#
+# `encoder_ckpt: null` -- it trains from scratch. The only `squares` encoder the project has was
+# fine-tuned for value, blunder and result, and starting from it scores **62 %** against **69 %**
+# from a random initialisation at the same size. A representation optimised for one question can
+# be a worse starting point than no representation at all.
+#
+# The size is 12 x 512 and not 8 x 384 because that is what the accuracy tracks: 73 % against
+# 69 %. The first run of this milestone reached 73 % by accident, loading a `moves` encoder whose
+# embeddings meant nothing for square tokens, and matched what scratch does at the same capacity.
+# `load_squares_encoder` now refuses that mistake instead of producing a plausible number from it.
+#
+# `point_of_view: white` asks the model the value head's question and puts the sign flip in the
+# loss, where it is a constant. Asking it for the mover's point of view instead costs about two
+# points, which is small and is measured rather than assumed.
+pairs: data/pairs/dpo-prompts.parquet
+encoder_ckpt: null
+model:
+  input: squares
+  n_layer: 12
+  n_head: 8
+  d_model: 512
+  dropout: 0.1
+pooling: mean
+out_dir: checkpoints
+run_name: rm
+lr: 1.0e-4
+weight_decay: 0.01
+batch_size: 64
+epochs: 10
+val_fraction: 0.1
+seed: 42
+point_of_view: white

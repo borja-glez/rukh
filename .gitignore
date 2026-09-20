@@ -40,6 +40,12 @@ Thumbs.db
 /artifacts/eval/**/*.sqlite
 /artifacts/eval/*.sqlite
 
+# The GRPO engine cache is the same kind of thing: a `(FEN, move) -> centipawns` dictionary that
+# any run rebuilds from Stockfish at a fixed depth. Megabytes of it, and reproducible by
+# definition, since the depth limit is what makes the analysis deterministic (D-118).
+/artifacts/grpo-engine-cache.json
+/artifacts/grpo-cache-*.json
+
 # Generated embeddings: 715 MB of vectors that `rukh encoder embed` rebuilds from a checkpoint.
 # They feed phase 2's position retrieval and belong on the Hub, never in git.
 /artifacts/embeddings/

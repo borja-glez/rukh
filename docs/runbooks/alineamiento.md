@@ -1,0 +1,127 @@
+# Alinear el decoder: preferencias, recompensas verificables y cómo medirlo (P5)
+
+## Cuándo
+
+Al rehacer la familia de M5 —el modelo de recompensa, los dos DPO (fuera y dentro de política) y
+el GRPO—, o al construir un conjunto de pares nuevo. También cada vez que haya que comparar dos
+modelos entre sí, porque el instrumento del hito sirve para cualquier par de checkpoints.
+
+Requisitos: `uv sync --extra cu128 --extra hf --group dev`, los pares de P1 en
+`data/pairs/dpo-prompts.parquet`, Stockfish en `tools/stockfish/` (o `RUKH_STOCKFISH`), y
+`HF_TOKEN` solo para `publish`. Todo se ejecuta desde `rukh/`.
+
+**Las tres reglas que no se saltan:**
+
+1. **Nada pesado mientras corre un enfrentamiento o una escalera.** Vale lo mismo que en P4 y por
+   la misma razón: el rival juega con un límite de tiempo y robarle CPU cambia el resultado. Con
+   una diferencia nueva de este hito —la generación de pares on-policy y GRPO usan el motor por
+   **profundidad**, así que ellos sí son reproducibles bajo carga; lo que se degrada es lo que
+   compite con ellos, no ellos.
+2. **La profundidad del motor se fija y se escribe en el run.** D-118 midió que el valor de una
+   recompensa para una jugada fija se mueve al cambiar la profundidad, incluso en la recompensa
+   sana. Dos corridas con profundidades distintas no son comparables y nada en el log lo avisa.
+3. **Entre trabajos largos, 15-20 minutos de descanso.**
+
+## Comandos, en orden
+
+| # | Paso | Comando | Tiempo | Salida |
+|---|---|---|---|---|
+| 1 | Cuántas partidas cuesta la medición | `uv run python labs/m5/games_needed_match.py` | segundos | la tabla de precios, en pantalla |
+| 2 | Control del instrumento | `uv run rukh eval match --a <base> --b <base> --games 100` | ~1 min | debe salir 0,5000 clavado |
+| 3 | Modelo de recompensa | `uv run rukh train reward --config configs/train/rm.yaml` | ~4 min | `checkpoints/rm-*/reward.pt`, `run.json` |
+| 4 | Pares dentro de política | `uv run rukh data onpolicy --config configs/data/onpolicy.yaml` | ~35 min | `data/pairs-onpolicy/pairs.parquet`, `manifest.json` |
+| 5 | DPO fuera de política | `uv run rukh train dpo --config configs/train/dpo-offpolicy.yaml` | ~8 min | `checkpoints/medium-v4-dpo-offpolicy/dpo.pt` |
+| 6 | DPO dentro de política | `uv run rukh train dpo --config configs/train/dpo-onpolicy.yaml` | ~4 min | `checkpoints/medium-v4-dpo-onpolicy/dpo.pt` |
+| 7 | La comparación que vale, **en las dos direcciones** | `uv run rukh eval match --a <dpo> --b <base> --games 400 --seed 7` y luego con `--a` y `--b` intercambiados | ~4 min cada una | `artifacts/eval/*/results.json` y `report.md` |
+| 7b | Agrupar las dos direcciones | `uv run python labs/m5/pooled_match.py` | segundos | la tabla agrupada y el residuo del triángulo |
+| 8 | Galería de reward hacking | `uv run python labs/m5/reward_hacking.py --depth 10` | ~2 min | las tres tablas y la de profundidades |
+| 9 | GRPO | `uv run rukh train grpo --config configs/train/grpo.yaml` | ~40 min | `checkpoints/medium-v4-grpo/grpo.pt` |
+| 10 | Evaluación canónica de cada etapa | `uv run rukh eval --model <ckpt> --config configs/eval/greedy.yaml --stage <nombre>` | ~26 min | `artifacts/eval/<nombre>/` |
+| 11 | Tabla de benchmarks | `uv run rukh eval benchmarks` | segundos | `docs/benchmarks.md` |
+| 12 | Exportar | `uv run rukh export --ckpt <ckpt> --out artifacts/onnx/<nombre> --fp16 --int8 --check-parity` | ~12 min cada uno | `model{,-fp16,-int8}.onnx`, `parity.json` |
+| 13 | Publicar | `uv run rukh publish model --ckpt <ckpt> --repo rukh-<nombre> --onnx artifacts/onnx/<nombre>` | minutos | repo en el Hub |
+
+El paso 2 no es ceremonia. Se corrió el día que se escribió `rukh eval match` y salió **0,975 con
+999 jugadas ilegales**, que destapó dos errores reales en `infer/game.py` (D-111). Un instrumento
+nuevo se estrena midiendo algo cuya respuesta ya se sabe, y este cuesta un minuto.
+
+## Cómo se lee cada salida
+
+### `rukh eval match`
+
+```
+score:    0.5687 (191W 73D 136L)
+elo:      +48 (95 % CI 19 to 80)
+verdict:  separated from zero
+illegal:  441 by A, 692 by B
+would need 200 games to call this edge, played 400
+```
+
+La línea que decide es la del **intervalo de Elo**, no la del punto. Si toca el cero, la
+conclusión es «no se puede distinguir», y decir «+48» sin el intervalo es decir menos de lo que se
+midió. El reparto de colores tiene que salir exacto a la mitad: `play_match` se niega a jugar un
+número impar de partidas precisamente para que no pueda no salir.
+
+**Y una corrida sola no basta.** El mismo par medido con los lados intercambiados dio +26 con el
+intervalo incluyendo el cero: la estimación se movió 22 puntos —ruido normal con 400 partidas— y el
+**veredicto** se dio la vuelta (D-120). Se corren las dos direcciones y se agrupan con
+`labs/m5/pooled_match.py`, que además calcula el residuo del triángulo cuando hay tres modelos.
+
+La línea de `illegal` no es decoración: los dos DPO de M5 doblan la tasa de su base (D-121), y
+como una propuesta ilegal se rescata con un sorteo enmascarado —que es un sorteo mejor—, esa tasa
+es también un posible sesgo. `--mask` enmascara desde el primer sorteo para los dos lados y quita
+el camino de rescate; es un control, no un ajuste.
+
+### `rukh train reward`
+
+```
+accuracy:   74.76 % on held-out pairs
+            77.30 % over the pairs an evaluation can decide
+    100-200 cp    556 pairs   77.52 %
+    ...
+       mate cp    356 pairs   68.26 %
+margin vs delta cp: Pearson -0.128, Spearman -0.067
+        without mates: Pearson +0.058, Spearman +0.075
+```
+
+Las dos primeras líneas y las dos últimas se leen juntas o no se leen. El acierto global está
+tirado hacia abajo por la banda de mate, que es un tercio de los pares, y la correlación global
+**cambia de signo** al quitarla (D-119). Además, la semilla reparte la partición, así que el
+titular depende de cuántos pares de mate le tocaron al conjunto de validación (D-113): comparar
+dos corridas con semillas distintas no dice nada del modelo.
+
+### `rukh train grpo`
+
+```
+reward:     +0.5241 -> +0.6013
+illegal:    0.0180 -> 0.0164
+kl:         0.00412 against the frozen start
+groups:     1,847 useful, 553 flat
+engine:     9,204 analyses, 71.4 % from cache
+```
+
+Lo que **no** hay que celebrar es la primera línea sola. Una recompensa verificable siempre puede
+subir; lo que dice si subió jugando mejor o cultivando el número es que suba **y** la KL se quede
+pequeña. `flat` cuenta los grupos donde las ocho candidatas puntuaron igual: el motor se pagó y no
+salió gradiente, así que es la parte del presupuesto que se lleva la propia confianza del modelo.
+
+## Lo que se aprendió montándolo
+
+- **Para medir una diferencia, mide la diferencia** (D-110). La escalera repite con un suelo de
+  unos 40 Elo, así que restar dos absolutos arrastra los dos ruidos. El enfrentamiento directo
+  sale 8,1 veces más barato en partidas y separó del cero un +40 que la escalera dejaba solapado.
+- **Un `head()` no es una muestra** (D-114). Los pares están equilibrados por fase en bloques y las
+  primeras filas son 65 % aperturas frente al 33 % real.
+- **Una puerta que lo que separa puede saltarse no es una puerta** (D-115). `ILLEGAL = 0,0` caía
+  dentro del intervalo legal, así que una jugada imposible puntuaba por encima de una legal que
+  repite.
+- **El hackeo de recompensa no está en la cima** (D-116). Seis recompensas, cinco rotas, coronan la
+  misma jugada: son todas monótonas en la evaluación. El daño está en la forma del grupo.
+- **Una ablación cuyas condiciones difieren en dos cosas no mide ninguna** (D-117).
+- **Ninguna recompensa que lea al motor es estable con la profundidad** (D-118). La sana se mueve
+  0,99 entre profundidad 4 y 14; la que no tiene suelo, 47,0.
+- **El triángulo no cierra** (D-120). Las tres aristas agrupadas a 800 partidas dejan un residuo de
+  47 Elo a 2,4 σ: la fuerza no es un solo número por modelo cuando los emparejamientos interactúan.
+  Y un veredicto binario leído del borde de un intervalo se da la vuelta con el ruido normal.
+- **Alinear cuesta legalidad** (D-121). Los dos DPO doblan la tasa de propuestas ilegales de su
+  base, y `nll_weight: 0.1` no lo evitó. Mide el coste en la misma corrida que el beneficio.

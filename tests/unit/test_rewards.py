@@ -13,9 +13,10 @@ import chess
 import pytest
 
 from rukh.train.rewards import (
-    ILLEGAL,
     RewardWeights,
     bounds,
+    illegal_value,
+    legal_bounds,
     legality_gate,
     mate_bonus,
     normalised_delta_cp,
@@ -27,16 +28,31 @@ pytestmark = pytest.mark.unit
 
 
 def test_legality_is_a_gate_and_not_a_term():
-    """An illegal move scores zero flat, with no other term able to buy it back."""
+    """An illegal move scores the floor flat, with no other term able to buy it back."""
     board = chess.Board()
     illegal = chess.Move.from_uci("e2e5")
     assert legality_gate(board, illegal) is False
 
     got = reward(board, illegal, cp_move=1000, cp_best=0)
-    assert got.total == ILLEGAL
+    assert got.total == illegal_value()
     assert got.legal is False
     # Even with the best possible centipawn score behind it, nothing leaks through the gate.
     assert got.terms == {"quality": 0.0, "mate": 0.0, "repetition": 0.0}
+
+
+def test_an_illegal_move_scores_below_every_legal_one():
+    """The bug the M5 gallery found: a flat zero put illegal *above* a legal repetition.
+
+    With the default weights a legal move that repeats scores -0.25, so a gate set at 0.0 was
+    telling the optimiser that proposing a move that cannot be played beats playing a legal one.
+    """
+    for weights in (
+        RewardWeights(),
+        RewardWeights(repetition=2.0),
+        RewardWeights(quality=3.0, mate=1.0, repetition=0.5),
+    ):
+        assert illegal_value(weights) < legal_bounds(weights)[0]
+        assert bounds(weights) == (illegal_value(weights), legal_bounds(weights)[1])
 
 
 def test_the_best_move_scores_one_and_the_scale_is_where_it_runs_out():
@@ -123,7 +139,8 @@ def test_no_input_escapes_the_interval_the_design_promises():
 
 def test_the_bounds_move_with_the_weights_instead_of_being_a_constant():
     weights = RewardWeights(quality=2.0, mate=0.5, repetition=1.0)
-    assert bounds(weights) == (-1.0, 2.5)
+    assert legal_bounds(weights) == (-1.0, 2.5)
+    assert bounds(weights) == (-2.0, 2.5)
 
 
 def test_the_weights_are_refused_when_they_would_break_the_design():

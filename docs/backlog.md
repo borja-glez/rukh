@@ -60,3 +60,23 @@ Se limpia al cerrar cada hito; lo que entra en un plan sale de aquí.
   rival, así que invalida todos los Elo publicados y obliga a recalibrar los ocho peldaños.
   **Cuándo:** P6, junto con la reconstrucción de la tabla, y midiendo antes cuánto se estrecha de
   verdad la reproducibilidad — que es el único motivo para pagar la recalibración.
+
+## Aplazado desde P5
+
+- **La galería usa `cp_best` del grupo también para la métrica de validación en las corridas
+  cortas.** `best_available` arregla la métrica publicada (D-123), pero las tres corridas del
+  barrido de temperatura se midieron antes y su columna de recompensa es la del grupo. No se
+  rehacen: lo que esas corridas miden es la proporción de grupos planos, que no depende de la
+  referencia. Si alguna vez se quiere la serie completa con la métrica buena, son doce minutos.
+- **GRPO no aprende legalidad en la configuración por defecto.** Con `restrict_to_legal: true` la
+  puerta nunca se dispara. `grpo-legality.yaml` existe para probar si GRPO puede devolver el peaje
+  que DPO se gastó (D-121), y esa corrida se queda para cuando haya presupuesto de motor: el
+  gradiente de legalidad es minúsculo porque solo el 0,25 % de las candidatas salen ilegales.
+- **El criterio de +50 Elo se cumple en la estimación puntual y no en el extremo del intervalo.**
+  Con 800 partidas agrupadas, `off-policy` da +67 (45 a 89). Llevarlo a 1 600 partidas bajaría el
+  intervalo a unos ±16 y cruzaría el 50 por el extremo. Son siete minutos de máquina y se hace
+  cuando haya una tanda libre.
+- **`rukh eval match` no reutiliza partidas entre corridas.** Cada dirección juega sus 400 desde
+  cero aunque el libro de aperturas sea el mismo. Un caché por `(modelo A, modelo B, apertura,
+  color)` ahorraría la mitad al repetir una dirección, y es lo que hace falta para subir a 1 600
+  partidas sin pagarlas enteras.
