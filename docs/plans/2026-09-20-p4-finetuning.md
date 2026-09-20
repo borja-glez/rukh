@@ -17,66 +17,59 @@ y los adaptadores vivos en la demo, y la lección M4.
    `rukh-lora-*` y `rukh-qwen3-pgn-qlora`.
 4. En la demo: selector "juega como 1500/2000/2400" y adaptadores intercambiables.
 
-## Estado · 2026-09-20 21:20
+## Estado · 2026-09-20 22:30 · todo medido, nada subido
 
 ### Criterios de aceptación
 
 | # | Criterio | Estado |
 |---|---|---|
-| 1 | Elo por condición monótono (1500 < 2000 < 2400 con IC) | ❌ **no se cumple**, medido y explicado (D-100, D-106, D-107) |
+| 1 | Elo por condición monótono (1500 < 2000 < 2400 con IC) | ❌ **no se cumple**, medido y explicado (D-100, D-106, D-107, D-109) |
 | 2 | Tabla comparativa con Qwen | ✅ **cumplido** |
-| 3 | Publicados con card los cinco artefactos | 🟡 construido; la subida espera decisión de Borja |
+| 3 | Publicados con card los artefactos | 🟡 los seis repos preparados con `--dry-run`; **la subida espera tu visto bueno** |
 | 4 | Demo: selector de Elo + adaptadores intercambiables | ✅ **cumplido** y verificado en navegador |
 
 **Decisión del 2026-09-20 (D-108):** el módulo se reformula sobre lo medido en vez de perseguir el
-criterio 1. El criterio se publica incumplido con sus números; lo que cambia es el objetivo docente,
-que pasa a ser *«¿qué cambia un afinado y qué no?»*. La lección se titula ahora **«cambiar el estilo
-sin cambiar la fuerza»**.
+criterio 1. El criterio se publica incumplido con sus números; lo que cambia es el objetivo
+docente. La lección se titula **«cambiar el estilo sin cambiar la fuerza»** y está en `vigente`.
 
 ### Lo que el hito estableció
 
 - **Cambia el comportamiento, del todo y gratis.** Un adaptador de 1,6 MB (0,34 % del modelo) sube
-  `1. e4` del 59,64 % al **99,85 %** sin coste medible en legalidad (99,8 %), top-1 (54,4 → 54,7 %)
-  ni puzles (37,5 → 37,8 %). Y con la primera jugada clavada, 199 de 200 auto-partidas siguen siendo
-  líneas distintas.
+  `1. e4` del 59,64 % al **99,85 %** sin coste medible en legalidad, top-1 ni puzles, y deja 199 de
+  200 líneas distintas en las once jugadas siguientes.
 - **Ordena el repertorio sin jugar una partida.** Entropía analítica de la primera jugada monótona
-  en las **seis** condiciones: 1,596 → 1,647 → 1,741 → 1,841 → 1,881 → 1,992 bits.
+  en las **seis** condiciones: 1,596 → 1,992 bits.
 - **No mueve la competencia.** `medium-v4` 1504 (1446-1558), `medium-elo` 1558 (1500-1609),
-  `medium-masters` 1583 (1525-1641): los tres caben dentro del intervalo de los otros dos. Los
-  puzles son planos en las seis condiciones (37,0 – 38,2 %).
-- **Y tres herramientas para saber que eso es un resultado y no una medición floja:** partidas
-  necesarias (24 420 entre `<w1500>` y `<w2000>`), corrida de control (el modelo sin afinar recorre
-  161 Elo con cabeceras que nunca entrenó) y suelo de reproducibilidad (la misma medición repetida
-  da 1498 y 1558).
+  `medium-masters` 1583 (1525-1641): los tres caben dentro del intervalo de los otros dos.
+- **Cuatro herramientas para saber que eso es un resultado**: partidas necesarias (24 420 entre
+  `<w1500>` y `<w2000>`), corrida de control (161 Elo en el modelo sin afinar), suelo de
+  reproducibilidad (1498 y 1558 en la misma medición) y el rango del instrumento (muestrear cuesta
+  400 Elo y empeora la medida, D-109).
 - **Qwen3-0.6B afinado con las mismas partidas pierde 160 de 160.** 62,50 % de jugadas legales
   contra 99,8 %, 12,5 % de top-1 contra 54,4 %, 0,9 % de puzles contra 37,5 %, Elo < 807.
-- **Los adaptadores viajan como entradas del grafo ONNX:** cambiar de estilo cuesta 1,6 MB de
-  subida en vez de 221 MB de descarga, y con ceros el fichero es el modelo base exactamente.
+- **Los adaptadores viajan como entradas del grafo ONNX**, con las dos paridades medidas: con ceros
+  el fichero reproduce el checkpoint (100 % en fp32), con `lora-e4` reproduce PyTorch con ese
+  adaptador (100 % en fp32). Cuesta 438 KB más que la exportación normal, el 0,19 %.
 
-### Qué queda
+### Verificación
 
-| # | Trabajo | Estado |
-|---|---|---|
-| 1 | Barrido a temperatura 1,0 en `<w1200>` y `<w2400>` (el mecanismo, no el criterio) | ⏳ corriendo |
-| 2 | Descanso | encadenado |
-| 3 | Exportaciones ONNX de los tres modelos + paridad | encadenado |
-| 4 | Tamaños medidos al registro de la demo | pendiente |
-| 5 | `--dry-run` de los cinco repositorios y revisión de las cards | pendiente |
-| 6 | Lección: la sección del mecanismo y `status: vigente` | pendiente |
-| 7 | `m4.json` a `live`, E2E completo y Lighthouse en las dos webs | pendiente |
-| 8 | **Subida al Hub** | pendiente de tu visto bueno |
+| Qué | Resultado |
+|---|---|
+| `rukh` | 706 pruebas, `ruff check` y `format` limpios |
+| `rukh-lab` | 42 unitarias, **46 E2E**, `astro check` sin errores |
+| `rukh-web` | 163 unitarias, **97 E2E** en los cuatro perfiles |
+| Lighthouse `rukh-lab` M4 | **1 / 1 / 1 / 1** (escritorio), igual que M3 |
+| Lighthouse `rukh-web` | **1 / 1 / 1 / 1** escritorio, **0,99 / 1 / 1 / 1** móvil |
+| Paridad ONNX | `medium-elo` 100 / 99,9 / 96,4 %; `medium-masters` 100 / 100 / 96,2 %; `medium-lora` 100 / 99,9 / 95,1 % con ceros y 100 / 99,8 / 96,0 % con adaptador |
 
-### Ya cerrado
+### Lo único que queda
 
-- `docs/benchmarks.md` regenerado desde las mediciones con `rukh eval benchmarks`: diez etapas, la
-  misma suite, la misma fecha, y las tres filas medidas con la escalera rota retractadas.
-- Ledger D-079 a D-108. Notas fechadas en `docs/spec/02` corrigiendo las dos predicciones que el
-  hito desmintió, y en `GOAL.md` con el resultado de P4.
-- Lección M4 completa salvo una sección: 1 662 líneas, cinco figuras animadas, nueve labs, veredicto
-  por criterio y cierre.
-- Borrador del post 2 en `docs/posts/`.
-- 705 pruebas de `rukh` en verde, 163 de `rukh-web`, 42 de `rukh-lab`, E2E de M4 y de los
-  adaptadores en verde, `ruff` y Prettier limpios en los tres repos.
+**Subir los seis repositorios al Hub.** Están preparados enteros en `artifacts/publish/chorcat/`
+(y el de Qwen en `checkpoints/qwen3-pgn-qlora/`), con las cards generadas a partir de sus propias
+corridas. Un comando por repo, sin `--dry-run`.
+
+Y dos decisiones tuyas que no bloquean nada: el **merge** de `p4-finetuning` en los tres repos, y
+**dónde va el borrador del post 2** que está en `docs/posts/`.
 
 ---
 
