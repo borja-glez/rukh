@@ -1559,6 +1559,30 @@ Evidencia obtenida por el controlador, no por subagentes:
   de salida en vez de escribirse en una rodaja de un tensor de ceros. La asignación por índice
   exporta como `ScatterND`, que onnxruntime web ejecuta en CPU aunque el resto vaya por WebGPU.
 
+### D-103 · El fichero dice cuánto mide un adaptador válido, así que el navegador no hay que decírselo
+- **El problema de siempre en esta demo:** ORT Web no expone `metadata_props`, así que todo lo que
+  el exportador escribe dentro del `.onnx` (`rukh_block`, `rukh_vocab_size`) es inalcanzable desde
+  el navegador y tiene que viajar por el registro (D-031). Un adaptador tenía pinta de necesitar lo
+  mismo: formas, rango, orden de los tensores, un JSON al lado.
+- **Lo que se hace en vez de eso:** las entradas `lora_a` y `lora_b` se declaran con **forma fija**,
+  y las formas de las entradas sí las expone ORT (`inputMetadata`). Así que el propio fichero dice
+  cuántos `float32` tiene un adaptador suyo, y `readAdapterShape` lo lee. Un fichero descargado de
+  cualquier otro tamaño es un desajuste que la página puede **nombrar** en vez de leer como basura
+  sobre los pesos correctos, que es la peor forma de estar mal: un modelo que juega legal y fatal.
+- **Y «sin estilo» no es un caso especial.** El selector en «Sin estilo» alimenta un adaptador de
+  ceros, que por construcción es el modelo base exacto. Ni se recrea la sesión ni se vuelve a
+  descargar nada: el camino de código es el mismo con estilo y sin él, y el E2E comprueba que
+  quitar el adaptador devuelve **el mismo número**, no uno parecido.
+- **Cómo se verifica en un navegador de verdad:** `scripts/make_toy_web_models.py` escribe, con las
+  mismas funciones que escriben los ficheros publicados, un decoder de juguete exportado con
+  factores como entradas (186 KB) y un adaptador para él (256 bytes). `e2e/adapter.spec.ts` carga
+  el modelo una vez, lee la distribución que publica para una posición, cambia de estilo, la vuelve
+  a leer y comprueba tres cosas: que cambia, que al quitarlo vuelve exactamente, y que solo se ha
+  pedido **un** `.onnx` en toda la prueba. Esa última aserción es el hito entero en una línea.
+- **Lo que no se toca:** `toy-decoder.onnx`, el de juguete que ya estaba versionado, se deja como
+  está. Regenerarlo con otra semilla cambiaría las jugadas que espera media docena de pruebas del
+  navegador, y no hay ninguna razón para hacerlo; el script lo reescribe solo con `--plain`.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
