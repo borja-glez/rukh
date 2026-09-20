@@ -5,7 +5,7 @@
   "model_type": "rukh-move-decoder",
   "library_name": "rukh",
   "rukh_version": "0.0.1",
-  "stage": "tiny",
+  "stage": "tiny-greedy",
   "step": 6000,
   "params": 5309952,
   "tokenizer": "uci",

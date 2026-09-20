@@ -254,15 +254,27 @@ def test_a_rung_needs_exactly_one_of_uci_elo_and_skill() -> None:
 
 
 @unit
-def test_the_default_rungs_go_below_the_engine_floor_and_up_to_2000() -> None:
+def test_the_default_rungs_are_ordered_and_none_reaches_below_the_engine_floor() -> None:
+    """The ladder is sorted by measured strength, and it has no rung under 1320.
+
+    The four ``Skill Level`` rungs were added to reach *below* the engine's ``UCI_Elo`` floor and
+    were labelled 800 to 1250 on that assumption. Playing them against ``uci-1320`` showed every
+    one of them is stronger than it, by 61 to 358 Elo (D-070), so the assumption was false and
+    the labels dragged every stage's fit down about 350 points. This test pins the corrected
+    ladder so the old guesses cannot come back unnoticed.
+    """
     assert [rung.elo for rung in DEFAULT_RUNGS] == sorted(rung.elo for rung in DEFAULT_RUNGS)
-    assert [rung.name for rung in DEFAULT_RUNGS if rung.skill is not None] == [
+    assert min(rung.elo for rung in DEFAULT_RUNGS) == 1320
+    assert {rung.name for rung in DEFAULT_RUNGS if rung.skill is not None} == {
         "skill-0",
         "skill-1",
         "skill-2",
         "skill-3",
-    ]
-    assert [rung.uci_elo for rung in DEFAULT_RUNGS if rung.uci_elo] == [1320, 1500, 1800, 2000]
+    }
+    uci = sorted(rung.uci_elo for rung in DEFAULT_RUNGS if rung.uci_elo)
+    assert uci == [1320, 1500, 1800, 2000]
+    skill = [rung.elo for rung in DEFAULT_RUNGS if rung.skill is not None]
+    assert skill == [1381, 1467, 1589, 1678]
 
 
 @pytest.mark.engine
@@ -278,3 +290,25 @@ def test_play_rung_against_stockfish_plays_both_colours_and_caches(tmp_path: Pat
         assert cache.count("elo") == 2
         again = play_rung(model, tok, rung, 2, cfg, move_time=0.01, max_plies=8, cache=cache)
     assert [r.model_dump() for r in again] == [r.model_dump() for r in played]
+
+
+def test_cache_key_separates_elo_headers() -> None:
+    """Two runs of the same rung under different headers are different games.
+
+    Without this the Elo of a model asked to play at 2600 would be read back from the games it
+    played at 1800: same rung, same index, silently the wrong answer. The default stays bare so
+    every game cached before the header existed is still addressable.
+    """
+    base = {
+        "rung": "uci-1320",
+        "opponent_elo": 1320,
+        "index": 7,
+        "model_white": True,
+        "result": "1-0",
+        "score": 1.0,
+        "plies": 40,
+        "illegal_proposals": 0,
+    }
+    assert GameRecord(**base).item_id() == "uci-1320:7"
+    assert GameRecord(**base, header_elo=2600).item_id() == "uci-1320:7:e2600"
+    assert GameRecord(**base, header_elo=1800).item_id() == GameRecord(**base).item_id()

@@ -14,8 +14,9 @@ tokenize:
   artifacts_dir: artifacts/tokenizer
   web_artifacts_dir: artifacts/web
   fixture_pgn: tests/fixtures/games.pgn
-  train_month: "2025-01"
+  train_months: ["2025-01"]
   val_month: "2025-02"
+  val_games: 100000   # held out; the other ~2.85 M games of the month train (D-062)
   stats_games: data/uci/year=2025/month=01/games.parquet
   bpe_vocab_size: 4096
   bpe_train_games: 200000

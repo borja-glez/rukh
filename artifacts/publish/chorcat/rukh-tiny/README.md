@@ -17,26 +17,34 @@ tags:
 # chorcat/rukh-tiny
 
 A GPT decoder written from scratch that plays chess by predicting the next move of a game
-written in UCI. This is the `tiny` stage of [Rukh](https://github.com/borja-glez/rukh), a course
+written in UCI. This is the `tiny-greedy` stage of [Rukh](https://github.com/borja-glez/rukh), a course
 that builds a chess language model end to end: 5,309,952 parameters, a
 vocabulary of 2030 fixed tokens and a context of
 200 moves.
 
-Play against it in the browser: [https://rukh.borjaglez.com/?stage=tiny](https://rukh.borjaglez.com/?stage=tiny) · read how it was built:
+Play against it in the browser: [https://rukh.borjaglez.com/?stage=tiny-int8](https://rukh.borjaglez.com/?stage=tiny-int8) · read how it was built:
 [https://lab.rukh.borjaglez.com](https://lab.rukh.borjaglez.com)
 
 ## Results
 
-Measured with `rukh eval --suite quick` on 2026-09-19.
+Measured with `rukh eval --suite full` on 2026-09-20.
 
 | Metric | Value |
 |---|---|
 | Legality without the mask, argmax | 94.5 % |
-| Legality without the mask, sampled (T=0.6, top-k 20) | 93.8 % |
+| Legality without the mask, sampled (T=0.05, top-k 1) | 94.5 % |
 | Top-1 next move | 40.3 % |
 | Top-3 next move | 67.1 % |
-| Puzzles solved | n/a |
-| Estimated Elo | 64 (95 % CI -200-292) |
+| Puzzles solved | 8.9 % |
+| Estimated Elo | 921 (95 % CI 713-1040) |
+
+Puzzles by difficulty band:
+
+| Band | Solved |
+|---|---|
+| 1000-1500 | 14.1 % |
+| 1500-2000 | 8.6 % |
+| 2000+ | 3.9 % |
 
 Legality is measured **without** the legality mask, twice, because the two numbers answer
 different questions:
@@ -58,23 +66,55 @@ flattering or not.
 | Bar | Target | Measured | Verdict |
 |---|---|---|---|
 | Legality without the mask, argmax | at least 99 % | 94.5 % | **not met** |
-| Estimated Elo | at least 1200 | 64 (95 % CI -200-292) | **not met** |
+| Estimated Elo | at least 1200 | 921 (95 % CI 713-1040) | **not met** |
 
 **The legality bar is not met**: without the legality mask the weights propose an illegal move
 more often than one time in a hundred. The demo masks before sampling and therefore never plays
 one, but the bar is about the weights and the weights do not clear it.
 
-**The Elo bar is not met**, and the reason is the corpus rather than the recipe: this model was
-trained on 5.9 M games, against the 16 M of the reference work it is measured against, and the
-`medium` stage with three times the parameters and the same data bought only 84 more Elo, with
-overlapping intervals. The constraint is data, not capacity, so the honest fix is more months of
-Lichess and not more layers.
+**The Elo bar is not met.** This stage exists as a baseline, not as a release: it is the smallest
+model in the project and it is published so the larger stages have something to be compared
+against. The stages that carry the project's answer to this bar are `rukh-medium` (1504) and
+`rukh-medium-dpo` (1529), trained on 19.0 M games where this one saw 2.9 M.
+
+### The ratings on this card replace lower ones
+
+An earlier release of these cards reported much lower ratings — 1007 for `small`, 1091 for
+`medium`, 64 for `tiny` — and said the project's 1200 Elo bar was missed. **Those figures were
+wrong, and the models were not.**
+
+The rating is fitted against eight Stockfish opponents. Four of them are set with `Skill Level`
+and were given Elo labels by hand, on the assumption that they reach below the engine's 1320
+`UCI_Elo` floor. None of them does. Playing the ladder against itself — 40 games a pair, the
+suite's own 0.1 s a move, colours alternated — put them at 1381, 1467, 1589 and 1678 against
+labels of 800, 950, 1100 and 1250: between 428 and 581 Elo too low, every one in the same
+direction, which dragged every stage's fit down by roughly 350 points.
+
+The method checks itself: `uci-1500` measured **+179** Elo over `uci-1320` against a nominal
++180. (`UCI_Elo` does compress higher up — `uci-1800` measured +215 over `uci-1500`, not +300 —
+which is a caveat for the top rungs, not for the range these models play in.)
+
+Every stage was then re-evaluated on the measured ladder, and the numbers on this card come from
+those runs. The correction moves all stages by a similar amount, so comparisons between them are
+unchanged.
+
+### An Elo belongs to the pair model+sampling
+
+The same weights (`4591cf8cca0b`) measure **921 Elo** at
+temperature 0.05, top-k 1 and **64 Elo** at temperature 0.6, top-k 20.
+Nothing about the tensors changed between the two runs; only the way a move is drawn from them
+did. A rating is therefore a property of the pair model+sampling and not of the file you
+download, and any table that compares stages has to fix the sampling first.
+
+The results above are the temperature 0.05, top-k 1 point. The demo samples for variety
+rather than always playing its best move, so what a player meets over the board is the weaker of
+the two numbers.
 
 How to read these numbers:
 
-- legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.6, top-k 20) and is always the lower of the two.
-- puzzles not found at E:\work\ai\chess-lm\rukh\data\puzzles\puzzles.parquet: puzzle suite skipped
+- legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
+- 3 of 160 games hit the context limit and were adjudicated (3 of them) instead of being scored as draws
 
 
 ## Input and output
@@ -175,7 +215,7 @@ MLflow run: `0a25dd056bfe4ca9b89204a6d75686f3`.
   "model_type": "rukh-move-decoder",
   "library_name": "rukh",
   "rukh_version": "0.0.1",
-  "stage": "tiny",
+  "stage": "tiny-greedy",
   "step": 6000,
   "params": 5309952,
   "tokenizer": "uci",

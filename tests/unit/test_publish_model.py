@@ -528,3 +528,28 @@ def test_the_parity_file_is_published_with_the_onnx_files(
     assert (Path(result.folder) / "onnx" / PARITY_NAME).is_file()
     card = Path(result.card_path).read_text(encoding="utf-8")
     assert "| `model-int8.onnx` (int8) | 95.4 % |" in card
+
+
+def test_publish_refuses_another_models_numbers(tmp_path: Path) -> None:
+    """A card must never carry metrics measured on different weights.
+
+    `read_eval` finds results by stage name alone, so the wrong `--stage` silently renders a card
+    whose Elo, legality and puzzle rates belong to another checkpoint. It nearly shipped twice:
+    once for the encoder (D-061) and once publishing `small-v3` under `small` v1's stage.
+    """
+    from rukh.eval.cache import file_sha
+    from rukh.publish.model import check_eval_matches
+
+    ckpt = tmp_path / "best.pt"
+    ckpt.write_bytes(b"weights that were published")
+    other = tmp_path / "other.pt"
+    other.write_bytes(b"weights that were measured")
+
+    # Same checkpoint: allowed, and the sha is the file's own.
+    check_eval_matches(ckpt, "small-greedy", {"model_sha": file_sha(ckpt)})
+    # No evaluation at all, or one without a sha: nothing to contradict.
+    check_eval_matches(ckpt, "small-greedy", None)
+    check_eval_matches(ckpt, "small-greedy", {})
+
+    with pytest.raises(ValueError, match="measured on a different checkpoint"):
+        check_eval_matches(ckpt, "small-greedy", {"model_sha": file_sha(other)})

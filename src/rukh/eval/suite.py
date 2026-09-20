@@ -84,6 +84,14 @@ class EvalConfig(BaseConfig):
     accuracy_positions: int = 10_000
     position_pool: int = 50_000
     puzzles_per_band: int = 2_000
+    header_elo: int = 1_800
+    """The Elo the model is asked to play at (``<wXXXX> <bXXXX>``).
+
+    It was hardcoded to 1800 while the corpus was 1800+ Lichess and the choice cost nothing. With
+    over half the corpus at 2400+ (D-064) it is a real knob: asking a model trained on masters to
+    imitate an 1800 is asking it for its weaker mode, so the header belongs in the suite config
+    and in the cache key rather than in a default argument.
+    """
     elo_games: int = 100
     elo_rungs: list[EloRung] = Field(default_factory=lambda: list(DEFAULT_RUNGS))
     elo_move_time: float = 0.1
@@ -196,6 +204,7 @@ def _elo(
             move_time=cfg.elo_move_time,
             max_plies=cfg.elo_max_plies,
             cache=cache,
+            header_elo=cfg.header_elo,
         )
     except EngineNotFound as exc:
         notes.append(f"Elo skipped: {exc}")
@@ -373,7 +382,9 @@ def evaluate(
             items = load_puzzles(
                 puzzle_path, cfg.puzzles_per_band, seed=cfg.seed, split=cfg.puzzle_split
             )
-            result.puzzles = run_puzzles(model_source(model, tok), tok, items, cache=cache)
+            result.puzzles = run_puzzles(
+                model_source(model, tok), tok, items, cache=cache, header_elo=cfg.header_elo
+            )
             if result.puzzles.prompt_style != GAME_PREFIX:
                 notes.append(PUZZLE_PROMPT_NOTE)
         else:

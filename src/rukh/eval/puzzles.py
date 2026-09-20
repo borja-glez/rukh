@@ -185,7 +185,14 @@ def run_puzzles(
     """Attempt every puzzle, reusing the cached attempts of a previous run of the same weights."""
     attempts: list[PuzzleAttempt] = []
     for item in items:
-        cached = cache.get(SUITE, item.puzzle_id) if cache is not None else None
+        # A puzzle whose parquet carries the players' own ratings ignores ``header_elo``, so its
+        # key stays as it was; one that falls back to the header is a different attempt per
+        # header and must not read back the 1800 run's answer.
+        uses_header = item.white_elo is None or item.black_elo is None
+        key = item.puzzle_id
+        if uses_header and header_elo != HEADER_ELO:
+            key = f"{key}:e{header_elo}"
+        cached = cache.get(SUITE, key) if cache is not None else None
         if cached is not None:
             attempt = PuzzleAttempt.model_validate(cached)
             # An attempt played with the other prompt answers a different question.
@@ -194,7 +201,7 @@ def run_puzzles(
                 continue
         attempt = solve_puzzle(source, tok, item, header_elo=header_elo)
         if cache is not None:
-            cache.put(SUITE, item.puzzle_id, attempt.model_dump())
+            cache.put(SUITE, key, attempt.model_dump())
         attempts.append(attempt)
     return summarize(attempts)
 

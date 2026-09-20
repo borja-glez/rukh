@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
@@ -157,39 +159,88 @@ def make_encoder(scheme: str, bpe: Tokenizer | None = None) -> GameEncoder:
     raise ValueError(f"unknown scheme {scheme!r}")
 
 
-def pack_month(games: Path, encoder: GameEncoder, out: Path) -> PackInfo:
-    """Encode every game of ``games`` (a UCI parquet) into ``out/tokens.npy`` + ``starts.npy``.
+@dataclass(frozen=True)
+class GameSlice:
+    """A contiguous run of games inside one UCI parquet.
 
-    The parquet is read row group by row group and the token stream is appended to a raw file;
+    ``skip`` games are dropped from the front and at most ``take`` are kept (``None`` = to the
+    end). It exists so one month can feed both splits: the validation slice is the first
+    ``val_games`` rows and training gets the remainder, instead of a whole month sitting idle
+    as validation when validation only ever reads a few hundred thousand tokens per eval.
+    """
+
+    path: Path
+    skip: int = 0
+    take: int | None = None
+
+    def label(self) -> str:
+        """``month=02/games.parquet[100000:]``: what ``meta.json`` records as the source."""
+        name = f"{self.path.parent.name}/{self.path.name}"
+        if not self.skip and self.take is None:
+            return name
+        end = "" if self.take is None else str(self.skip + self.take)
+        return f"{name}[{self.skip}:{end}]"
+
+
+def pack_month(games: Path, encoder: GameEncoder, out: Path) -> PackInfo:
+    """Encode every game of ``games`` (a UCI parquet) into ``out/tokens.npy`` + ``starts.npy``."""
+    return pack_games([GameSlice(Path(games))], encoder, out)
+
+
+def pack_games(sources: Sequence[GameSlice], encoder: GameEncoder, out: Path) -> PackInfo:
+    """Encode every game of ``sources``, in order, into ``out/tokens.npy`` + ``starts.npy``.
+
+    Each parquet is read row group by row group and the token stream is appended to a raw file;
     once its length is known the raw file is copied into the ``.npy`` memmap in 64 MiB chunks,
-    so neither the games nor the whole stream are ever held in memory at once.
+    so neither the games nor the whole stream are ever held in memory at once. Several sources
+    concatenate into a single stream, which is why ``starts.npy`` is written last: its offsets
+    are absolute over the concatenation.
     """
     if encoder.vocab_size() > np.iinfo(np.uint16).max + 1:
         raise ValueError("vocabulary does not fit in uint16")
+    if not sources:
+        raise ValueError("pack_games needs at least one source")
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     raw_path = out / "tokens.bin"
     starts: list[int] = []
     n_tokens = 0
-    reader = pq.ParquetFile(Path(games))
     with raw_path.open("wb") as raw:
-        for batch in reader.iter_batches(
-            batch_size=CHUNK_GAMES, columns=["uci", "white_elo", "black_elo", "result"]
-        ):
-            buffer: list[int] = []
-            rows = zip(
-                batch.column("uci").to_pylist(),
-                batch.column("white_elo").to_pylist(),
-                batch.column("black_elo").to_pylist(),
-                batch.column("result").to_pylist(),
-                strict=True,
-            )
-            for uci, w_elo, b_elo, result in rows:
-                ids = encoder.encode_game(uci, int(w_elo), int(b_elo), result, max_len=1 << 30)
-                starts.append(n_tokens)
-                n_tokens += len(ids)
-                buffer.extend(ids)
-            raw.write(np.asarray(buffer, dtype=np.uint16).tobytes())
+        for source in sources:
+            reader = pq.ParquetFile(source.path)
+            seen = 0
+            taken = 0
+            for batch in reader.iter_batches(
+                batch_size=CHUNK_GAMES, columns=["uci", "white_elo", "black_elo", "result"]
+            ):
+                rows_here = batch.num_rows
+                lo = min(max(source.skip - seen, 0), rows_here)
+                hi = rows_here
+                if source.take is not None:
+                    hi = min(hi, lo + source.take - taken)
+                seen += rows_here
+                if hi <= lo:
+                    if source.take is not None and taken >= source.take:
+                        break
+                    continue
+                batch = batch.slice(lo, hi - lo)
+                taken += hi - lo
+                buffer: list[int] = []
+                rows = zip(
+                    batch.column("uci").to_pylist(),
+                    batch.column("white_elo").to_pylist(),
+                    batch.column("black_elo").to_pylist(),
+                    batch.column("result").to_pylist(),
+                    strict=True,
+                )
+                for uci, w_elo, b_elo, result in rows:
+                    ids = encoder.encode_game(uci, int(w_elo), int(b_elo), result, max_len=1 << 30)
+                    starts.append(n_tokens)
+                    n_tokens += len(ids)
+                    buffer.extend(ids)
+                raw.write(np.asarray(buffer, dtype=np.uint16).tobytes())
+                if source.take is not None and taken >= source.take:
+                    break
     tokens = np.lib.format.open_memmap(
         out / TOKENS_FILE, mode="w+", dtype=np.uint16, shape=(n_tokens,)
     )
@@ -204,7 +255,7 @@ def pack_month(games: Path, encoder: GameEncoder, out: Path) -> PackInfo:
         scheme=encoder.scheme,
         vocab_size=encoder.vocab_size(),
         vocab_hash=encoder.vocab_hash(),
-        source=Path(games).name,
+        source="+".join(source.label() for source in sources),
     )
     (out / META_FILE).write_text(info.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return info
@@ -231,13 +282,36 @@ def month_parquet(uci_dir: Path, month: str) -> Path:
     return Path(uci_dir) / f"year={year}" / f"month={mm}" / "games.parquet"
 
 
-def pack_scheme(cfg: TokenizeConfig, scheme: str, bpe: Tokenizer | None = None) -> list[Path]:
-    """Pack ``train_month`` and ``val_month`` under ``out_dir/<scheme>/{train,val}``."""
-    encoder = make_encoder(scheme, bpe)
+def split_sources(cfg: TokenizeConfig) -> dict[str, list[GameSlice]]:
+    """The parquet slices behind each split, as ``pack_scheme`` will read them.
+
+    ``train_months`` are taken whole. ``val_month`` is cut in two: its first ``val_games`` games
+    are the validation set and everything after them joins training. With ``val_games = 0`` the
+    whole month is validation, which is what P1 and P2 did -- and what left 238 M tokens unused,
+    since an eval reads 50 batches and not a month (D-062).
+
+    ``extra_train_parquets`` appends UCI parquets that live outside the ``year=/month=`` layout,
+    which is how the Elite Database (2200+ only) joins the corpus without pretending to be a
+    Lichess month.
+    """
     uci_dir = resolve(cfg.uci_dir)
+    train = [GameSlice(month_parquet(uci_dir, month)) for month in cfg.train_months]
+    val_parquet = month_parquet(uci_dir, cfg.val_month)
+    if cfg.val_games:
+        val = [GameSlice(val_parquet, take=cfg.val_games)]
+        train.append(GameSlice(val_parquet, skip=cfg.val_games))
+    else:
+        val = [GameSlice(val_parquet)]
+    train += [GameSlice(resolve(extra)) for extra in cfg.extra_train_parquets]
+    return {"train": train, "val": val}
+
+
+def pack_scheme(cfg: TokenizeConfig, scheme: str, bpe: Tokenizer | None = None) -> list[Path]:
+    """Pack the ``train`` and ``val`` splits under ``out_dir/<scheme>/{train,val}``."""
+    encoder = make_encoder(scheme, bpe)
     written: list[Path] = []
-    for split, month in (("train", cfg.train_month), ("val", cfg.val_month)):
+    for split, sources in split_sources(cfg).items():
         out = resolve(cfg.out_dir) / scheme / split
-        pack_month(month_parquet(uci_dir, month), encoder, out)
+        pack_games(sources, encoder, out)
         written.append(out / META_FILE)
     return written

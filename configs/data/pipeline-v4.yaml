@@ -1,0 +1,73 @@
+# Every step of `rukh data ...` after `fetch`. Paths are relative to the repo root (RUKH_HOME).
+duckdb:               # applied to every DuckDB connection of the pipeline
+  memory_limit: 32GB
+  threads: 0          # 0 = cpu_count()
+uci:
+  raw_dir: data/raw
+  out_dir: data/uci
+  min_plies: 20
+  max_plies: 300
+  workers: 0          # 0 = cpu_count() - 1
+tokenize:
+  uci_dir: data/uci
+  out_dir: data/tokens-v4
+  artifacts_dir: artifacts/tokenizer
+  web_artifacts_dir: artifacts/web
+  fixture_pgn: tests/fixtures/games.pgn
+  train_months: ["2025-01"]
+  val_month: "2025-02"
+  val_games: 100000   # held out; the other ~2.85 M games of the month train (D-062)
+  # 44 months of the Lichess Elite Database (2200+), 13 146 352 games. With the 5.9 M of the
+  # 1800+ corpus that is 19.0 M games, past the 16 M of the work this project measures itself
+  # against, and about 70 % of it is 2400+ play (D-064, D-066).
+  extra_train_parquets: ["data/elite/games.parquet"]
+  stats_games: data/uci/year=2025/month=01/games.parquet
+  bpe_vocab_size: 4096
+  bpe_train_games: 200000
+  stats_n_games: 20000
+  max_len: 200
+positions:
+  uci_dir: data/uci
+  month: "2025-01"
+  out_dir: data/positions
+  n_games: 300000
+  max_positions: 5000000
+  workers: 0
+evals:
+  dataset: Lichess/chess-position-evaluations
+  remote_pattern: "hf://datasets/{dataset}/data/data_{index:04d}.parquet"
+  n_files: 20
+  positions: data/positions/positions.parquet
+  out_dir: data/evals
+puzzles:
+  with_games: true
+  dataset: Lichess/chess-puzzles-with-games
+  puzzles_only_dataset: Lichess/chess-puzzles
+  remote_glob: "hf://datasets/{dataset}/**/*.parquet"
+  out_dir: data/puzzles
+  max_rating_deviation: 100
+  min_plays: 100
+  n_test: 2000
+  n_train: 50000
+  seed: 42
+pairs:
+  positions_eval: data/evals/positions-eval.parquet
+  out_dir: data/pairs
+  min_delta_cp: 100
+  max_per_phase: 200000
+  seed: 42
+elite:
+  base_url: https://database.nikonoel.fr
+  months: ["2025-01", "2025-02"]
+  out_dir: data/elite
+  min_plies: 20
+  max_plies: 300
+  workers: 0
+elo_bins:
+  uci_dir: data/uci
+  out_dir: data/elo-bins
+  n_per_bin: 50000
+  seed: 42
+publish:
+  owner: chorcat
+  publish_dir: data/publish

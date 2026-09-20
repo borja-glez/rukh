@@ -28,9 +28,27 @@ class PackedDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
         self.block = block
         self.start_at_game = start_at_game
         self.info: PackInfo = read_pack_info(self.directory)
-        self.tokens = np.load(self.directory / TOKENS_FILE, mmap_mode="r")
-        self.starts = np.load(self.directory / STARTS_FILE)
         self.pad_id = 0
+        self._open()
+
+    def _open(self) -> None:
+        """Map the two arrays from disk. Called on construction and in every worker process."""
+        self.tokens = np.load(self.directory / TOKENS_FILE, mmap_mode="r")
+        self.starts = np.load(self.directory / STARTS_FILE, mmap_mode="r")
+
+    def __getstate__(self) -> dict[str, object]:
+        """Ship the paths to a worker, never the arrays.
+
+        ``DataLoader`` workers are spawned on Windows, so the dataset is pickled once per worker.
+        ``starts`` is one int64 per game: 95 MB at 12.5 M games, 145 MB at 18.9 M, and at 145 MB
+        the spawn died with ``UnpicklingError: pickle data was truncated`` before a single step
+        ran. Both arrays live in files the worker can map itself (D-067).
+        """
+        return {k: v for k, v in self.__dict__.items() if k not in ("tokens", "starts")}
+
+    def __setstate__(self, state: dict[str, object]) -> None:
+        self.__dict__.update(state)
+        self._open()
 
     def __len__(self) -> int:
         if self.start_at_game:

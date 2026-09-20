@@ -1,0 +1,29 @@
+# `medium` (115,120,128 parameters) on the corpus of D-062 and D-064. The first `medium` run bought
+# only 84 Elo over `small` with overlapping intervals, which said the constraint was data and not
+# capacity; this one exists for after that constraint is lifted, when ~1 B unique tokens put
+# `small` past its Chinchilla point and the extra parameters finally have something to learn from.
+# 40,000 steps is 2.05 B tokens, about 19 per parameter: the first `medium` ran 1.02 B over a
+# 240 M corpus, which was four passes of too little data through too many weights.
+preset: medium
+tokens_dir: data/tokens-v3/uci
+block: 200
+batch_size: 32
+grad_accum: 8 # 256 effective sequences of 200 tokens
+lr: 4.5e-4
+min_lr_ratio: 0.1
+warmup: 1000
+max_steps: 40000
+weight_decay: 0.1
+betas: [0.9, 0.95]
+grad_clip: 1.0
+precision: bf16
+compile: true
+eval_every: 500
+eval_batches: 50
+ckpt_every: 1000
+out_dir: checkpoints
+seed: 42
+run_name: medium-v3
+unique_run_name: true
+workers: 4
+log_every: 10

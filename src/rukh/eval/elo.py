@@ -66,15 +66,26 @@ class EloRung(BaseConfig):
         return self
 
 
-# ``Skill Level`` ratings are nominal anchors for the rungs below the engine's 1320 floor: they
-# are not measured strengths, so a model whose fit leans on them is reported with that caveat.
+# The four ``Skill Level`` rungs carry **measured** ratings, not the nominal 800/950/1100/1250 they
+# were given when the harness was written. Those guesses were wrong by 430 to 580 Elo and dragged
+# every stage's fit down by about 350 points: the contradiction that exposed them was a model
+# scoring 0.725 against a 1320-rated engine while losing 20-0 to one labelled 1250.
+#
+# The numbers below come from playing the ladder against itself at the suite's own 0.1 s per move,
+# 40 games per pair with colours alternated, anchored on ``uci-1320`` (D-070). The method validates
+# on its own control: ``uci-1500`` measured +179 Elo over ``uci-1320`` against a nominal +180.
+# ``UCI_Elo`` does compress higher up -- ``uci-1800`` measured +215 over ``uci-1500``, not +300 --
+# which is a caveat for the top rungs and not for the range these models play in.
+# Ordered by measured strength. Note what that ordering shows: **no rung is below 1320**. The
+# four ``skill-*`` opponents were put in the ladder to reach under the engine's ``UCI_Elo`` floor
+# and they never did, which is why every stage measured lower than it plays.
 DEFAULT_RUNGS: list[EloRung] = [
-    EloRung(name="skill-0", elo=800, skill=0),
-    EloRung(name="skill-1", elo=950, skill=1),
-    EloRung(name="skill-2", elo=1100, skill=2),
-    EloRung(name="skill-3", elo=1250, skill=3),
     EloRung(name="uci-1320", elo=1320, uci_elo=1320),
+    EloRung(name="skill-0", elo=1381, skill=0),
+    EloRung(name="skill-1", elo=1467, skill=1),
     EloRung(name="uci-1500", elo=1500, uci_elo=1500),
+    EloRung(name="skill-2", elo=1589, skill=2),
+    EloRung(name="skill-3", elo=1678, skill=3),
     EloRung(name="uci-1800", elo=1800, uci_elo=1800),
     EloRung(name="uci-2000", elo=2000, uci_elo=2000),
 ]
@@ -88,6 +99,8 @@ class GameRecord(BaseModel):
     rung: str
     opponent_elo: int
     index: int
+    header_elo: int = 1800
+    """The Elo the model was asked to play at. Part of the cache key: same rung, different game."""
     model_white: bool
     result: str
     score: float
@@ -99,7 +112,14 @@ class GameRecord(BaseModel):
     """How a cut game was decided (``engine depth 8``, ``material count``), or None."""
 
     def item_id(self) -> str:
-        return f"{self.rung}:{self.index}"
+        """Cache key. The header is only in it when it is not the default.
+
+        Without the header a run at ``<2600>`` would silently read back the games played at
+        ``<1800>``: same rung, same index, completely different game. Leaving the default out
+        keeps every game cached before this existed addressable.
+        """
+        suffix = "" if self.header_elo == 1800 else f":e{self.header_elo}"
+        return f"{self.rung}:{self.index}{suffix}"
 
 
 class RungResult(BaseModel):
@@ -312,6 +332,7 @@ def record_of(
     index: int,
     model_white: bool,
     engine: chess.engine.SimpleEngine | None = None,
+    header_elo: int = 1800,
 ) -> GameRecord:
     """One played game as a record, adjudicating it first when it was cut short."""
     result = outcome.result
@@ -322,6 +343,7 @@ def record_of(
         rung=rung.name,
         opponent_elo=rung.elo,
         index=index,
+        header_elo=header_elo,
         model_white=model_white,
         result=result,
         score=score_of(result, model_white),
@@ -341,6 +363,7 @@ def play_rung(
     move_time: float = MOVE_TIME,
     max_plies: int | None = None,
     cache: EvalCache | None = None,
+    header_elo: int = 1800,
 ) -> list[GameRecord]:
     """Play ``games`` games against one rung, alternating colours, reusing cached games.
 
@@ -349,8 +372,9 @@ def play_rung(
     final position.
     """
     records: list[GameRecord] = []
+    suffix = "" if header_elo == 1800 else f":e{header_elo}"
     for index in range(games):
-        cached = cache.get(SUITE, f"{rung.name}:{index}") if cache is not None else None
+        cached = cache.get(SUITE, f"{rung.name}:{index}{suffix}") if cache is not None else None
         if cached is not None:
             records.append(GameRecord.model_validate(cached))
     done = {record.index for record in records}
@@ -368,9 +392,13 @@ def play_rung(
                 opponent,
                 cfg.model_copy(update={"seed": None if cfg.seed is None else cfg.seed + index}),
                 model_color=chess.WHITE if model_white else chess.BLACK,
+                white_elo=header_elo,
+                black_elo=header_elo,
                 max_plies=max_plies,
             )
-            record = record_of(outcome, rung, index, model_white, engine=opponent.engine)
+            record = record_of(
+                outcome, rung, index, model_white, engine=opponent.engine, header_elo=header_elo
+            )
             if cache is not None:
                 cache.put(SUITE, record.item_id(), record.model_dump())
             records.append(record)
@@ -388,6 +416,7 @@ def play_rungs(
     move_time: float = MOVE_TIME,
     max_plies: int | None = None,
     cache: EvalCache | None = None,
+    header_elo: int = 1800,
 ) -> list[GameRecord]:
     """Play every rung and return all the game records."""
     records: list[GameRecord] = []
@@ -402,6 +431,7 @@ def play_rungs(
                 move_time=move_time,
                 max_plies=max_plies,
                 cache=cache,
+                header_elo=header_elo,
             )
         )
     return records

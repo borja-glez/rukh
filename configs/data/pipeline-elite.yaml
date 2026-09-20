@@ -1,0 +1,69 @@
+# Every step of `rukh data ...` after `fetch`. Paths are relative to the repo root (RUKH_HOME).
+duckdb:               # applied to every DuckDB connection of the pipeline
+  memory_limit: 32GB
+  threads: 0          # 0 = cpu_count()
+uci:
+  raw_dir: data/raw
+  out_dir: data/uci
+  min_plies: 20
+  max_plies: 300
+  workers: 0          # 0 = cpu_count() - 1
+tokenize:
+  uci_dir: data/uci
+  out_dir: data/tokens
+  artifacts_dir: artifacts/tokenizer
+  web_artifacts_dir: artifacts/web
+  fixture_pgn: tests/fixtures/games.pgn
+  train_months: ["2025-01"]
+  val_month: "2025-02"
+  val_games: 100000   # held out; the other ~2.85 M games of the month train (D-062)
+  stats_games: data/uci/year=2025/month=01/games.parquet
+  bpe_vocab_size: 4096
+  bpe_train_games: 200000
+  stats_n_games: 20000
+  max_len: 200
+positions:
+  uci_dir: data/uci
+  month: "2025-01"
+  out_dir: data/positions
+  n_games: 300000
+  max_positions: 5000000
+  workers: 0
+evals:
+  dataset: Lichess/chess-position-evaluations
+  remote_pattern: "hf://datasets/{dataset}/data/data_{index:04d}.parquet"
+  n_files: 20
+  positions: data/positions/positions.parquet
+  out_dir: data/evals
+puzzles:
+  with_games: true
+  dataset: Lichess/chess-puzzles-with-games
+  puzzles_only_dataset: Lichess/chess-puzzles
+  remote_glob: "hf://datasets/{dataset}/**/*.parquet"
+  out_dir: data/puzzles
+  max_rating_deviation: 100
+  min_plays: 100
+  n_test: 2000
+  n_train: 50000
+  seed: 42
+pairs:
+  positions_eval: data/evals/positions-eval.parquet
+  out_dir: data/pairs
+  min_delta_cp: 100
+  max_per_phase: 200000
+  seed: 42
+elite:
+  base_url: https://database.nikonoel.fr
+  months: ['2023-09', '2023-10', '2023-11', '2023-12', '2024-01', '2024-02', '2024-03', '2024-04', '2024-05', '2024-06', '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06', '2025-07', '2025-08']
+  out_dir: data/elite
+  min_plies: 20
+  max_plies: 300
+  workers: 6   # the GPU is training; leave cores for its dataloader
+elo_bins:
+  uci_dir: data/uci
+  out_dir: data/elo-bins
+  n_per_bin: 50000
+  seed: 42
+publish:
+  owner: chorcat
+  publish_dir: data/publish

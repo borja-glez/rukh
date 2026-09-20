@@ -23,7 +23,7 @@ that builds a chess language model end to end: {{ "{:,}".format(params) }} param
 vocabulary of {{ config.get("vocab_size", 2030) }} fixed tokens and a context of
 {{ config.get("block", 200) }} moves.
 
-Play against it in the browser: [{{ demo_url }}]({{ demo_url }}) · read how it was built:
+{% if demo_serves_this %}Play against it in the browser: [{{ demo_url }}]({{ demo_url }}){% else %}The demo at [{{ demo_url }}]({{ demo_url }}) serves the `tiny` and `small` stages, not this one; this repository is for running the weights yourself{% endif %} · read how it was built:
 [{{ course_url }}]({{ course_url }})
 
 ## Results
@@ -72,11 +72,10 @@ flattering or not.
 {%- endfor %}
 {%- for bar in bars if not bar.met %}
 {% if bar.id == "elo" %}
-**The Elo bar is not met**, and the reason is the corpus rather than the recipe: this model was
-trained on 5.9 M games, against the 16 M of the reference work it is measured against, and the
-`medium` stage with three times the parameters and the same data bought only 84 more Elo, with
-overlapping intervals. The constraint is data, not capacity, so the honest fix is more months of
-Lichess and not more layers.
+**The Elo bar is not met.** This stage exists as a baseline, not as a release: it is the smallest
+model in the project and it is published so the larger stages have something to be compared
+against. The stages that carry the project's answer to this bar are `rukh-medium` (1504) and
+`rukh-medium-dpo` (1529), trained on 19.0 M games where this one saw 2.9 M.
 {%- elif bar.id == "legality" %}
 **The legality bar is not met**: without the legality mask the weights propose an illegal move
 more often than one time in a hundred. The demo masks before sampling and therefore never plays
@@ -84,6 +83,28 @@ one, but the bar is about the weights and the weights do not clear it.
 {%- endif %}
 {%- endfor %}
 {%- endif %}
+
+### The ratings on this card replace lower ones
+
+An earlier release of these cards reported much lower ratings — 1007 for `small`, 1091 for
+`medium`, 64 for `tiny` — and said the project's 1200 Elo bar was missed. **Those figures were
+wrong, and the models were not.**
+
+The rating is fitted against eight Stockfish opponents. Four of them are set with `Skill Level`
+and were given Elo labels by hand, on the assumption that they reach below the engine's 1320
+`UCI_Elo` floor. None of them does. Playing the ladder against itself — 40 games a pair, the
+suite's own 0.1 s a move, colours alternated — put them at 1381, 1467, 1589 and 1678 against
+labels of 800, 950, 1100 and 1250: between 428 and 581 Elo too low, every one in the same
+direction, which dragged every stage's fit down by roughly 350 points.
+
+The method checks itself: `uci-1500` measured **+179** Elo over `uci-1320` against a nominal
++180. (`UCI_Elo` does compress higher up — `uci-1800` measured +215 over `uci-1500`, not +300 —
+which is a caveat for the top rungs, not for the range these models play in.)
+
+Every stage was then re-evaluated on the measured ladder, and the numbers on this card come from
+those runs. The correction moves all stages by a similar amount, so comparisons between them are
+unchanged.
+
 {%- if sampling %}
 
 ### An Elo belongs to the pair model+sampling

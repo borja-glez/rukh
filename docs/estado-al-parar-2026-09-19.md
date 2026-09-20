@@ -23,17 +23,23 @@ una encadenada sobre la anterior. Ninguna se ha mergeado a `main`.
 
 | Etapa | Parámetros | Legales sin máscara | Top-1 | Puzles | Elo (IC 95 %) |
 |---|---|---|---|---|---|
-| `tiny` | 5 309 952 | 94,5 % | 40,3 % | — | 64 (−200 a 292) |
-| `small` (T=0,6) | 38 971 392 | 99,4 % | 51,1 % | — | 785 (680-896) |
-| `small` (determinista) | 38 971 392 | **99,4 %** | 51,1 % | 22,1 % | **1007 (920-1101)** |
-| `medium` (determinista) | 115 120 128 | 99,4 % | 52,9 % | 23,9 % | 1091 (990-1194) |
+| `tiny` | 5 309 952 | 94,5 % | 40,3 % | — | 495 (320-709) |
+| `small` (T=0,6) | 38 971 392 | 99,4 % | 51,1 % | — | 1181 (1076-1249) |
+| `small` (determinista) | 38 971 392 | **99,4 %** | 51,1 % | 22,1 % | **1359 (1293-1429)** |
+| `medium` (determinista) | 115 120 128 | 99,4 % | 52,9 % | 23,9 % | 1422 (1353-1483) |
+| **`medium-v4` + DPO** | 115 120 128 | **99,8 %** | 53,4 % | **38,8 %** | **1529 (1470-1583)** |
+
+Los Elo de esta tabla **no son los que se publicaron el 2026-09-19**: aquellos (64 / 785 / 1007 /
+1091) salían de un ajuste apoyado en cuatro rivales con el Elo escrito a mano y equivocado entre
+428 y 581 puntos (D-070). Son las mismas partidas con la escalera medida.
 
 | Encoder | F1 de error (ajustado) | Margen sobre heurística | ROC AUC | Spearman valor↔cp |
 |---|---|---|---|---|
 | `moves` (preentrenado con MMM) | 0,179 | **+9,0** | 0,738 | 0,407 |
 | `squares` (desde cero) | 0,146 | +5,7 | 0,696 | 0,422 (Pearson 0,688) |
 
-**Criterios de aceptación:** legalidad ≥ 99 % **cumplido**; Elo ≥ 1200 **no cumplido** (1007);
+**Criterios de aceptación:** legalidad ≥ 99 % **cumplido** (99,8 %); Elo ≥ 1200 **cumplido**
+(1529, IC 1470-1583; y ya lo estaba con los 1359 de `small`);
 paridad ONNX ≥ 99,9 % **no cumplido** en el decoder (fp16 99,80 %, int8 95,40 %) y **cumplido** en
 el encoder (100 % en las tres precisiones); F1 de error ≥ heurística + 5 **cumplido** (+9,0);
 correlación de valor ≥ 0,8 **no cumplido** (0,42). Todo está documentado tal cual en

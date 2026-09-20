@@ -17,12 +17,12 @@ tags:
 # chorcat/rukh-medium
 
 A GPT decoder written from scratch that plays chess by predicting the next move of a game
-written in UCI. This is the `medium-greedy` stage of [Rukh](https://github.com/borja-glez/rukh), a course
+written in UCI. This is the `medium-v4-greedy` stage of [Rukh](https://github.com/borja-glez/rukh), a course
 that builds a chess language model end to end: 115,120,128 parameters, a
 vocabulary of 2030 fixed tokens and a context of
 200 moves.
 
-Play against it in the browser: [https://rukh.borjaglez.com/?stage=medium-greedy](https://rukh.borjaglez.com/?stage=medium-greedy) · read how it was built:
+The demo at [https://rukh.borjaglez.com](https://rukh.borjaglez.com) serves the `tiny` and `small` stages, not this one; this repository is for running the weights yourself · read how it was built:
 [https://lab.rukh.borjaglez.com](https://lab.rukh.borjaglez.com)
 
 ## Results
@@ -31,20 +31,20 @@ Measured with `rukh eval --suite full` on 2026-09-19.
 
 | Metric | Value |
 |---|---|
-| Legality without the mask, argmax | 99.4 % |
-| Legality without the mask, sampled (T=0.05, top-k 1) | 99.4 % |
-| Top-1 next move | 52.9 % |
-| Top-3 next move | 80.9 % |
-| Puzzles solved | 23.9 % |
-| Estimated Elo | 1091 (95 % CI 990-1194) |
+| Legality without the mask, argmax | 99.8 % |
+| Legality without the mask, sampled (T=0.05, top-k 1) | 99.8 % |
+| Top-1 next move | 54.4 % |
+| Top-3 next move | 82.2 % |
+| Puzzles solved | 37.5 % |
+| Estimated Elo | 1504 (95 % CI 1446-1558) |
 
 Puzzles by difficulty band:
 
 | Band | Solved |
 |---|---|
-| 1000-1500 | 37.6 % |
-| 1500-2000 | 24.0 % |
-| 2000+ | 10.2 % |
+| 1000-1500 | 57.9 % |
+| 1500-2000 | 38.0 % |
+| 2000+ | 16.6 % |
 
 Legality is measured **without** the legality mask, twice, because the two numbers answer
 different questions:
@@ -65,20 +65,35 @@ flattering or not.
 
 | Bar | Target | Measured | Verdict |
 |---|---|---|---|
-| Legality without the mask, argmax | at least 99 % | 99.4 % | met |
-| Estimated Elo | at least 1200 | 1091 (95 % CI 990-1194) | **not met** |
+| Legality without the mask, argmax | at least 99 % | 99.8 % | met |
+| Estimated Elo | at least 1200 | 1504 (95 % CI 1446-1558) | met |
 
-**The Elo bar is not met**, and the reason is the corpus rather than the recipe: this model was
-trained on 5.9 M games, against the 16 M of the reference work it is measured against, and the
-`medium` stage with three times the parameters and the same data bought only 84 more Elo, with
-overlapping intervals. The constraint is data, not capacity, so the honest fix is more months of
-Lichess and not more layers.
+### The ratings on this card replace lower ones
+
+An earlier release of these cards reported much lower ratings — 1007 for `small`, 1091 for
+`medium`, 64 for `tiny` — and said the project's 1200 Elo bar was missed. **Those figures were
+wrong, and the models were not.**
+
+The rating is fitted against eight Stockfish opponents. Four of them are set with `Skill Level`
+and were given Elo labels by hand, on the assumption that they reach below the engine's 1320
+`UCI_Elo` floor. None of them does. Playing the ladder against itself — 40 games a pair, the
+suite's own 0.1 s a move, colours alternated — put them at 1381, 1467, 1589 and 1678 against
+labels of 800, 950, 1100 and 1250: between 428 and 581 Elo too low, every one in the same
+direction, which dragged every stage's fit down by roughly 350 points.
+
+The method checks itself: `uci-1500` measured **+179** Elo over `uci-1320` against a nominal
++180. (`UCI_Elo` does compress higher up — `uci-1800` measured +215 over `uci-1500`, not +300 —
+which is a caveat for the top rungs, not for the range these models play in.)
+
+Every stage was then re-evaluated on the measured ladder, and the numbers on this card come from
+those runs. The correction moves all stages by a similar amount, so comparisons between them are
+unchanged.
 
 How to read these numbers:
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
-- 4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws
+- 2 of 160 games hit the context limit and were adjudicated (2 of them) instead of being scored as draws
 
 
 ## Input and output
@@ -121,14 +136,14 @@ repository is that measurement, as the exporter wrote it.
 
 | File | Same move as PyTorch | Worst logit drift |
 |---|---|---|
-| `model.onnx` (fp32) | 100.0 % | 1.88e-05 |
-| `model-fp16.onnx` (fp16) | 100.0 % | 0.0115 |
-| `model-int8.onnx` (int8) | 96.5 % | 1.94 |
+| `model.onnx` (fp32) | 100.0 % | 1.91e-05 |
+| `model-fp16.onnx` (fp16) | 99.9 % | 0.0196 |
+| `model-int8.onnx` (int8) | 95.1 % | 2.77 |
 
 The bar the project set itself is 99.9 %.
 
-`model-int8.onnx` does not reach it: it picks a different move in 3.5 % of
-positions, roughly one in 29. That is the file the WASM fallback loads, so a phone on the
+`model-int8.onnx` does not reach it: it picks a different move in 4.9 % of
+positions, roughly one in 20. That is the file the WASM fallback loads, so a phone on the
 int8 build is playing a measurably different model from the one in the results table above: the
 weights are the same, the arithmetic is not.
 
@@ -150,23 +165,23 @@ weights are the same, the arithmetic is not.
 | `grad_clip` | `1.0` |
 | `log_every` | `10` |
 | `lr` | `0.00045` |
-| `max_steps` | `20000` |
+| `max_steps` | `48000` |
 | `min_lr_ratio` | `0.1` |
 | `model` | `None` |
 | `num_params` | `114966528` |
 | `out_dir` | `checkpoints` |
 | `precision` | `bf16` |
 | `preset` | `medium` |
-| `run_name` | `medium` |
+| `run_name` | `medium-v4` |
 | `seed` | `42` |
-| `tokens_dir` | `data/tokens/uci` |
+| `tokens_dir` | `data/tokens-v4/uci` |
 | `unique_run_name` | `True` |
 | `vocab_hash` | `527c5dda224cab570cb84da8f7dcda0f43fe53edaf86822f899568f5dd824b46` |
 | `warmup` | `1000` |
 | `weight_decay` | `0.1` |
 | `workers` | `4` |
 
-MLflow run: `beb0cea9dd5043bf8518cfb782d8c1d1`.
+MLflow run: `3aba23bb1cf04deb89afc6994c17e1e1`.
 
 ```json
 {
@@ -176,13 +191,13 @@ MLflow run: `beb0cea9dd5043bf8518cfb782d8c1d1`.
   "model_type": "rukh-move-decoder",
   "library_name": "rukh",
   "rukh_version": "0.0.1",
-  "stage": "medium-greedy",
-  "step": 20000,
+  "stage": "medium-v4-greedy",
+  "step": 48000,
   "params": 115120128,
   "tokenizer": "uci",
   "vocab_hash": "527c5dda224cab570cb84da8f7dcda0f43fe53edaf86822f899568f5dd824b46",
   "data_manifest_sha": "2274906c04342b8fc1632d3e1c3bff82e33f535936af742c7a7f9e4b052afa31",
-  "git_sha": "01e9106fb7cd1c7364022c564044c9b15dda47c1",
+  "git_sha": "386e45f0378bf97456c4faaaf712ea91b57f0dce",
   "vocab_size": 2030,
   "n_layer": 16,
   "n_head": 12,

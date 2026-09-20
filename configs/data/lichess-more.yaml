@@ -1,0 +1,16 @@
+# Lever 2: months beyond the two P1 fetched. Same filters, a higher cap -- the 3,000,000 of
+# `lichess-2025-01-02.yaml` was our own ceiling, not the dataset's (7,136,017,970 games).
+# `threads` is held below cpu_count() on purpose: this runs while the GPU trains and the
+# dataloader needs cores.
+dataset: Lichess/standard-chess-games
+months: ["2025-03"]
+min_elo: 1800
+min_base_seconds: 180
+terminations: ["Normal", "Time forfeit"]
+min_plies: 20
+exclude_variants: true
+out_dir: data/raw
+limit: 6000000
+duckdb:
+  memory_limit: 16GB
+  threads: 3   # 8 tripped HTTP 429 three times running; fewer parallel range requests

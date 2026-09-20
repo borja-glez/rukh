@@ -17,34 +17,34 @@ tags:
 # chorcat/rukh-small
 
 A GPT decoder written from scratch that plays chess by predicting the next move of a game
-written in UCI. This is the `small-greedy` stage of [Rukh](https://github.com/borja-glez/rukh), a course
+written in UCI. This is the `small-v3-greedy` stage of [Rukh](https://github.com/borja-glez/rukh), a course
 that builds a chess language model end to end: 38,971,392 parameters, a
 vocabulary of 2030 fixed tokens and a context of
 200 moves.
 
-Play against it in the browser: [https://rukh.borjaglez.com/?stage=small-greedy](https://rukh.borjaglez.com/?stage=small-greedy) · read how it was built:
+Play against it in the browser: [https://rukh.borjaglez.com/?stage=small-fp16](https://rukh.borjaglez.com/?stage=small-fp16) · read how it was built:
 [https://lab.rukh.borjaglez.com](https://lab.rukh.borjaglez.com)
 
 ## Results
 
-Measured with `rukh eval --suite full` on 2026-09-19.
+Measured with `rukh eval --suite full` on 2026-09-20.
 
 | Metric | Value |
 |---|---|
-| Legality without the mask, argmax | 99.4 % |
-| Legality without the mask, sampled (T=0.05, top-k 1) | 99.4 % |
-| Top-1 next move | 51.1 % |
-| Top-3 next move | 79.4 % |
-| Puzzles solved | 22.1 % |
-| Estimated Elo | 1007 (95 % CI 920-1101) |
+| Legality without the mask, argmax | 99.1 % |
+| Legality without the mask, sampled (T=0.05, top-k 1) | 99.1 % |
+| Top-1 next move | 52.4 % |
+| Top-3 next move | 80.5 % |
+| Puzzles solved | 26.7 % |
+| Estimated Elo | 1365 (95 % CI 1293-1423) |
 
 Puzzles by difficulty band:
 
 | Band | Solved |
 |---|---|
-| 1000-1500 | 34.7 % |
-| 1500-2000 | 21.1 % |
-| 2000+ | 10.3 % |
+| 1000-1500 | 41.0 % |
+| 1500-2000 | 27.0 % |
+| 2000+ | 12.2 % |
 
 Legality is measured **without** the legality mask, twice, because the two numbers answer
 different questions:
@@ -65,32 +65,35 @@ flattering or not.
 
 | Bar | Target | Measured | Verdict |
 |---|---|---|---|
-| Legality without the mask, argmax | at least 99 % | 99.4 % | met |
-| Estimated Elo | at least 1200 | 1007 (95 % CI 920-1101) | **not met** |
+| Legality without the mask, argmax | at least 99 % | 99.1 % | met |
+| Estimated Elo | at least 1200 | 1365 (95 % CI 1293-1423) | met |
 
-**The Elo bar is not met**, and the reason is the corpus rather than the recipe: this model was
-trained on 5.9 M games, against the 16 M of the reference work it is measured against, and the
-`medium` stage with three times the parameters and the same data bought only 84 more Elo, with
-overlapping intervals. The constraint is data, not capacity, so the honest fix is more months of
-Lichess and not more layers.
+### The ratings on this card replace lower ones
 
-### An Elo belongs to the pair model+sampling
+An earlier release of these cards reported much lower ratings — 1007 for `small`, 1091 for
+`medium`, 64 for `tiny` — and said the project's 1200 Elo bar was missed. **Those figures were
+wrong, and the models were not.**
 
-The same weights (`7130d64ac1c4`) measure **1007 Elo** at
-temperature 0.05, top-k 1 and **785 Elo** at temperature 0.6, top-k 20.
-Nothing about the tensors changed between the two runs; only the way a move is drawn from them
-did. A rating is therefore a property of the pair model+sampling and not of the file you
-download, and any table that compares stages has to fix the sampling first.
+The rating is fitted against eight Stockfish opponents. Four of them are set with `Skill Level`
+and were given Elo labels by hand, on the assumption that they reach below the engine's 1320
+`UCI_Elo` floor. None of them does. Playing the ladder against itself — 40 games a pair, the
+suite's own 0.1 s a move, colours alternated — put them at 1381, 1467, 1589 and 1678 against
+labels of 800, 950, 1100 and 1250: between 428 and 581 Elo too low, every one in the same
+direction, which dragged every stage's fit down by roughly 350 points.
 
-The results above are the temperature 0.05, top-k 1 point. The demo samples for variety
-rather than always playing its best move, so what a player meets over the board is the weaker of
-the two numbers.
+The method checks itself: `uci-1500` measured **+179** Elo over `uci-1320` against a nominal
++180. (`UCI_Elo` does compress higher up — `uci-1800` measured +215 over `uci-1500`, not +300 —
+which is a caveat for the top rungs, not for the range these models play in.)
+
+Every stage was then re-evaluated on the measured ladder, and the numbers on this card come from
+those runs. The correction moves all stages by a similar amount, so comparisons between them are
+unchanged.
 
 How to read these numbers:
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
-- 4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws
+- 3 of 160 games hit the context limit and were adjudicated (3 of them) instead of being scored as draws
 
 
 ## Input and output
@@ -133,17 +136,14 @@ repository is that measurement, as the exporter wrote it.
 
 | File | Same move as PyTorch | Worst logit drift |
 |---|---|---|
-| `model.onnx` (fp32) | 100.0 % | 2.55e-05 |
-| `model-fp16.onnx` (fp16) | 99.8 % | 0.014 |
-| `model-int8.onnx` (int8) | 95.4 % | 1.75 |
+| `model.onnx` (fp32) | 100.0 % | 2.43e-05 |
+| `model-fp16.onnx` (fp16) | 99.9 % | 0.0135 |
+| `model-int8.onnx` (int8) | 94.6 % | 1.58 |
 
 The bar the project set itself is 99.9 %.
 
-`model-fp16.onnx` does not reach it: it picks a different move in 0.2 % of
-positions, roughly one in 500.
-
-`model-int8.onnx` does not reach it: it picks a different move in 4.6 % of
-positions, roughly one in 22. That is the file the WASM fallback loads, so a phone on the
+`model-int8.onnx` does not reach it: it picks a different move in 5.4 % of
+positions, roughly one in 19. That is the file the WASM fallback loads, so a phone on the
 int8 build is playing a measurably different model from the one in the results table above: the
 weights are the same, the arithmetic is not.
 
@@ -165,23 +165,23 @@ weights are the same, the arithmetic is not.
 | `grad_clip` | `1.0` |
 | `log_every` | `10` |
 | `lr` | `0.0006` |
-| `max_steps` | `20000` |
+| `max_steps` | `28000` |
 | `min_lr_ratio` | `0.1` |
 | `model` | `None` |
 | `num_params` | `38868992` |
 | `out_dir` | `checkpoints` |
 | `precision` | `bf16` |
 | `preset` | `small` |
-| `run_name` | `small` |
+| `run_name` | `small-v3` |
 | `seed` | `42` |
-| `tokens_dir` | `data/tokens/uci` |
+| `tokens_dir` | `data/tokens-v3/uci` |
 | `unique_run_name` | `True` |
 | `vocab_hash` | `527c5dda224cab570cb84da8f7dcda0f43fe53edaf86822f899568f5dd824b46` |
 | `warmup` | `1000` |
 | `weight_decay` | `0.1` |
 | `workers` | `4` |
 
-MLflow run: `7b0217a900b348e583bb5889cde4918e`.
+MLflow run: `1252948f0ad64d6c8875fb9a3a3b358b`.
 
 ```json
 {
@@ -191,13 +191,13 @@ MLflow run: `7b0217a900b348e583bb5889cde4918e`.
   "model_type": "rukh-move-decoder",
   "library_name": "rukh",
   "rukh_version": "0.0.1",
-  "stage": "small-greedy",
-  "step": 20000,
+  "stage": "small-v3-greedy",
+  "step": 28000,
   "params": 38971392,
   "tokenizer": "uci",
   "vocab_hash": "527c5dda224cab570cb84da8f7dcda0f43fe53edaf86822f899568f5dd824b46",
   "data_manifest_sha": "2274906c04342b8fc1632d3e1c3bff82e33f535936af742c7a7f9e4b052afa31",
-  "git_sha": "8ed4c8aaddd924cfe243975098c44fba1099d8e2",
+  "git_sha": "4dc9f23148280b6a2d2bb96ad39b7103607ed96a",
   "vocab_size": 2030,
   "n_layer": 12,
   "n_head": 8,

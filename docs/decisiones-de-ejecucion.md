@@ -810,6 +810,291 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Si está mal:** el criterio de correlación sigue sin cumplirse (0,52 frente a 0,80), y la card
   lo dice.
 
+### D-062 · La validación se queda en 100 000 partidas y el resto del mes entrena
+- **Qué:** `TokenizeConfig` gana `train_months` (lista) y `val_games`. Con `val_games: 100000`, la
+  validación son las primeras 100 000 partidas de `val_month` y las otras ~2,85 M se unen al
+  entrenamiento. `pack_month` pasa a ser un caso de `pack_games(sources)`, que concatena trozos
+  `GameSlice(path, skip, take)` en un solo flujo.
+- **Por qué:** P1 dedicó el mes 02 entero a validación: 238 657 571 tokens parados para un bucle
+  que lee 50 lotes (640 000 tokens) por evaluación. El decoder entrenó con 240 M tokens únicos,
+  6,2 por parámetro frente a los ~20 razonables, y repitió el corpus 4,3 veces (1,024 B tokens
+  vistos). La huella está en las curvas: el hueco train/val pasa de 0,021 en el paso 10 000 a
+  0,060 en el 20 000 mientras el top-1 solo sube 0,75 puntos en los últimos 5 000 pasos. El cuello
+  era repetición de datos, no capacidad — lo que ya sugería D-054.
+- **Medido:** el corpus recuperado da 5 796 388 partidas y **470 650 377 tokens** de entrenamiento
+  (12,1 por parámetro) contra 100 000 partidas y 8 076 148 tokens de validación; las dos cifras
+  suman exactamente las 5 896 388 del corpus, así que ninguna partida se pierde ni se duplica.
+- **Comparabilidad:** los mismos pesos (`small` paso 20 000) miden **1,5197 de pérdida y 0,5120 de
+  top-1 en las dos validaciones**, la vieja y la nueva, hasta el cuarto decimal. El objetivo de
+  val/loss ≤ 1,42 se traslada sin recalibrar.
+- **Si está mal:** entrenamiento y validación salen ahora del mismo mes, con partidas distintas.
+  Se pierde la propiedad "un mes que el modelo no ha visto" y con ella la prueba de deriva
+  temporal, que vuelve en cuanto haya un mes nuevo descargado.
+
+### D-063 · La precisión que sirve la demo la decide el backend, no el tamaño de pantalla
+- **Qué:** `defaultStageId` deja de mirar `mobile`. Sirve `small-fp16` allá donde haya WebGPU,
+  teléfono incluido, y reserva `small-int8` para el respaldo WASM y para `saveData`. El encoder
+  mantiene int8 en móvil.
+- **Por qué:** int8 cambia la jugada en el 4,6 % de las posiciones (D-049), así que la regla
+  anterior servía a los móviles un modelo que no es aquel cuyo Elo publican las cards, y lo hacía
+  en hardware que sí puede con fp16 — los teléfonos llevan tiempo con WebGPU. fp16 diverge en el
+  0,2 %. El tamaño de pantalla no dice nada sobre la aritmética disponible.
+- **La asimetría del encoder es medida, no preferencia:** su int8 coincide con el checkpoint en el
+  100 % de las posiciones de paridad, en las tres precisiones, así que ahí los 15 MB salen gratis.
+- **Si está mal:** un móvil sin WebGPU y sin `saveData` baja 78,8 MB en vez de 43,5 MB, una sola
+  vez y cacheado. `navigator.gpu` se consulta de forma síncrona porque `parseQuery` lo es; si
+  existe pero no da adaptador, el worker cae a WASM por su cuenta y reporta el backend real.
+
+### D-064 · 24 meses de la Lichess Elite Database entran en el corpus de entrenamiento
+- **Qué:** `data/elite` pasa de 2 meses (541 085 partidas) a **24** (2023-09 a 2025-08,
+  **6 676 794 partidas**) y se suma al entrenamiento por `extra_train_parquets`. Nunca a la
+  validación, que sigue siendo las 100 000 partidas congeladas de 2025-02.
+- **Por qué:** la sonda de condicionamiento mostró que el eje de Elo está comprimido, no muerto:
+  dentro del rango entrenado las distribuciones distan 0,004-0,047 nats, frente a 0,39 contra una
+  cabecera por debajo del suelo del corpus. La causa es la composición: solo el **3,4 %** de
+  nuestras partidas tiene a las blancas en 2400+. En la base de élite es el **93,6 %**.
+- **Corrección a la primera lectura:** se dijo que forzar una cabecera alta *empeora* la predicción
+  (50,93 % con `<1800>` contra 50,07 % con `<2800>`). Eso se midió contra continuaciones de
+  jugadores de 1800-2100, así que medía lo contrario de lo que parecía. Sobre `data/uci-strong`
+  (partidas de 2200+) la curva **se invierte y hace pico en `<2200>`**, la banda real de esas
+  partidas: 41,70 → 41,89 → **42,20** → 41,95 → 41,64 % para 1800/2000/2200/2400/2800. El
+  condicionamiento funciona en la dirección correcta; lo que falla es la magnitud.
+- **Además resuelve la palanca de datos:** Hugging Face está devolviendo HTTP 429 a las descargas
+  de meses nuevos y `database.nikonoel.fr` es otro servidor, así que esta vía no depende de aquella.
+- **Calidad verificada, no supuesta:** 88,4 jugadas de media (frente a ~77 del corpus general) y
+  **solo el 0,5 %** de las partidas con menos de 180 s de base, así que la base de élite viene
+  prácticamente sin bullet y es coherente con nuestro filtro `min_base_seconds: 180`.
+- **Cuidado al leer la pérdida:** el entrenamiento deja de parecerse a la validación, que es 53 %
+  sub-2000. Se añade `data/uci-strong` (10 230 partidas de 2200+ **dentro** de las 100 000
+  congeladas, nunca entrenadas por ninguna corrida) para tener una pérdida comparable sobre juego
+  fuerte, y el Elo se mide con partidas en vez de inferirse.
+- **Si está mal:** el modelo dedicaría capacidad a imitar un juego que el listón no premia; se
+  vería como Elo estancado pese a mejor pérdida sobre `uci-strong`, y la alternativa sería usar
+  élite solo como afinado final y no en el preentrenamiento.
+
+### D-065 · Recuperar el mes de validación vale más que triplicar los parámetros
+- **Medido** (misma receta, mismo muestreo, misma validación congelada):
+
+  | Corrida | Parámetros | Tokens únicos | Pasos | val/loss | top-1 | hueco train/val |
+  |---|---|---|---|---|---|---|
+  | `small` v1 | 38 971 392 | 240 068 954 | 20 000 | 1,5197 | 51,20 % | **+0,0603** |
+  | `medium` v1 | 115 120 128 | 240 068 954 | 20 000 | 1,4782 | 52,31 % | — |
+  | **`small` v2** | 38 971 392 | 470 650 377 | 28 000 | **1,4703** | **52,49 %** | **+0,0242** |
+
+- **`small` con 39 M de parámetros bate a `medium` con 115 M** en las dos validaciones (general
+  1,4703 frente a 1,4782; fuerte 1,4652 frente a 1,4880). Confirma D-054 con una medida directa:
+  el cuello eran los datos, y la capacidad extra de `medium` se estaba gastando en memorizar un
+  corpus repetido 4,3 veces.
+- **El hueco train/val cae a la mitad** (0,0603 → 0,0242), que es justo lo que predice el
+  diagnóstico de repetición: menos épocas sobre el mismo material, menos memorización.
+- **Traducción a Elo:** −0,0494 nats × 2132 Elo/nat ≈ **+105 Elo** (~1112 estimado). Sigue corto
+  del listón de 1200, así que la palanca de datos no se agota aquí.
+- **Nota:** v2 es el primer modelo que predice mejor el juego de 2200+ (1,4652) que el promedio
+  del corpus (1,4703); v1 y `medium` iban al revés.
+- **Si está mal:** el Elo se mide con partidas, no con la recta; la estimación de +105 solo sirve
+  para decidir si merece la pena seguir, y se sustituye por la medición en cuanto haya CPU libre.
+
+### D-066 · La élite ensancha el eje de Elo; la cantidad de datos por sí sola, no
+- **Medido** al terminar las tres corridas, todas con 28 000 pasos salvo v1 (20 000), mismo
+  planificador, misma semilla y la misma validación congelada:
+
+  | Modelo | Par. | general | top-1 | fuerte 2200+ | top-1 |
+  |---|---|---|---|---|---|
+  | `small` v1 | 39 M | 1,5197 | 51,20 % | 1,5391 | 50,84 % |
+  | `medium` v1 | 115 M | 1,4782 | 52,31 % | 1,4880 | 52,06 % |
+  | `small` v2 | 39 M | **1,4703** | **52,49 %** | 1,4652 | 52,69 % |
+  | `small` v3 | 39 M | 1,4770 | 52,19 % | **1,4537** | **53,02 %** |
+
+- **El intercambio es el diseñado:** v3 cede 0,0067 nats en juego promedio y gana 0,0115 sobre
+  juego fuerte respecto a v2. Frente a v1 son **−0,0854 nats en juego fuerte**, ~+182 Elo por la
+  pendiente medida.
+- **El eje de condicionamiento se ensancha 2,4 veces.** KL de `<2800>` contra `<1800>`: 0,0472 en
+  v1, 0,0487 en v2, **0,1147 en v3**. La ganancia por condicionar sobre juego fuerte pasa de
+  +0,42 puntos de top-1 (v2, pico en `<2200>`) a **+0,88** (v3: 52,15 % con `<1800>` frente a
+  53,03 % con `<2200>`).
+- **La conclusión que importa:** v2 duplicó los datos y dejó el eje exactamente igual que v1
+  (KL 0,0487 frente a 0,0472). Lo que lo abre es la **composición**, no el volumen. Sin el corpus
+  de élite, el hito de "juega como 1500/2000/2400" de P4 no tenía de dónde salir.
+- **Si está mal:** la sonda mide distribuciones, no fuerza. Que el eje se ensanche no garantiza
+  Elo; eso se comprueba con partidas y es lo que decide qué cabecera sirve la demo.
+
+### D-067 · `PackedDataset` mandaba su índice entero a cada worker y eso rompió a los 19 M
+- **Síntoma:** `medium-v4` murió al arrancar con `UnpicklingError: pickle data was truncated`,
+  antes del primer paso, sobre el corpus de 18 942 740 partidas. Las mismas configuraciones
+  funcionaban con 12 473 182.
+- **Causa:** `starts` es un `int64` por partida y se cargaba en memoria. Los workers del
+  `DataLoader` se lanzan con *spawn* en Windows, así que el dataset se serializa una vez por
+  worker: **95 MB con 12,5 M partidas, 145 MB con 18,9 M**, y a 145 MB la tubería se corta.
+- **Arreglo:** `__getstate__` excluye `tokens` y `starts`, y `__setstate__` los remapea desde
+  disco en el worker; `starts` pasa además a `mmap_mode="r"`. El pickle del dataset real baja de
+  **145 MB a 0,5 KB** y las ventanas son idénticas tras el viaje (comprobado sobre el índice
+  1 234 567 del corpus v4).
+- **Por qué importa más allá del susto:** era un techo de escalado silencioso. Cualquiera que
+  ampliara el corpus se lo habría encontrado, y el mensaje de error no señala a los datos.
+- **Si está mal:** el coste es reabrir dos memmaps por worker al arrancar, una vez por época.
+
+### D-068 · La carga de CPU infla el Elo en ~13 puntos, dentro del ruido
+- **Duda:** Stockfish juega a 0,1 s por jugada, así que bajo carga busca menos profundo y regala
+  Elo. Si el sesgo fuese grande, ninguna medición tomada mientras la GPU entrena sería comparable
+  con las publicadas, y habría que serializar toda la noche.
+- **Medido:** el mismo checkpoint de `small` v1, misma configuración, misma semilla, con un caché
+  aparte para no pisar las partidas originales:
+
+  | Condición | Elo | IC 95 % | Puntuación |
+  |---|---|---|---|
+  | máquina libre (lo publicado) | 1006,8 | 920-1101 | 0,2656 |
+  | bajo carga (entrenando + descargando) | 1019,7 | 931-1116 | 0,2750 |
+
+- **Conclusión:** **+12,9 Elo**, una séptima parte del intervalo de confianza. La diferencia de
+  puntuación es 0,0094 sobre 160 partidas, con error típico 0,035: indistinguible del ruido. Para
+  efectos de 100-200 Elo no es un confusor, así que las mediciones pueden ir en paralelo con el
+  entrenamiento anotando el sesgo.
+- **Si está mal:** el sesgo no es cero y se suma en la dirección favorable, así que cualquier
+  resultado que quede a menos de ~15 Elo del listón hay que repetirlo con la máquina parada antes
+  de declararlo cumplido.
+
+### D-069 · El condicionamiento alto no da Elo, aunque el eje funcione
+- **Medido** con la suite completa (160 partidas, muestreo determinista, `configs/eval/greedy*.yaml`):
+
+  | Etapa | Elo | IC 95 % | legal argmax | top-1 | puzles |
+  |---|---|---|---|---|---|
+  | `small` v1 @1800 | 1007 | 920-1101 | 99,40 % | 51,10 % | 22,07 % |
+  | `small` v2 @1800 | 1070 | 975-1167 | 99,30 % | 51,80 % | **26,93 %** |
+  | `small` v3 @1800 | **1095** | 1006-1188 | 99,10 % | **52,40 %** | 26,73 % |
+  | `small` v3 @2600 | 1058 | 974-1175 | 99,10 % | 52,40 % | 26,73 % |
+
+- **Pedirle a v3 que juegue a 2600 no mejora nada**: 1058 frente a 1095, con intervalos muy
+  solapados. La prueba de 32 partidas había dado 0,703 contra 0,609 a favor de `<2600>`; era
+  ruido, y con 160 partidas se cae.
+- **El eje sí funciona** (D-066: KL 2,4 veces mayor, +0,88 puntos de top-1 sobre juego fuerte).
+  Lo que no ocurre es la traducción a fuerza: imitar las elecciones de un 2400 no gana partidas
+  sin búsqueda táctica. Sirve para el hito de P4 «juega como 1500/2000/2400», no para el listón
+  de Elo.
+- **La pendiente pérdida→Elo estaba sobreestimada.** Se predijo +105 Elo para v2 con 2132
+  Elo/nat; lo medido son +63 sobre 0,0494 nats, o sea ~1275 Elo/nat. Llegar a 1200 desde 1007
+  exige ~0,151 nats, no 0,09.
+- **Vigilar:** la legalidad sin máscara baja monótonamente (99,40 → 99,30 → 99,10 %). Sigue sobre
+  el listón del 99 % pero el margen se adelgaza corrida a corrida.
+- **Los puzles suben mucho más que el Elo**: 22,07 → 26,93 %, y por bandas +8,7 puntos en
+  1000-1500 frente a +1,1 en 2000+.
+
+### D-070 · Cuatro de los ocho rivales del harness tenían el Elo inventado y estaba mal por ~500
+- **Qué estaba mal:** los escalones `skill-0..3` se metieron en la escalera para llegar *por
+  debajo* del suelo de 1320 de `UCI_Elo` y se etiquetaron 800/950/1100/1250 sobre esa suposición.
+  Es falsa. Ninguno de los cuatro está por debajo de 1320.
+- **Cómo se detectó:** por una contradicción interna, no buscando aprobar el criterio. `small` v2
+  puntuaba 0,725 contra `uci-1320` y perdía 20-0 contra `skill-3`, etiquetado 1250. Ninguna
+  medición del modelo puede resolver eso, porque el modelo es lo que se está midiendo; motor
+  contra motor sí.
+- **Medido** (40 partidas por pareja, 0,1 s por jugada, colores alternados, anclado en `uci-1320`):
+
+  | Escalón | Etiqueta vieja | Medido | Error |
+  |---|---|---|---|
+  | `skill-0` | 800 | **1381** | +581 |
+  | `skill-1` | 950 | **1467** | +517 |
+  | `skill-2` | 1100 | **1589** | +489 |
+  | `skill-3` | 1250 | **1678** | +428 |
+
+- **El método se valida con sus propios controles:** `uci-1500` midió **+179** Elo sobre
+  `uci-1320` frente a los +180 nominales. Si el procedimiento estuviera sesgado, ese control
+  habría fallado. `UCI_Elo` sí se comprime más arriba (`uci-1800` midió +215 sobre `uci-1500`, no
+  +300), lo que es una salvedad para los escalones altos y no para el rango donde jugamos.
+- **Consecuencia sobre todo lo publicado:**
+
+  | Etapa | Publicado | Corregido | IC 95 % |
+  |---|---|---|---|
+  | `small` v1 | 1007 | **1359** | 1293-1429 |
+  | `small` v2 | 1070 | **1407** | 1344-1462 |
+  | `small` v3 @1800 | 1095 | **1425** | 1367-1485 |
+  | `small` v3 @2600 | 1058 | 1397 | 1340-1450 |
+
+- **El listón de 1200 nunca se falló**: incluso `small` v1, ya publicado en Hugging Face con
+  «Elo bar not met», estaba en 1359. Las model cards y `docs/plans/*` dicen lo contrario y hay que
+  corregirlas.
+- **Lo relativo no cambia:** la corrección sube a los cuatro modelos por igual, así que todas las
+  comparaciones de D-065, D-066 y D-069 siguen en pie; el trabajo de datos de hoy vale +66 Elo
+  (1359 → 1425) en la escala corregida igual que valía +88 en la torcida.
+- **Lo que sigue sin resolverse:** el número absoluto depende de fiarse del `UCI_Elo` de Stockfish
+  a 0,1 s por jugada, un régimen para el que no está calibrado. Los controles lo respaldan entre
+  1320 y 1500 y lo desmienten por encima.
+- **Si está mal:** la escalera corregida ya no tiene ningún rival por debajo de 1320, así que un
+  modelo débil queda mal acotado por abajo. Para los actuales (~1400) la escalera los rodea.
+
+### D-071 · DPO compra Elo y rompe el criterio de legalidad
+- **Medido** con la suite completa y la escalera corregida de D-070:
+
+  | Etapa | Elo | IC 95 % | legal argmax | top-1 | puzles |
+  |---|---|---|---|---|---|
+  | `small` v1 | 1359 | 1293-1429 | 99,40 % | 51,10 % | 22,07 % |
+  | `small` v2 | 1407 | 1344-1462 | 99,30 % | 51,80 % | 26,93 % |
+  | `small` v3 | 1425 | 1367-1485 | 99,10 % | 52,40 % | 26,73 % |
+  | **`small` v3 + DPO** | **1460** | 1401-1517 | **98,90 %** | **53,20 %** | **27,87 %** |
+
+- **+35 Elo sobre v3**, y a la vez sube top-1 y puzles. Es la única palanca del día que no está
+  limitada por lo fuertes que fueran los jugadores del corpus: un par de preferencia dice «esta
+  jugada es 100 cp mejor que aquella», que no aparece en ninguna partida humana.
+- **Rompe la legalidad:** 98,90 % frente al listón de 99 %. La serie venía bajando (99,40 → 99,30
+  → 99,10) y DPO la cruza. El mejor modelo que cumple **los dos** criterios sigue siendo `small`
+  v3 con 1425 Elo y 99,10 %.
+- **Hay volante:** `nll_weight` está en 0,5. Subirlo ancla más la política a la referencia, lo que
+  debería recuperar legalidad a cambio de parte del Elo. Falta medir esa curva.
+- **Si está mal:** el par proviene de posiciones que están en el corpus de entrenamiento; lo nuevo
+  es la preferencia, no la posición. Si el efecto fuese memorización, no se vería en puzles de un
+  conjunto distinto, y ahí también sube (26,73 → 27,87 %).
+
+### D-072 · `medium` con datos suficientes: 1504 Elo y la mejor legalidad del proyecto
+- **Medido** (escalera corregida de D-070, muestreo determinista):
+
+  | Modelo | Par. | Tokens únicos | Elo | IC 95 % | legal argmax | top-1 | puzles |
+  |---|---|---|---|---|---|---|---|
+  | `small` v1 | 39 M | 240 M | 1359 | 1293-1429 | 99,40 % | 51,10 % | 22,07 % |
+  | `medium` v1 | 115 M | 240 M | — | — | — | 52,31 % | — |
+  | `small` v2 | 39 M | 471 M | 1407 | 1344-1462 | 99,30 % | 51,80 % | 26,93 % |
+  | `small` v3 | 39 M | 1 095 M | 1425 | 1367-1485 | 99,10 % | 52,40 % | 26,73 % |
+  | `small` v3 + DPO | 39 M | 1 095 M | 1460 | 1401-1517 | 98,90 % | 53,20 % | 27,87 % |
+  | **`medium-v4`** | 115 M | 1 681 M | **1504** | **1446-1558** | **99,80 %** | **54,40 %** | **37,50 %** |
+
+- **Los dos criterios cumplidos con holgura:** Elo 1504 con el intervalo entero por encima de
+  1200, y legalidad 99,80 %, la más alta de cualquier etapa del proyecto.
+- **El diagnóstico de la legalidad estaba equivocado.** Se leyó la serie 99,40 → 99,30 → 99,10 %
+  como una tendencia a vigilar. No lo era: era un modelo de 39 M estirándose sobre un corpus
+  creciente. Con capacidad suficiente, fuerza y legalidad suben juntas.
+- **Los puzles pasan de 22,07 % a 37,50 %**, un 70 % relativo, que es donde más se ve la mejora
+  real de juego: `medium-v4` en juego fuerte mide 1,3242 de pérdida frente a los 1,4537 de v3.
+- **Contra el `medium` original:** misma arquitectura, mismos 115 M de parámetros, 1,4782 de
+  pérdida con 240 M de tokens repetidos 4,3 veces frente a **1,3733** con 1 681 M y 1,46 épocas.
+  No era la arquitectura.
+- **Si está mal:** el hueco train/val de `medium-v4` es +0,0667, parecido al +0,0603 que en v1
+  señalaba memorización, así que 1,68 B tokens tampoco sobran para 115 M de parámetros.
+
+### D-073 · Modelo final: `medium-v4` + DPO, 1529 Elo, los dos criterios cumplidos
+- **Medido** con la escalera corregida (D-070) y muestreo determinista:
+
+  | Modelo | Elo | IC 95 % | legal argmax | top-1 | puzles |
+  |---|---|---|---|---|---|
+  | `small` v1 (publicado) | 1359 | 1293-1429 | 99,40 % | 51,10 % | 22,07 % |
+  | `small` v2 | 1407 | 1344-1462 | 99,30 % | 51,80 % | 26,93 % |
+  | `small` v3 | 1425 | 1367-1485 | 99,10 % | 52,40 % | 26,73 % |
+  | `small` v3 + DPO | 1460 | 1401-1517 | 98,90 % | 53,20 % | 27,87 % |
+  | `medium-v4` | 1504 | 1446-1558 | 99,80 % | 54,40 % | 37,50 % |
+  | **`medium-v4` + DPO** | **1529** | **1470-1583** | **99,80 %** | 53,40 % | **38,77 %** |
+
+- **Listón de Elo ≥ 1200: cumplido con el intervalo entero por encima.** Legalidad ≥ 99 %:
+  cumplida con 99,80 %, la más alta del proyecto.
+- **DPO no cuesta legalidad cuando hay margen.** El 98,90 % de `small` v3 + DPO (D-071) no era un
+  defecto de DPO sino falta de holgura en 39 M parámetros: sobre `medium-v4` la legalidad se queda
+  clavada en 99,80 % antes y después, y los +25 Elo salen gratis. `nll_weight` 0,5 y `lr` 2e-6 en
+  los dos casos.
+- **El coste real de DPO es el top-1** (54,40 → 53,40 %), que es lo esperado: deja de imitar la
+  continuación humana para preferir la mejor jugada. Los puzles, que sí miden calidad, suben
+  (37,50 → 38,77 %).
+- **Reparto de los +170 Elo del día** (1359 → 1529): recuperar el mes de validación +48, corpus de
+  19 M partidas con élite +18, capacidad ya justificada por los datos +79, DPO +25, y
+  condicionamiento por Elo **0**.
+- **Si está mal:** los intervalos de `medium-v4` y `medium-v4` + DPO se solapan (1446-1558 frente a
+  1470-1583), así que los +25 de DPO no están separados del ruido por sí solos; lo que los sostiene
+  es que top-1 baja y puzles suben a la vez, que es la firma esperada y no la del azar.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
