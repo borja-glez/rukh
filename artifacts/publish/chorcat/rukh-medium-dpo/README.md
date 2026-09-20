@@ -14,37 +14,37 @@ tags:
   - onnx
 ---
 
-# chorcat/rukh-small
+# chorcat/rukh-medium-dpo
 
 A GPT decoder written from scratch that plays chess by predicting the next move of a game
-written in UCI. This is the `small-v3-greedy` stage of [Rukh](https://github.com/borja-glez/rukh), a course
-that builds a chess language model end to end: 38,971,392 parameters, a
+written in UCI. This is the `medium-v4-dpo-greedy` stage of [Rukh](https://github.com/borja-glez/rukh), a course
+that builds a chess language model end to end: 115,120,128 parameters, a
 vocabulary of 2030 fixed tokens and a context of
 200 moves.
 
-Play against it in the browser: [https://rukh.borjaglez.com/?stage=small-fp16](https://rukh.borjaglez.com/?stage=small-fp16) · read how it was built:
+The demo at [https://rukh.borjaglez.com](https://rukh.borjaglez.com) serves the `tiny` and `small` stages, not this one; this repository is for running the weights yourself · read how it was built:
 [https://lab.rukh.borjaglez.com](https://lab.rukh.borjaglez.com)
 
 ## Results
 
-Measured with `rukh eval --suite full` on 2026-09-20.
+Measured with `rukh eval --suite full` on 2026-09-19.
 
 | Metric | Value |
 |---|---|
-| Legality without the mask, argmax | 99.1 % |
-| Legality without the mask, sampled (T=0.05, top-k 1) | 99.1 % |
-| Top-1 next move | 52.4 % |
+| Legality without the mask, argmax | 99.8 % |
+| Legality without the mask, sampled (T=0.05, top-k 1) | 99.8 % |
+| Top-1 next move | 53.4 % |
 | Top-3 next move | 80.5 % |
-| Puzzles solved | 26.7 % |
-| Estimated Elo | 1365 (95 % CI 1293-1423) |
+| Puzzles solved | 38.8 % |
+| Estimated Elo | 1529 (95 % CI 1470-1583) |
 
 Puzzles by difficulty band:
 
 | Band | Solved |
 |---|---|
-| 1000-1500 | 41.0 % |
-| 1500-2000 | 27.0 % |
-| 2000+ | 12.2 % |
+| 1000-1500 | 58.3 % |
+| 1500-2000 | 39.9 % |
+| 2000+ | 18.1 % |
 
 Legality is measured **without** the legality mask, twice, because the two numbers answer
 different questions:
@@ -65,8 +65,8 @@ flattering or not.
 
 | Bar | Target | Measured | Verdict |
 |---|---|---|---|
-| Legality without the mask, argmax | at least 99 % | 99.1 % | met |
-| Estimated Elo | at least 1200 | 1365 (95 % CI 1293-1423) | met |
+| Legality without the mask, argmax | at least 99 % | 99.8 % | met |
+| Estimated Elo | at least 1200 | 1529 (95 % CI 1470-1583) | met |
 
 ### The ratings on this card replace lower ones
 
@@ -93,7 +93,7 @@ How to read these numbers:
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
-- 3 of 160 games hit the context limit and were adjudicated (3 of them) instead of being scored as draws
+- 4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws
 
 
 ## Input and output
@@ -136,52 +136,27 @@ repository is that measurement, as the exporter wrote it.
 
 | File | Same move as PyTorch | Worst logit drift |
 |---|---|---|
-| `model.onnx` (fp32) | 100.0 % | 2.43e-05 |
-| `model-fp16.onnx` (fp16) | 99.9 % | 0.0135 |
-| `model-int8.onnx` (int8) | 94.6 % | 1.58 |
+| `model.onnx` (fp32) | 100.0 % | 2.13e-05 |
+| `model-fp16.onnx` (fp16) | 99.7 % | 0.015 |
+| `model-int8.onnx` (int8) | 96.7 % | 2.85 |
 
 The bar the project set itself is 99.9 %.
 
-`model-int8.onnx` does not reach it: it picks a different move in 5.4 % of
-positions, roughly one in 19. That is the file the WASM fallback loads, so a phone on the
+`model-fp16.onnx` does not reach it: it picks a different move in 0.3 % of
+positions, roughly one in 333.
+
+`model-int8.onnx` does not reach it: it picks a different move in 3.3 % of
+positions, roughly one in 30. That is the file the WASM fallback loads, so a phone on the
 int8 build is playing a measurably different model from the one in the results table above: the
 weights are the same, the arithmetic is not.
 
 ## Training recipe
 
 
-| Parameter | Value |
-|---|---|
-| `batch_size` | `64` |
-| `betas` | `[0.9, 0.95]` |
-| `block` | `200` |
-| `ckpt_every` | `1000` |
-| `compile` | `True` |
-| `data_manifest_sha` | `2274906c04342b8fc1632d3e1c3bff82e33f535936af742c7a7f9e4b052afa31` |
-| `device` | `cuda` |
-| `eval_batches` | `50` |
-| `eval_every` | `500` |
-| `grad_accum` | `4` |
-| `grad_clip` | `1.0` |
-| `log_every` | `10` |
-| `lr` | `0.0006` |
-| `max_steps` | `28000` |
-| `min_lr_ratio` | `0.1` |
-| `model` | `None` |
-| `num_params` | `38868992` |
-| `out_dir` | `checkpoints` |
-| `precision` | `bf16` |
-| `preset` | `small` |
-| `run_name` | `small-v3` |
-| `seed` | `42` |
-| `tokens_dir` | `data/tokens-v3/uci` |
-| `unique_run_name` | `True` |
-| `vocab_hash` | `527c5dda224cab570cb84da8f7dcda0f43fe53edaf86822f899568f5dd824b46` |
-| `warmup` | `1000` |
-| `weight_decay` | `0.1` |
-| `workers` | `4` |
+The MLflow run for this checkpoint was not available when the card was generated; the shape of
+the model is in `config.json`.
 
-MLflow run: `1252948f0ad64d6c8875fb9a3a3b358b`.
+
 
 ```json
 {
@@ -191,17 +166,17 @@ MLflow run: `1252948f0ad64d6c8875fb9a3a3b358b`.
   "model_type": "rukh-move-decoder",
   "library_name": "rukh",
   "rukh_version": "0.0.1",
-  "stage": "small-v3-greedy",
-  "step": 28000,
-  "params": 38971392,
+  "stage": "medium-v4-dpo-greedy",
+  "step": 519,
+  "params": 115120128,
   "tokenizer": "uci",
   "vocab_hash": "527c5dda224cab570cb84da8f7dcda0f43fe53edaf86822f899568f5dd824b46",
   "data_manifest_sha": "2274906c04342b8fc1632d3e1c3bff82e33f535936af742c7a7f9e4b052afa31",
-  "git_sha": "4dc9f23148280b6a2d2bb96ad39b7103607ed96a",
+  "git_sha": null,
   "vocab_size": 2030,
-  "n_layer": 12,
-  "n_head": 8,
-  "d_model": 512,
+  "n_layer": 16,
+  "n_head": 12,
+  "d_model": 768,
   "d_ff": null,
   "block": 200,
   "dropout": 0.0,

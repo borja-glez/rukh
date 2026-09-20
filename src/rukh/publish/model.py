@@ -173,6 +173,27 @@ def read_run(run_id: str | None = None, run_name: str | None = None) -> RunSumma
     )
 
 
+DEMO_STAGES = {"tiny": "tiny-int8", "small": "small-fp16"}
+"""Stage ids the demo actually serves, keyed by the model size in the repo name.
+
+The card used to link ``/?stage=<eval stage>``, and the demo does not know those names: an
+unknown ``stage`` falls back to whatever the device would load anyway. For `tiny` and `small`
+that lands on the right model by luck; for a `medium` card it promises a game against a model
+the demo never loads. A repo the demo does not serve gets a bare link and a sentence saying so
+(D-075).
+"""
+
+
+def demo_link(cfg: ModelPublishConfig, repo_id: str) -> tuple[str, bool]:
+    """``(url, served)``: where to send a reader, and whether the demo really runs this model."""
+    name = repo_id.split("/")[-1].removeprefix("rukh-")
+    size = name.split("-")[0]
+    stage = DEMO_STAGES.get(size)
+    if stage is None or name != size:
+        return cfg.demo_url, False
+    return f"{cfg.demo_url}/?stage={stage}", True
+
+
 def read_eval(stage: str, cfg: ModelPublishConfig) -> dict[str, Any] | None:
     """The ``results.json`` the evaluation harness wrote for this stage, if it ran."""
     path = resolve(cfg.eval_dir) / stage / "results.json"
@@ -183,6 +204,36 @@ def read_eval(stage: str, cfg: ModelPublishConfig) -> dict[str, Any] | None:
     except ValueError:
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def check_eval_matches(ckpt: Path, stage: str, evaluation: dict[str, Any] | None) -> None:
+    """Refuse to put one model's numbers on another model's card.
+
+    ``read_eval`` finds results by stage name alone, so passing the wrong ``--stage`` renders a
+    card whose weights and metrics come from different checkpoints, and nothing in the output
+    says so. It nearly happened twice: once with the encoder (D-061) and once publishing
+    ``small-v3`` under the stage that holds ``small`` v1's numbers. The guard added the first
+    time only paired the two sampling points; this one compares what is actually being shipped
+    against what was actually measured (D-074).
+
+    The evaluation stores ``sha256`` of the checkpoint file, so ``best.pt`` and a ``step-*.pt``
+    with identical weights are still different files and still refused. That is the safe
+    direction: publish the file that was measured.
+    """
+    if not evaluation:
+        return
+    measured = str(evaluation.get("model_sha") or "")
+    if not measured:
+        return
+    from rukh.eval.cache import file_sha
+
+    actual = file_sha(Path(ckpt))
+    if measured != actual:
+        raise ValueError(
+            f"stage {stage!r} was measured on a different checkpoint: its results.json records "
+            f"model_sha {measured[:12]} and {Path(ckpt).as_posix()} hashes to {actual[:12]}. "
+            f"Evaluate this checkpoint under this stage, or publish the one that was evaluated."
+        )
 
 
 def counterpart_stage(stage: str) -> str:
@@ -606,7 +657,8 @@ def card_context(
         "stage": stage,
         "license": cfg.license,
         "datasets": cfg.datasets,
-        "demo_url": f"{cfg.demo_url}/?stage={stage}",
+        "demo_url": demo_link(cfg, repo_id)[0],
+        "demo_serves_this": demo_link(cfg, repo_id)[1],
         "course_url": cfg.course_url,
         "repository_url": cfg.repository_url,
         "params": config.get("params", 0),
@@ -687,7 +739,8 @@ def encoder_card_context(
         "stage": stage,
         "license": cfg.license,
         "datasets": cfg.datasets,
-        "demo_url": f"{cfg.demo_url}/?stage={stage}",
+        "demo_url": demo_link(cfg, repo_id)[0],
+        "demo_serves_this": demo_link(cfg, repo_id)[1],
         "course_url": cfg.course_url,
         "repository_url": cfg.repository_url,
         "params": config.get("params", 0),
@@ -763,6 +816,7 @@ def publish_model(
 
     run = read_run(run_id, run_name=ckpt.parent.name)
     evaluation = read_eval(name, cfg)
+    check_eval_matches(ckpt, name, evaluation)
     measured_parity = read_parity(folder)
     card = (
         render_card(
