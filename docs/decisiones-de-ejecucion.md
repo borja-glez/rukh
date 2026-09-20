@@ -1713,6 +1713,42 @@ Evidencia obtenida por el controlador, no por subagentes:
   faltaba era dejar de muestrear el pico; si sale plano, es un segundo nulo y la lección lo dice.
   Una hora de máquina, y contesta una pregunta en vez de precisar un no.
 
+### D-109 · La explicación obvia se comprobó y salió que no: muestrear empeora la medición
+- **La hipótesis (D-108):** toda la suite juega con `temperature: 0.05, top_k: 1`, o sea la **moda**
+  de la distribución, y la diferencia entre un 1200 y un 2400 no está en la moda sino en la cola.
+  Todo lo que lee la distribución entera (la entropía de la primera jugada) es monótono; todo lo que
+  lee solo la moda (puzles, Elo) es plano. Si eso fuera la causa, muestrear de verdad abriría la
+  brecha.
+- **La prueba:** `configs/eval/sweep-temperature.yaml`, idéntico al barrido salvo por
+  `temperature: 1.0, top_k: 20`, sobre `<w1200>` y `<w2400>`. Una hora de máquina, caché propia, y
+  **no** sustituye a ningún número publicado (D-047 fija el muestreo casi determinista como el de
+  todo el proyecto).
+- **Lo que salió:**
+
+  | | `<w1200>` | `<w2400>` | brecha | anchura IC | brecha / IC | Δ tasa |
+  |---|---|---|---:|---:|---:|---:|
+  | moda | 1425 (1361-1479) | 1644 (1578-1707) | 219 | 123 | **1,78** | +0,2375 (4,40 σ) |
+  | T=1,0 | 1002 (866-1109) | 1272 (1193-1340) | 270 | 195 | 1,38 | +0,1375 (3,85 σ) |
+
+- **Cómo se lee:** en puntos de Elo la brecha se ensancha (219 → 270) y parece que la hipótesis
+  acierta. No acierta. Los intervalos se ensanchan **más** (123 → 195), así que el cociente que
+  decide si una diferencia se puede afirmar **baja** de 1,78 a 1,38; y en el espacio donde de verdad
+  se mide —la tasa de puntos, de la que el Elo es una transformación no lineal— la diferencia
+  **encoge**, de 4,40 σ a 3,85 σ. El ensanchamiento en Elo es un artefacto de la transformación
+  cerca del suelo, no una señal.
+- **La causa, visible en el detalle por peldaño:** muestrear a temperatura 1,0 cuesta unos **400
+  puntos de Elo**, más que todo lo que separa a las seis condiciones entre sí. Eso tira al modelo
+  por debajo del rango para el que la escalera está calibrada: `<w1200>` saca 0,053 de tasa —cinco
+  victorias en ciento sesenta partidas— aplastado contra el suelo, y las dos condiciones acaban
+  comprimidas en el mismo rincón.
+- **La regla que deja:** un instrumento tiene un **rango**. Un tratamiento que saca al sujeto de ese
+  rango no revela el efecto, lo esconde bajo el ruido del propio instrumento. Una escalera calibrada
+  para un 1500 mide mal a un 1000, igual que una báscula de cocina mide mal un camión. Probar la
+  hipótesis en serio pediría peldaños más flojos, o sea recalibrar los ocho y tirar todos los Elo
+  publicados: no en este hito.
+- **Y por qué valió la hora:** ahora se puede decir «la cabecera no mueve la fuerza» sin dejarse la
+  explicación obvia sin comprobar. Un negativo sin la alternativa descartada es una opinión.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
