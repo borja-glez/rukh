@@ -1955,6 +1955,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   |---|---|---|
   | off-policy − base | **+67** | 45 a 89 |
   | on-policy − base | **+57** | 36 a 79 |
+  | GRPO − base | **+44** | 23 a 66 |
   | on-policy − off-policy | **+37** | 15 a 59 |
 
 - **El problema:** de las dos primeras se sigue que `on − off = 57 − 67 = −10`. Medido de frente
