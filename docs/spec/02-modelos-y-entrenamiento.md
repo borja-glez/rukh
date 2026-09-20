@@ -48,6 +48,17 @@ medibles (50-150 Elo) con Elo-conditioning, DPO y GRPO.
   Elo, baja la diversidad.
 - **Elo-conditioning** (instruction tuning): reentrenar/afinar con `rukh-elo-bins` y evaluar que
   `<w1500>` juega peor que `<w2400>` de forma medible (Elo estimado por condición). Comparar con Maia.
+
+> **Nota (2026-09-20, P4):** medido y **no se cumple** por la vía del Elo. Con 160 partidas por
+> condición ni las estimaciones son monótonas ni los intervalos se separan, y el cálculo de potencia
+> dice que entre `<w1500>` y `<w2000>` harían falta 24 420 partidas por condición para separar una
+> diferencia de −0,013 en tasa de puntos: no es tamaño de muestra, es que no hay diferencia. El
+> control lo remata: el modelo **sin** afinar recorre 161 Elo por el mismo eje usando cabeceras que
+> nunca entrenó, así que la columna de Elo no distingue «condicionamiento» de «un prefijo
+> desconocido estorba». Lo que sí cambia de forma medible y ordenada es el **estilo**: entropía
+> analítica de la primera jugada monótona en las seis condiciones (1,596 → 1,992 bits), top-1 con
+> máximo en `<w1800>` y legalidad que baja al ensanchar el repertorio. Detalle en D-100, D-101 y
+> D-106 de `docs/decisiones-de-ejecucion.md`.
 - **LoRA por estilo**: adaptadores r=8-16 sobre las proyecciones de atención, uno por repertorio o
   jugador (p. ej. partidas de un jugador concreto de la Elite DB), intercambiables en la demo.
   Implementado a mano en el decoder propio (para entender LoRA) y con `peft` sobre el modelo HF.
