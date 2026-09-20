@@ -1583,6 +1583,31 @@ Evidencia obtenida por el controlador, no por subagentes:
   está. Regenerarlo con otra semilla cambiaría las jugadas que espera media docena de pruebas del
   navegador, y no hay ninguna razón para hacerlo; el script lo reescribe solo con `--plain`.
 
+### D-104 · Un valor por defecto de la especificación rompió el fp16 de todo modelo intercambiable
+- **El síntoma:** `onnxruntime` se niega a cargar el fichero fp16 con
+  `Type Error: Type (tensor(float16)) of output arg (val_20) of node (node_ConstantOfShape_18)
+  does not match expected type (tensor(float))`. El fp32 carga perfectamente, y el fp32 no lo sirve
+  nadie.
+- **La causa:** la corrección de LoRA se arma con `cat` sobre todo el ancho de la proyección, y los
+  rangos que nadie adapta son un `ConstantOfShape` de ceros. El exportador lo escribe **sin**
+  atributo `value`, porque la especificación dice que el valor por defecto es un cero de
+  `float32`. `convert_float_to_float16` retipa el grafo alrededor y no toca el nodo, así que el
+  grafo pasa a declarar `float16` donde el nodo sigue produciendo `float32`.
+- **La familia entera del fallo:** es el mismo error que ya arreglaba `_align_cast_outputs` —un
+  `Cast` cuyo atributo `to` se quedó diciendo el tipo viejo— escrito de otra forma. Aquí no hay un
+  atributo equivocado: hay un atributo **ausente**, y lo que cambia bajo los pies es el valor por
+  defecto que lo sustituía. Un parámetro implícito es una dependencia como cualquier otra, y las
+  herramientas que reescriben un fichero no la ven.
+- **Qué se hace:** `_align_constant_outputs` retipa el `value` de todo `Constant` y
+  `ConstantOfShape` que no cuadre con lo que el grafo declara, y le **pone** el atributo al que no
+  lo tenía. Y el test que lo cubre no comprueba que el fichero cargue: comprueba que, ya cargado,
+  el adaptador sigue cambiando la respuesta en fp16 y en int8. Cargar es el mínimo; lo que había
+  que saber es si la cuantización deja intactas las dos multiplicaciones del adaptador, cuyos dos
+  operandos vienen de fuera del grafo y no son inicializadores.
+- **Cuándo se encontró:** en el modelo de juguete, antes de la exportación real de 221 MB. La
+  prueba que lo destapó cuesta catorce segundos; la que no se escribió habría costado cuarenta y
+  cinco minutos de exportación y una demo rota en el navegador.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
