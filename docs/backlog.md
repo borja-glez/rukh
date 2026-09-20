@@ -41,3 +41,12 @@ Se limpia al cerrar cada hito; lo que entra en un plan sale de aquí.
   **Cuándo:** cuando toque revisar el pipeline del curso (P6 o el primer módulo que necesite una
   tabla ancha de verdad), con una prueba `e2e` de desbordamiento en las cuatro lecciones, no solo
   en la última.
+
+- **Dos filas del encoder llevan el nombre de su directorio de corrida en la tabla pública.**
+  `eval-encoder-heads-rank30-20260920-111151` y `eval-encoder-heads-rank80-20260920-111329` salen
+  tal cual en `/proyecto/`, porque `--stage` no se pasó y el defecto es el nombre de la carpeta.
+  Las mediciones son buenas; el nombre es ruido en una página pública, justo lo que D-099 acababa
+  de limpiar por otra razón. **Por qué se aplaza:** renombrar una fila no existe —`rukh eval drop`
+  solo retira— y volver a correrlas con `--stage` cuesta su evaluación entera; además son
+  mediciones de P3 y tirarlas es decisión de quien las hizo. **Cuándo:** con la reconstrucción de
+  la tabla de P6, o antes si se vuelven a evaluar las cabezas por cualquier otro motivo.
