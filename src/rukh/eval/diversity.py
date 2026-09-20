@@ -40,7 +40,13 @@ if TYPE_CHECKING:
     from rukh.models import MoveDecoder
     from rukh.tokenize.uci_vocab import UciTokenizer
 
-__all__ = ["DiversityResult", "first_move_entropy", "opening_diversity", "shannon_entropy"]
+__all__ = [
+    "DiversityResult",
+    "first_move_distribution",
+    "first_move_entropy",
+    "opening_diversity",
+    "shannon_entropy",
+]
 
 OPENING_PLIES = 12
 """Six moves a side: long enough to have left the book, short enough that two games sharing it
@@ -79,13 +85,15 @@ def shannon_entropy(counts: dict[str, int] | Counter[str]) -> float:
 
 
 @torch.no_grad()
-def first_move_entropy(model: MoveDecoder, tok: UciTokenizer, header_elo: int = 1800) -> float:
-    """Entropy in bits of the model's own distribution over the legal first moves.
+def first_move_distribution(
+    model: MoveDecoder, tok: UciTokenizer, header_elo: int = 1800
+) -> dict[str, float]:
+    """The model's own probability for each of the twenty legal first moves, renormalised.
 
-    No temperature, no top-k, no sampling: the softmax as the weights produce it, restricted to
-    the twenty legal moves and renormalised. The ceiling is ``log2(20) = 4.32`` bits for a model
-    that has no opinion at all; a strong human-imitating model sits well below that, and one
-    fine-tuned onto a single repertoire collapses towards zero.
+    No temperature, no top-k, no sampling: the softmax as the weights produce it. That makes it
+    the right instrument for measuring what a style adapter *did* -- the share it moved towards
+    ``e2e4`` is a property of the weights, with no seed in it and no variance between runs, which
+    self-play openings could not give without playing hundreds of games to average the noise out.
     """
     board = chess.Board()
     device = next(model.parameters()).device
@@ -94,8 +102,19 @@ def first_move_entropy(model: MoveDecoder, tok: UciTokenizer, header_elo: int = 
     legal = legal_token_ids(board, tok)
     kept = logits[torch.tensor(legal, dtype=torch.long, device=device)]
     probs = torch.softmax(kept, dim=-1)
-    probs = probs[probs > 0]
-    return float(-(probs * probs.log2()).sum())
+    return {tok.ids[token]: float(p) for token, p in zip(legal, probs.tolist(), strict=True)}
+
+
+def first_move_entropy(model: MoveDecoder, tok: UciTokenizer, header_elo: int = 1800) -> float:
+    """Entropy in bits of the model's own distribution over the legal first moves.
+
+    No temperature, no top-k, no sampling: the softmax as the weights produce it, restricted to
+    the twenty legal moves and renormalised. The ceiling is ``log2(20) = 4.32`` bits for a model
+    that has no opinion at all; a strong human-imitating model sits well below that, and one
+    fine-tuned onto a single repertoire collapses towards zero.
+    """
+    probs = [p for p in first_move_distribution(model, tok, header_elo).values() if p > 0]
+    return float(-sum(p * math.log2(p) for p in probs))
 
 
 @torch.no_grad()

@@ -155,3 +155,44 @@ def test_the_header_the_games_start_from_is_the_one_asked_for() -> None:
     )
     assert isinstance(result, DiversityResult)
     assert result.games == 4
+
+
+def test_the_first_move_distribution_is_over_the_twenty_legal_moves_and_sums_to_one() -> None:
+    """The instrument that measures what a style adapter did, with no seed in it."""
+    from rukh.eval.diversity import first_move_distribution
+
+    tok = UciTokenizer()
+    probs = first_move_distribution(_model(), tok)
+    assert len(probs) == 20
+    assert set(probs) >= {"e2e4", "d2d4", "g1f3", "b1c3"}
+    assert sum(probs.values()) == pytest.approx(1.0, abs=1e-5)
+    assert all(0.0 <= p <= 1.0 for p in probs.values())
+
+
+def test_the_distribution_and_the_entropy_agree() -> None:
+    from rukh.eval.diversity import first_move_distribution
+
+    tok = UciTokenizer()
+    model = _model()
+    probs = first_move_distribution(model, tok)
+    by_hand = -sum(p * math.log2(p) for p in probs.values() if p > 0)
+    assert first_move_entropy(model, tok) == pytest.approx(by_hand, abs=1e-6)
+
+
+def test_a_collapsed_repertoire_shows_up_as_a_share_near_one() -> None:
+    """What a style adapter is supposed to do, forced by hand so the metric can be checked."""
+    from rukh.eval.diversity import first_move_distribution
+
+    tok = UciTokenizer()
+    base = _model()
+    chosen = tok.vocab["d2d4"]
+
+    class Narrow(MoveDecoder):
+        def next_logits(self, idx: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+            out = torch.full((idx.shape[0], base.cfg.vocab_size), -20.0)
+            out[:, chosen] = 20.0
+            return out
+
+    probs = first_move_distribution(Narrow(base.cfg).eval(), tok)
+    assert probs["d2d4"] == pytest.approx(1.0, abs=1e-6)
+    assert probs["e2e4"] < 1e-6
