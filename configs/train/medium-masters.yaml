@@ -6,8 +6,9 @@
 # precisely because nothing had needed it yet.
 #
 # The token budget is the same as `medium-elo`'s (3 800 steps of 51 200 tokens, 194.6 M) so the
-# two fine-tunes differ in their corpus and in nothing else. Against the 1.05 B tokens of the
-# elite pack that is 0.18 of an epoch: a fine-tune, not a second pretraining.
+# two fine-tunes differ in their corpus and in nothing else. Against the 1 210 419 259 tokens of
+# the elite pack (13 146 352 games) that is 0.16 of an epoch: a fine-tune, not a second
+# pretraining, and every sample it sees is new.
 preset: medium
 init_from: checkpoints/medium-v4-20260919-174623/best.pt
 tokens_dir: data/tokens-masters/uci
