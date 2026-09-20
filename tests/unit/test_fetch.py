@@ -61,6 +61,7 @@ def test_fetch_config_defaults_match_spec() -> None:
     cfg = _cfg()
     assert cfg.dataset == "Lichess/standard-chess-games"
     assert cfg.min_elo == 1800
+    assert cfg.max_elo is None
     assert cfg.min_base_seconds == 180
     assert cfg.terminations == ["Normal", "Time forfeit"]
     assert cfg.min_plies == 20
@@ -91,10 +92,18 @@ def test_fetch_config_requires_at_least_one_month() -> None:
         {"terminations": []},
         {"limit": 0},
         {"min_elo": -1},
+        {"max_elo": -1},
         {"min_base_seconds": -1},
         {"min_plies": -1},
     ],
-    ids=["empty-terminations", "limit-zero", "negative-elo", "negative-base", "negative-plies"],
+    ids=[
+        "empty-terminations",
+        "limit-zero",
+        "negative-elo",
+        "negative-max-elo",
+        "negative-base",
+        "negative-plies",
+    ],
 )
 def test_fetch_config_rejects_out_of_range_values(overrides: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
@@ -119,6 +128,41 @@ def test_build_query_optional_parts() -> None:
     sql = build_query(_cfg(exclude_variants=False, limit=1000))
     assert "ILIKE" not in sql
     assert sql.rstrip().endswith("LIMIT 1000")
+
+
+def test_build_query_bounds_both_ratings_when_max_elo_is_set() -> None:
+    """The band a second corpus fills is closed at both ends, and on both players.
+
+    The project's corpus stops at 1800 from below and has no ceiling, so the Elo tokens under
+    `<w1800>` never trained. Filling that band means fetching games where *both* players are in
+    it: a 1200 paired against a 2400 is a mismatch, not a 1200-rated game.
+    """
+    sql = build_query(_cfg(min_elo=1000, max_elo=1799))
+    assert "WhiteElo >= 1000 AND BlackElo >= 1000" in sql
+    assert "WhiteElo <= 1799 AND BlackElo <= 1799" in sql
+
+
+def test_build_query_omits_the_ceiling_when_there_is_none() -> None:
+    assert "<=" not in build_query(_cfg())
+
+
+def test_fetch_config_rejects_a_ceiling_below_the_floor() -> None:
+    with pytest.raises(ValidationError):
+        FetchConfig(months=MONTHS, min_elo=1800, max_elo=1500)
+
+
+def test_shipped_low_band_config_closes_the_gap_left_by_the_first_corpus(repo_root: Path) -> None:
+    """The two shipped corpora must tile the Elo axis without overlapping or leaving a hole."""
+    high = load_yaml(repo_root / "configs" / "data" / "lichess-2025-01-02.yaml", FetchConfig)
+    low = load_yaml(repo_root / "configs" / "data" / "lichess-low.yaml", FetchConfig)
+    assert low.max_elo is not None
+    assert low.max_elo + 1 == high.min_elo
+    assert low.months == high.months
+    assert (low.min_base_seconds, low.terminations, low.min_plies) == (
+        high.min_base_seconds,
+        high.terminations,
+        high.min_plies,
+    )
 
 
 def test_plan_lists_relative_output_paths_and_manifest(rukh_home: Path) -> None:

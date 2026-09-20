@@ -1,0 +1,20 @@
+# The band the first corpus left out: club players, 1000-1799, both sides.
+#
+# `lichess-2025-01-02.yaml` fetched everything from 1800 up, so the Elo header tokens below
+# `<w1800>` have never seen a gradient and "play like 1500" asks the model to read a vector that
+# is still at its initialisation. This file closes that hole with the *same* filters (>= 180 s of
+# base time, normal terminations, no variants, >= 20 plies deferred to P1) so the two halves of
+# the axis differ in rating and in nothing else.
+#
+# It goes to its own `out_dir`: the 1800+ corpus is what every published model trained on, and
+# mixing a weaker slice into `data/raw` would silently change what `data/uci` means.
+dataset: Lichess/standard-chess-games
+months: ['2025-01', '2025-02']
+min_elo: 1000
+max_elo: 1799
+min_base_seconds: 180
+terminations: ['Normal', 'Time forfeit']
+min_plies: 20
+exclude_variants: true
+out_dir: data/raw-low
+limit: 3000000

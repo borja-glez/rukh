@@ -13,7 +13,7 @@ import hashlib
 import re
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from rukh import paths
 from rukh.config import BaseConfig
@@ -29,6 +29,14 @@ class FetchConfig(BaseConfig):
     dataset: str = "Lichess/standard-chess-games"
     months: list[str] = Field(min_length=1)
     min_elo: int = Field(default=1800, ge=0)
+    max_elo: int | None = Field(default=None, ge=0)
+    """Upper bound on both ratings, so a second corpus can cover the band the first one left out.
+
+    The project's whole corpus was fetched with ``min_elo: 1800`` and no ceiling, which means the
+    Elo header tokens below ``<w1800>`` were never trained: conditioning the model on 1500 shows it
+    a vector that is still at its initialisation. Filling that band needs a fetch that is bounded
+    above as well, and a bound that is applied to *both* players for the same reason ``min_elo``
+    is -- a 1200 against a 2400 is not a 1200-rated game, it is a mismatch."""
     min_base_seconds: int = Field(default=180, ge=0)
     terminations: list[str] = Field(default=["Normal", "Time forfeit"], min_length=1)
     min_plies: int = Field(default=20, ge=0)
@@ -44,6 +52,12 @@ class FetchConfig(BaseConfig):
             if not MONTH_RE.match(month):
                 raise ValueError(f"month {month!r} must look like YYYY-MM")
         return months
+
+    @model_validator(mode="after")
+    def _check_elo_band(self) -> FetchConfig:
+        if self.max_elo is not None and self.max_elo < self.min_elo:
+            raise ValueError(f"max_elo {self.max_elo} is below min_elo {self.min_elo}")
+        return self
 
 
 class FetchPlan(BaseModel):
@@ -90,6 +104,8 @@ def build_query(cfg: FetchConfig) -> str:
         f"TRY_CAST(split_part(TimeControl, '+', 1) AS INTEGER) >= {cfg.min_base_seconds}",
         "Termination IN (" + ", ".join(_sql_string(t) for t in cfg.terminations) + ")",
     ]
+    if cfg.max_elo is not None:
+        conditions.insert(1, f"WhiteElo <= {cfg.max_elo} AND BlackElo <= {cfg.max_elo}")
     if cfg.exclude_variants:
         conditions.append("Event NOT ILIKE '%variant%'")
     where = "\n    AND ".join(conditions)
