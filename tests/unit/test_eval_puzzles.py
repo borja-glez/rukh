@@ -252,3 +252,60 @@ def test_load_puzzles_reads_the_prefix_columns_when_they_are_there(tmp_path: Pat
     assert item.prefix == ["d2d4", "d7d5"]
     assert (item.white_elo, item.black_elo) == (1912, 1755)
     assert item.prompt_style == GAME_PREFIX
+
+
+def test_forcing_the_header_overrides_the_players_own_ratings() -> None:
+    """The Elo sweep needs every column to answer the same question.
+
+    Almost every puzzle carries the real ratings of the game it came from, so without this the
+    puzzle rate is identical in every row of a sweep -- correct, and indistinguishable from
+    evidence that the condition does nothing.
+    """
+    from rukh.eval.puzzles import start_history
+    from rukh.tokenize.uci_vocab import UciTokenizer
+
+    tok = UciTokenizer()
+    item = PuzzleItem(
+        puzzle_id="p",
+        fen=chess.STARTING_FEN,
+        moves=["e2e4"],
+        rating=1500,
+        band="1000-1500",
+        prefix=[],
+        white_elo=2100,
+        black_elo=2200,
+    )
+    own = start_history(tok, item, header_elo=1200)
+    assert own[1:3] == [tok.vocab["<w2100>"], tok.vocab["<b2200>"]]
+
+    forced = start_history(tok, item, header_elo=1200, force_header=True)
+    assert forced[1:3] == [tok.vocab["<w1200>"], tok.vocab["<b1200>"]]
+
+
+def test_a_forced_header_gets_its_own_cache_key() -> None:
+    """Otherwise the 1200 row of a sweep would read back the 1800 row's answers."""
+    from rukh.eval.cache import EvalCache
+    from rukh.eval.puzzles import run_puzzles
+    from rukh.tokenize.uci_vocab import UciTokenizer
+
+    tok = UciTokenizer()
+    item = PuzzleItem(
+        puzzle_id="p",
+        fen=chess.STARTING_FEN,
+        moves=["e2e4", "e7e5"],
+        rating=1500,
+        band="1000-1500",
+        prefix=[],
+        white_elo=2100,
+        black_elo=2200,
+    )
+    cache = EvalCache(None, "sha", enabled=False)
+    asked: list[int] = []
+
+    def source(board: chess.Board, history: list[int]) -> chess.Move | None:
+        asked.append(history[1])
+        return chess.Move.from_uci("e7e5")
+
+    run_puzzles(source, tok, [item], cache=cache, header_elo=1200, force_header=True)
+    run_puzzles(source, tok, [item], cache=cache, header_elo=2400, force_header=True)
+    assert asked == [tok.vocab["<w1200>"], tok.vocab["<w2400>"]]

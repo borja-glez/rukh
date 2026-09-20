@@ -1,0 +1,33 @@
+# The suite the Elo sweep of M4 runs once per condition.
+#
+# Identical to `greedy.yaml` -- the sampling every published number was read at (D-047) -- with
+# one change: `puzzles_use_header`. Almost every puzzle in the split carries the real ratings of
+# the players whose game it came from, so with it off the puzzle column would be the same in
+# every row of the sweep. Correct, and indistinguishable from evidence that the condition does
+# nothing, which is the one thing this table must not be ambiguous about.
+#
+# Its own cache, for the same reason: these puzzle attempts answer a different question from the
+# ones `cache-greedy.sqlite` holds and must not be confused with them.
+games: data/uci/year=2025/month=02/games.parquet
+puzzles: data/puzzles/puzzles.parquet
+puzzle_split: test
+legality_positions: 1000
+accuracy_positions: 1000
+position_pool: 20000
+puzzles_per_band: 2000
+puzzles_use_header: true
+elo_games: 20
+elo_move_time: 0.1
+bootstrap: 500
+temperature: 0.05
+top_k: 1
+block: 200
+seed: 42
+header_elo: 1800
+diversity_games: 200
+diversity_plies: 12
+diversity_temperature: 1.0
+out_dir: artifacts/eval
+web_results: null
+cache_db: artifacts/eval/cache-sweep.sqlite
+track: false

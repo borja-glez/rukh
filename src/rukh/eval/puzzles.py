@@ -99,14 +99,28 @@ class PuzzleAttempt(BaseModel):
     """How the model was prompted; the default is what every attempt cached before P3 used."""
 
 
-def start_history(tok: UciTokenizer, item: PuzzleItem, header_elo: int = HEADER_ELO) -> list[int]:
+def start_history(
+    tok: UciTokenizer,
+    item: PuzzleItem,
+    header_elo: int = HEADER_ELO,
+    force_header: bool = False,
+) -> list[int]:
     """The ids the model sees before its first move: header, then the real game if there is one.
 
     The header is the ``<bos> <wXXXX> <bXXXX>`` of ``rukh.infer.sampler.prompt_ids``, with the
     players' own ratings when the parquet carries them; ``header_elo`` stands in otherwise.
+
+    ``force_header`` overrides the real ratings, and exists for exactly one measurement: the Elo
+    sweep of M4, which asks the same model to play at several strengths and needs *every* column
+    to answer that question. Almost all puzzles carry their players' ratings, so without this the
+    puzzle rate would be identical in every row of the sweep and would look like evidence that
+    the condition does nothing.
     """
-    white = item.white_elo if item.white_elo is not None else header_elo
-    black = item.black_elo if item.black_elo is not None else header_elo
+    if force_header:
+        white = black = header_elo
+    else:
+        white = item.white_elo if item.white_elo is not None else header_elo
+        black = item.black_elo if item.black_elo is not None else header_elo
     history = header(tok, white, black)
     history.extend(tok.vocab.get(uci, tok.unk_id) for uci in item.prefix)
     return history
@@ -118,6 +132,7 @@ def solve_puzzle(
     item: PuzzleItem,
     header_elo: int = HEADER_ELO,
     block: int = 200,
+    force_header: bool = False,
 ) -> PuzzleAttempt:
     """Play the puzzle line; stop at the first move that is not the expected one.
 
@@ -125,7 +140,7 @@ def solve_puzzle(
     token history, because that is all a move-sequence model reads.
     """
     board = chess.Board(item.fen)
-    history = start_history(tok, item, header_elo)
+    history = start_history(tok, item, header_elo, force_header)
     expected = [uci for index, uci in enumerate(item.moves) if index % 2 == 1]
     correct = 0
     for index, uci in enumerate(item.moves):
@@ -181,6 +196,7 @@ def run_puzzles(
     items: Sequence[PuzzleItem],
     cache: EvalCache | None = None,
     header_elo: int = HEADER_ELO,
+    force_header: bool = False,
 ) -> PuzzleResult:
     """Attempt every puzzle, reusing the cached attempts of a previous run of the same weights."""
     attempts: list[PuzzleAttempt] = []
@@ -188,7 +204,7 @@ def run_puzzles(
         # A puzzle whose parquet carries the players' own ratings ignores ``header_elo``, so its
         # key stays as it was; one that falls back to the header is a different attempt per
         # header and must not read back the 1800 run's answer.
-        uses_header = item.white_elo is None or item.black_elo is None
+        uses_header = force_header or item.white_elo is None or item.black_elo is None
         key = item.puzzle_id
         if uses_header and header_elo != HEADER_ELO:
             key = f"{key}:e{header_elo}"
@@ -199,7 +215,7 @@ def run_puzzles(
             if attempt.prompt_style == item.prompt_style:
                 attempts.append(attempt)
                 continue
-        attempt = solve_puzzle(source, tok, item, header_elo=header_elo)
+        attempt = solve_puzzle(source, tok, item, header_elo=header_elo, force_header=force_header)
         if cache is not None:
             cache.put(SUITE, key, attempt.model_dump())
         attempts.append(attempt)

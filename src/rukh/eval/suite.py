@@ -85,6 +85,12 @@ class EvalConfig(BaseConfig):
     accuracy_positions: int = 10_000
     position_pool: int = 50_000
     puzzles_per_band: int = 2_000
+    puzzles_use_header: bool = False
+    """Prompt every puzzle with ``header_elo`` instead of the ratings its own players had.
+
+    Off everywhere except the Elo sweep. Almost every puzzle carries real ratings, so with it off
+    the puzzle rate is the same in every row of a sweep -- correct, and indistinguishable from
+    evidence that the condition does nothing."""
     header_elo: int = 1_800
     """The Elo the model is asked to play at (``<wXXXX> <bXXXX>``).
 
@@ -120,7 +126,7 @@ class EvalConfig(BaseConfig):
 
     def cache_fields(self) -> dict[str, Any]:
         """The settings that change what a cached game or puzzle means."""
-        return {
+        fields: dict[str, Any] = {
             "temperature": self.temperature,
             "top_k": self.top_k,
             "elo_move_time": self.elo_move_time,
@@ -130,6 +136,12 @@ class EvalConfig(BaseConfig):
             "seed": self.seed,
             "block": self.block,
         }
+        # Only when it is on. A cache key is a promise that two runs with the same key measured
+        # the same thing, and a flag that is off *is* the behaviour every cached game was played
+        # under; adding it unconditionally would throw away the 17 MB of games P2 and P3 paid for.
+        if self.puzzles_use_header:
+            fields["puzzles_use_header"] = True
+        return fields
 
     def sampling(self) -> SampleConfig:
         """The sampler the Elo games use: masked, seeded, as the demo plays."""
@@ -395,7 +407,12 @@ def evaluate(
                 puzzle_path, cfg.puzzles_per_band, seed=cfg.seed, split=cfg.puzzle_split
             )
             result.puzzles = run_puzzles(
-                model_source(model, tok), tok, items, cache=cache, header_elo=cfg.header_elo
+                model_source(model, tok),
+                tok,
+                items,
+                cache=cache,
+                header_elo=cfg.header_elo,
+                force_header=cfg.puzzles_use_header,
             )
             if result.puzzles.prompt_style != GAME_PREFIX:
                 notes.append(PUZZLE_PROMPT_NOTE)
