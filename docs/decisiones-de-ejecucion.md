@@ -1152,6 +1152,29 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Si está mal:** una tirada por variante. El desglose por bandas es la medida más informativa y
   la más barata de repetir.
 
+### D-078 · DPO sin ancla destruye el modelo: la medida que faltaba en el registro
+- **Qué faltaba:** D-071 y D-073 documentan el DPO ya anclado (`nll_weight` 0,5) y dan por sabido
+  que el puro no vale. La tirada que lo demuestra no estaba escrita, así que el curso habría
+  enseñado de oídas justo donde predica lo contrario.
+- **Medido** sobre `small` v3, β 0,1, lr 5e-6, una época, `nll_weight` **0**:
+
+  | | general | top-1 | fuerte 2200+ |
+  |---|---|---|---|
+  | antes de DPO | 1,4770 | 52,19 % | 1,4537 |
+  | DPO puro | **1,8892** | 47,29 % | 1,8312 |
+
+  Margen final 4,40 y aciertos en pares reservados **bajando** de 0,9068 a 0,8960: el margen crecía
+  sin mejorar el orden.
+- **Mecanismo:** con una respuesta de un solo token, empujar hacia abajo el logit de la jugada
+  rechazada sube todas las demás por el softmax compartido, incluidas las malas. Un objetivo que
+  solo dice «esto no» no dice adónde va la probabilidad que libera.
+- **Con ancla** (`nll_weight` 0,5, lr 2e-6): margen 0,84, aciertos 0,9249, y la imitación cede solo
+  0,021 nats.
+- **Corrección que debe viajar con el episodio:** D-071 concluyó «DPO rompe la legalidad» (98,90 %)
+  y D-073 lo desmintió — sobre `medium-v4` la legalidad se queda en 99,80 % antes y después. No era
+  el método, era la falta de holgura en 39 M parámetros. Enseñarlo sin esa corrección sería
+  generalizar desde un solo punto de operación.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
