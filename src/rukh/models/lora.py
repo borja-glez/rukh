@@ -41,8 +41,10 @@ if TYPE_CHECKING:
 
 __all__ = [
     "TARGETS",
+    "AdapterLayout",
     "LoraConfig",
     "LoRALinear",
+    "adapter_layout",
     "adapter_params",
     "apply_lora",
     "load_adapter",
@@ -50,6 +52,7 @@ __all__ = [
     "merge_lora",
     "merged_state_dict",
     "save_adapter",
+    "stack_adapter",
 ]
 
 ADAPTER_FILE = "adapter.safetensors"
@@ -315,6 +318,88 @@ def load_adapter(model: nn.Module, path: Path | str) -> LoraConfig:
     if unexpected:
         raise ValueError(f"adapter carries tensors the model has no place for: {unexpected}")
     return cfg
+
+
+class AdapterLayout(BaseConfig):
+    """How a whole adapter is laid out as two stacked tensors, one per factor.
+
+    ``save_adapter`` writes one ``A`` and one ``B`` per adapted slice, keyed by the module they
+    belong to. That is the right shape to load into PyTorch and the wrong shape to feed a graph:
+    an ONNX input is one tensor, not thirty-two. Stacking turns the whole adapter into
+    ``A (layers, slices, r, in_features)`` and ``B (layers, slices, width, r)``, which is what
+    the browser uploads once per move and what lets a 1.6 MB file change a 440 MB model without
+    downloading a second one.
+
+    The stacking needs the layers to agree: one adapted module per block, every slice the same
+    width, the same input width everywhere. That covers the query, key and value ranges of the
+    fused ``qkv`` -- which is what this project trains and publishes -- and it does not cover an
+    adapter that also touches the MLP, whose ``fc`` is four times as wide. That case has a path
+    of its own (``merge_lora`` and an ordinary export); it just cannot travel as one tensor.
+    """
+
+    module: str
+    """Dotted path of the adapted matrix inside a block, e.g. ``attn.qkv``."""
+    layers: int
+    slices: tuple[tuple[int, int], ...]
+    r: int
+    scale: float
+    in_features: int
+
+    @property
+    def width(self) -> int:
+        return self.slices[0][1] - self.slices[0][0]
+
+    @property
+    def shape_a(self) -> tuple[int, int, int, int]:
+        return (self.layers, len(self.slices), self.r, self.in_features)
+
+    @property
+    def shape_b(self) -> tuple[int, int, int, int]:
+        return (self.layers, len(self.slices), self.width, self.r)
+
+    @property
+    def numel(self) -> int:
+        return math.prod(self.shape_a) + math.prod(self.shape_b)
+
+
+def adapter_layout(model: nn.Module) -> AdapterLayout:
+    """Read the layout off a model that already has its adapters applied."""
+    found = list(lora_modules(model))
+    if not found:
+        raise ValueError("model has no LoRA adapters")
+    names = [name for name, _ in found]
+    suffixes = {name.split(".", 2)[-1] for name in names}
+    if len(suffixes) != 1:
+        raise ValueError(
+            f"adapters on more than one matrix per block ({sorted(suffixes)}) cannot be stacked "
+            "into one tensor; merge them instead"
+        )
+    first = found[0][1]
+    for name, adapter in found:
+        if adapter.slices != first.slices or adapter.base.in_features != first.base.in_features:
+            raise ValueError(f"{name} does not have the same shape as {names[0]}")
+    widths = {stop - start for start, stop in first.slices}
+    if len(widths) != 1:
+        raise ValueError(f"slices of different widths ({sorted(widths)}) cannot be stacked")
+    return AdapterLayout(
+        module=suffixes.pop(),
+        layers=len(found),
+        slices=first.slices,
+        r=first.r,
+        scale=first.scale,
+        in_features=first.base.in_features,
+    )
+
+
+@torch.no_grad()
+def stack_adapter(model: nn.Module) -> tuple[Tensor, Tensor]:
+    """The whole adapter as ``(A, B)``, stacked layer by layer in the order the blocks run."""
+    layout = adapter_layout(model)
+    a = torch.stack([torch.stack([p.detach() for p in ad.a]) for _, ad in lora_modules(model)])
+    b = torch.stack([torch.stack([p.detach() for p in ad.b]) for _, ad in lora_modules(model)])
+    if a.shape != layout.shape_a or b.shape != layout.shape_b:  # pragma: no cover - guarded above
+        raise ValueError(f"stacked {tuple(a.shape)}/{tuple(b.shape)} against {layout}")
+    return a.cpu().float().contiguous(), b.cpu().float().contiguous()
 
 
 def adapter_size(model: nn.Module) -> tuple[int, int]:

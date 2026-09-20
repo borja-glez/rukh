@@ -10,6 +10,13 @@ are the ones that say what the adapter *changed*: the share of first moves it sh
 whole visible point of a style adapter, and the Elo of base-plus-adapter against the base alone,
 which is what that style cost in strength. Publishing an adapter with the base model's Elo and no
 mention of the adapter's own effect would be publishing somebody else's number.
+
+Two copies of the same numbers go out. ``adapter.safetensors`` is for PyTorch and is what
+``load_adapter`` reads. ``web/adapter.bin`` is the same factors as one flat little-endian float32
+buffer, with the ``alpha / r`` already folded in, for the demo: the browser feeds it straight into
+the adaptable ONNX graph (``rukh.export.adapter``) and changes style without downloading another
+221 MB of model. The two are written from the same tensors by the same function, so they cannot
+drift apart.
 """
 
 from __future__ import annotations
@@ -22,6 +29,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from rukh.config import BaseConfig
+from rukh.export.adapter import WEB_ADAPTER_FILE, WEB_ADAPTER_META, write_web_adapter_from_file
 from rukh.models.lora import ADAPTER_CONFIG, ADAPTER_FILE, LoraConfig
 from rukh.paths import resolve
 from rukh.publish.model import README_NAME, ModelPublishConfig, _api, read_eval, render_card
@@ -98,6 +106,7 @@ def publish_adapter(
     folder = resolve(cfg.publish_dir) / repo_id
     folder.mkdir(parents=True, exist_ok=True)
     (folder / ADAPTER_FILE).write_bytes(weights.read_bytes())
+    web = write_web_adapter_from_file(weights, folder / WEB_ADAPTER_FILE, base_id)
     (folder / ADAPTER_CONFIG).write_text(
         json.dumps(
             {"lora": lora.model_dump(mode="json"), "base_model": base_id, "format": "rukh-lora-1"},
@@ -121,6 +130,8 @@ def publish_adapter(
             "params": params,
             "bytes": weights.stat().st_size,
             "effect": (effect or AdapterEffect()).model_dump(mode="json"),
+            "web_file": WEB_ADAPTER_FILE,
+            "web_bytes": web.stat().st_size,
             "demo_url": cfg.demo_url,
             "course_url": cfg.course_url,
             "repository_url": cfg.repository_url,
@@ -131,7 +142,7 @@ def publish_adapter(
     card_path = folder / README_NAME
     card_path.write_text(card, encoding="utf-8", newline="\n")
 
-    files = [ADAPTER_FILE, ADAPTER_CONFIG, README_NAME]
+    files = [ADAPTER_FILE, ADAPTER_CONFIG, README_NAME, WEB_ADAPTER_FILE, WEB_ADAPTER_META]
     if not dry_run:
         api = _api()
         api.create_repo(repo_id, repo_type=REPO_TYPE, exist_ok=True)

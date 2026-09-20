@@ -7,6 +7,7 @@ repository root.
 |---|---|---|
 | `header_histogram.py` | a packed token stream | 1 · mirar el corpus antes de culpar al modelo |
 | `lora_check.py` | nothing (check 4 needs the `hf` extra) | 4 y 5 · LoRA a mano y la prueba contra `peft` |
+| `games_needed.py` | a sweep's `results.json` | 6 · ¿faltan partidas o no hay diferencia? |
 
 Both are copies of the code the lesson shows, and both print the numbers the lesson quotes. If you
 edit one, edit the other.
@@ -51,3 +52,22 @@ detail: `peft` cannot express what we do on a fused `qkv`. Asked for `target_mod
 adapts all three projections with **one** `A`/`B` pair of 2304 rows, while `apply_lora` gives one
 pair per slice. Those are different parameterisations, and comparing them would measure the
 difference rather than the correctness of the code.
+
+## `games_needed.py`
+
+The question every overlapping interval raises, answered with arithmetic instead of machine time.
+The ladder scores a proportion, so its standard error is `sqrt(p (1 - p) / n)` and two 95 %
+intervals stop touching when the gap between the scores beats `1.96 (se1 + se2)` — about
+`n > 3.84 / (delta p)^2` games per condition for proportions near a half.
+
+On the sweep this milestone ran, with `--only 1500,2000,2400` (the conditions `GOAL.md` names):
+
+```
+  <w1500> -> <w2000>  0.466->0.453  -0.013   no              24,420
+  <w2000> -> <w2400>  0.453->0.569  +0.116   no                 284
+```
+
+Twenty-four thousand games is sixty hours of Stockfish to tighten an interval around a difference
+that is not there; two hundred and eighty-four is an hour. The two rows read the same on the
+report — "not separated" — and mean opposite things, which is the whole point of running this
+before deciding whether to re-run anything.

@@ -17,6 +17,76 @@ y los adaptadores vivos en la demo, y la lección M4.
    `rukh-lora-*` y `rukh-qwen3-pgn-qlora`.
 4. En la demo: selector "juega como 1500/2000/2400" y adaptadores intercambiables.
 
+## Estado · 2026-09-20 18:50
+
+Se actualiza a medida que caen las mediciones. Lo que está **medido** lleva el número; lo que está
+en marcha lleva la hora prevista.
+
+### Criterios de aceptación
+
+| # | Criterio | Estado |
+|---|---|---|
+| 1 | Elo por condición monótono (1500 < 2000 < 2400 con IC) | ❌ **no se cumple**, y medido por qué (D-100) |
+| 2 | Tabla comparativa con Qwen | ⏳ Qwen entrenando (arrancó 18:15) |
+| 3 | Publicados con card los cinco artefactos | ⏳ código listo, exportación pendiente |
+| 4 | Demo: selector de Elo + adaptadores intercambiables | ⏳ código listo, faltan los ficheros |
+
+### Criterio 1, con detalle, porque es el que no sale
+
+Seis condiciones, 160 partidas cada una: 1425 · 1549 · 1498 · 1538 · 1606 · 1644 Elo. Ni monótono
+ni separado. La aritmética de `labs/m4/games_needed.py` dice que entre `<w1500>` y `<w2000>` harían
+falta **24 420 partidas por condición** (sesenta horas de Stockfish) para separar una diferencia de
+−0,013 en tasa de puntos: no es que falten partidas, es que la diferencia no está. Entre los
+extremos (`<w1200>` y `<w2400>`) **sí** están separados, con 64 partidas habría bastado.
+
+Lo que sí mueve la cabecera, medido en la misma tirada:
+
+- **entropía analítica de la primera jugada, monótona 6 de 6**: 1,596 → 1,647 → 1,741 → 1,841 →
+  1,881 → 1,992 bits, sin jugar una sola partida y sin ruido de muestreo;
+- **top-1 con máximo en `<w1800>`** (51,4 → 54,1 → 53,3 %), que es donde está la media de Elo de
+  las posiciones de validación: la cabecera que mejor predice es la que describe a quien jugó;
+- **legalidad que baja al subir la cabecera** (100,00 → 99,70 %), el mismo signo que la entropía;
+- **puzles planos** (37,0 – 38,2 %): la táctica no se mueve.
+
+Conclusión del hito: **la cabecera mueve el estilo, no la fuerza táctica.** Está en la lección con
+la tabla delante y en el ledger como D-100 y D-101.
+
+### Qué queda, en orden
+
+| # | Trabajo | Recurso | Estado |
+|---|---|---|---|
+| 1 | Barrido de 6 condiciones | GPU + Stockfish | ✅ 18:40 |
+| 2 | Control: el modelo base en los dos extremos del eje | GPU + Stockfish | ⏳ ~19:20 |
+| 3 | Evaluación canónica de `medium-elo` | GPU + Stockfish | ⏳ ~19:45 |
+| 4 | Qwen3 QLoRA | GPU | ⏳ arrancó 18:15 |
+| 5 | Descanso | — | 15-20 min |
+| 6 | Maestros: escalera completa + reevaluación de las etapas publicadas | GPU + Stockfish | pendiente |
+| 7 | `rukh eval qwen` por el mismo harness | GPU + Stockfish | pendiente |
+| 8 | Reintento de `<w1500>` y `<w2400>` con 400 partidas | GPU + Stockfish | pendiente |
+| 9 | Exportación ONNX (incluida la adaptable), paridad y publicación | CPU | pendiente |
+| 10 | Demo, lección, cheatsheet y glosario | CPU | en marcha |
+
+**Regla que se está siguiendo:** nada de trabajo pesado de CPU mientras corre una escalera. El
+rival tiene 0,1 s por jugada, así que robarle CPU lo debilita y el Elo del modelo sale inflado. Las
+exportaciones esperan a que la escalera esté parada.
+
+### Ya hecho y verificado
+
+- Corpus del tramo bajo descargado y equilibrado; `medium-elo` afinado; los doce tokens de cabecera
+  muertos, entrenados.
+- LoRA a mano, idéntica a `peft` paso a paso (`|delta| = 0,00e+00` en seis pasos).
+- Dos adaptadores de estilo de **1,6 MB**: 99,85 % de `1. e4` y 99,88 % de `1. d4`, **sin coste**
+  medible en legalidad, top-1 ni puzles.
+- **Adaptadores como entradas del grafo ONNX** (D-102): con ceros el fichero es el modelo base
+  exactamente; con un adaptador de 1,6 MB es ese estilo. El navegador cambia de estilo sin
+  descargar otro modelo de 221 MB. Diez pruebas nuevas, incluida la ida y vuelta completa del
+  fichero que descarga la página.
+- Demo: selector de estilo y de Elo cableados de punta a punta (registro, protocolo, worker, panel);
+  158 pruebas en verde.
+- 699 pruebas de `rukh` en verde, `ruff` limpio, `pnpm check` y `pnpm test` limpios.
+
+---
+
 ## Restricciones globales
 
 - Las de P0-P3: commits en inglés con Conventional Commits, código y docstrings en inglés, docs en

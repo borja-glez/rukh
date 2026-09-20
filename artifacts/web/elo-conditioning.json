@@ -14,10 +14,10 @@
       "elo_lower": null,
       "elo_upper": null,
       "score": 0.33125,
-      "legality": 0.997,
-      "top1": 0.549,
+      "legality": 1.0,
+      "top1": 0.514,
       "puzzles": 0.37016666666666664,
-      "first_move_entropy": 1.5955005884170532,
+      "first_move_entropy": 1.5955005966393512,
       "stage": "medium-elo@1200"
     },
     {
@@ -30,10 +30,10 @@
       "elo_lower": null,
       "elo_upper": null,
       "score": 0.465625,
-      "legality": 0.997,
-      "top1": 0.549,
+      "legality": 1.0,
+      "top1": 0.539,
       "puzzles": 0.37666666666666665,
-      "first_move_entropy": 1.6469883918762207,
+      "first_move_entropy": 1.6469883143874313,
       "stage": "medium-elo@1500"
     },
     {
@@ -46,11 +46,27 @@
       "elo_lower": null,
       "elo_upper": null,
       "score": 0.409375,
-      "legality": 0.997,
-      "top1": 0.549,
+      "legality": 0.998,
+      "top1": 0.541,
       "puzzles": 0.382,
-      "first_move_entropy": 1.7407686710357666,
+      "first_move_entropy": 1.7407688017812908,
       "stage": "medium-elo@1800"
+    },
+    {
+      "header_elo": 2000,
+      "elo": 1537.7025527209353,
+      "elo_ci": [
+        1478.7576608975435,
+        1597.0262009043502
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "score": 0.453125,
+      "legality": 0.997,
+      "top1": 0.54,
+      "puzzles": 0.37983333333333336,
+      "first_move_entropy": 1.84060262733361,
+      "stage": "medium-elo@2000"
     },
     {
       "header_elo": 2100,
@@ -63,9 +79,9 @@
       "elo_upper": null,
       "score": 0.528125,
       "legality": 0.997,
-      "top1": 0.549,
+      "top1": 0.534,
       "puzzles": 0.38083333333333336,
-      "first_move_entropy": 1.880906343460083,
+      "first_move_entropy": 1.880906346231127,
       "stage": "medium-elo@2100"
     },
     {
@@ -79,9 +95,9 @@
       "elo_upper": null,
       "score": 0.56875,
       "legality": 0.997,
-      "top1": 0.549,
+      "top1": 0.533,
       "puzzles": 0.38083333333333336,
-      "first_move_entropy": 1.9915566444396973,
+      "first_move_entropy": 1.9915567737134319,
       "stage": "medium-elo@2400"
     }
   ],

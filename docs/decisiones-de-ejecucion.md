@@ -1479,6 +1479,86 @@ Evidencia obtenida por el controlador, no por subagentes:
   cuando lo es la tabla tiene que poder dejar de llevarla. Es explícito y por etapa a propósito:
   tirar una fila es tirar una medición, y debería costar decir su nombre.
 
+### D-100 · El criterio 1 no se cumple, y la aritmética dice que no es cuestión de partidas
+- **Qué se midió:** el barrido con las seis condiciones, 160 partidas cada una contra los ocho
+  peldaños de Stockfish, con la cabecera forzada también en las posiciones de validación y en los
+  puzles (D-088). Elo: 1425, 1549, 1498, 1538, 1606, 1644 para `<w1200>`…`<w2400>`. **Ni monótono
+  ni separado.** Span de 219 Elo entre extremos.
+- **Lo que pide `GOAL.md`:** `Elo(<w1500>) < Elo(<w2000>) < Elo(<w2400>)` con intervalos. El primer
+  par va del revés: 1549 contra 1538, once puntos de Elo, y la tasa de puntos contra la escalera
+  —que es el número que se mide, el Elo es una transformación de él— va de 0,466 a 0,453.
+- **La pregunta que había que contestar antes de pedir más máquina:** ¿faltan partidas o no hay
+  diferencia? Es aritmética. La tasa de puntos es una proporción, su error típico es
+  `sqrt(p(1-p)/n)` y dos intervalos del 95 % dejan de tocarse cuando la distancia entre las tasas
+  supera `1,96 (se1 + se2)`, que para proporciones cerca de la mitad es
+  `n > 3,84 / (delta p)^2` partidas por condición. Con los números medidos
+  (`labs/m4/games_needed.py`):
+
+  | par | tasa | delta | partidas necesarias |
+  |---|---|---:|---:|
+  | `<w1500>` → `<w2000>` | 0,466 → 0,453 | **−0,013** | **24 420** |
+  | `<w2000>` → `<w2400>` | 0,453 → 0,569 | +0,116 | 284 |
+  | `<w1500>` → `<w2400>` | 0,466 → 0,569 | +0,103 | 357 |
+  | `<w1200>` → `<w2400>` | 0,331 → 0,569 | +0,238 | 64 ✅ ya separado |
+
+- **Qué se decide:** el criterio 1 **no se cumple** y se dice así, con la tabla delante. No se
+  vuelve a correr `<w2000>`: veinticuatro mil partidas por condición son sesenta horas de
+  Stockfish para estrechar el intervalo alrededor de una diferencia que no está. Sí se vuelven a
+  correr `<w1500>` y `<w2400>` con 400 partidas (`configs/eval/greedy-sweep-50.yaml`), que es lo
+  que el mismo cálculo pide para el par exterior del criterio, y que convierte «no separado con
+  160» en una afirmación medida en un sentido o en el otro.
+- **Por qué esto es un resultado y no una excusa:** los extremos del eje **sí** están separados
+  (1200 contra 2400, con 64 partidas habría bastado y se jugaron 160), la entropía analítica de la
+  primera jugada es monótona en las **seis** condiciones sin una sola partida de por medio
+  (1,596 → 1,647 → 1,741 → 1,841 → 1,881 → 1,992 bits) y los puzles son planos
+  (37,0 – 38,2 %). Las tres cosas dicen lo mismo: **la cabecera mueve el estilo, no la fuerza
+  táctica**. Que es exactamente lo que P3 sospechaba y no podía afirmar, porque entonces las
+  cabeceras por debajo de 1800 ni siquiera se habían entrenado.
+
+### D-101 · La cabecera sí mueve dos columnas que en la primera pasada salían constantes
+- **Qué cambió:** con `force_header` extendido a las posiciones de validación (D-088), la legalidad
+  sin máscara y el top-1 dejan de ser idénticos en todas las filas y se ordenan solos:
+
+  | cabecera | legal argmax | top-1 |
+  |---|---:|---:|
+  | `<w1200>` | 100,00 % | 51,40 % |
+  | `<w1500>` | 100,00 % | 53,90 % |
+  | `<w1800>` | 99,80 % | **54,10 %** |
+  | `<w2000>` | 99,70 % | 54,00 % |
+  | `<w2100>` | 99,70 % | 53,40 % |
+  | `<w2400>` | 99,70 % | 53,30 % |
+
+- **Cómo se lee:** el top-1 tiene un máximo en `<w1800>` y baja hacia los dos lados. No es ruido:
+  las posiciones de validación son partidas reales con su reparto real de Elo, cuya media está
+  cerca de 1800, así que la cabecera que mejor predice la jugada siguiente es la que describe a
+  los jugadores que la hicieron. Pedirle al modelo que juegue como 2400 lo hace **peor** prediciendo
+  jugadas de un jugador medio, y eso es lo correcto.
+- **Y la legalidad baja al subir la cabecera**, de 100,00 % a 99,70 %. Tres décimas son tres
+  jugadas de mil, pero el signo es el mismo que el de la entropía: cuanto más ancho el repertorio,
+  más lejos de las aperturas trilladas y más ocasiones de escribir algo ilegal.
+
+### D-102 · Los adaptadores viajan como entradas del grafo, no fundidos en los pesos
+- **El problema:** fundir un adaptador y exportar el ONNX cuesta 221 MB por estilo en `medium`.
+  Dos estilos son 442 MB de descarga para mover 1,6 MB de corrección, que es tirar por tierra la
+  única cosa que LoRA compra.
+- **Qué se hace:** el grafo se exporta con `A` y `B` como **entradas**, apiladas por capas en dos
+  tensores `(capas, rangos, r, d)` y `(capas, rangos, d, r)` (`rukh.export.adapter`). El navegador
+  cambia de estilo subiendo 1,6 MB, no descargando otro modelo.
+- **Las tres propiedades que lo hacen honesto, y las tres están en `tests/unit/test_export_adapter.py`:**
+  con ceros el grafo **es** el modelo base (por eso el fichero adaptable *sustituye* al ordinario en
+  vez de sumarse a él, y una demo sin estilo elegido no está corriendo otro modelo); con un
+  adaptador distinto la respuesta cambia sin tocar el fichero; y la paridad contra PyTorch con el
+  mismo adaptador cargado se mide sobre posiciones reales.
+- **Lo que no admite:** un adaptador cuyos rangos no midan todos lo mismo. Los factores viajan como
+  un tensor cada uno, así que todas las capas tienen que adaptar la misma matriz con los mismos
+  anchos —cierto para consulta, clave y valor sobre el `qkv` fundido, falso en cuanto entra el MLP,
+  cuyo `fc` es cuatro veces más ancho—. Ese caso sigue teniendo `merge_lora` y una exportación
+  normal; lo único que no tiene es el intercambio en caliente. `adapter_layout` lo dice con esas
+  palabras en vez de apilar algo que no cuadra.
+- **Detalle de implementación que sí importa:** la corrección se arma con `cat` sobre todo el ancho
+  de salida en vez de escribirse en una rodaja de un tensor de ceros. La asignación por índice
+  exporta como `ScatterND`, que onnxruntime web ejecuta en CPU aunque el resto vaya por WebGPU.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

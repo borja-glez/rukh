@@ -1062,12 +1062,31 @@ def export_cmd(
             help="Validation games parquet for the parity positions.",
         ),
     ] = None,
+    adapter_inputs: Annotated[
+        bool,
+        typer.Option(
+            "--adapter-inputs",
+            help="Write the graph with the LoRA factors as inputs, so styles can be swapped.",
+        ),
+    ] = False,
+    adapter: Annotated[
+        Path | None,
+        typer.Option(
+            "--adapter",
+            exists=True,
+            file_okay=False,
+            readable=True,
+            help="Adapter folder to check the parity of the swapped path against PyTorch.",
+        ),
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
 ) -> None:
     """Export a model to ONNX, quantize it and check parity with PyTorch.
 
     The decoder exports its next-move head; ``--kind encoder`` exports the two heads the demo
-    reads from a position, ``value`` and ``blunder``.
+    reads from a position, ``value`` and ``blunder``. With ``--adapter-inputs`` the decoder's
+    graph takes its LoRA factors as two extra inputs: fed zeros it is the checkpoint, fed a
+    1.6 MB adapter it is that style, and the browser changes style without downloading a model.
     """
     from rukh.export import KINDS, export_all
 
@@ -1087,6 +1106,8 @@ def export_cmd(
             check_parity=check_parity,
             positions=positions,
             games=games,
+            adapter_inputs=adapter_inputs,
+            adapter=adapter,
         )
     except (ImportError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
@@ -1110,10 +1131,21 @@ def export_cmd(
                 f"{quantized.kind}:     {quantized.path} ({quantized.bytes} bytes, "
                 f"{quantized.ratio:.2f} of fp32, {quantized.method})"
             )
+    if bundle.adapter_inputs:
+        shape_a = bundle.onnx.metadata.get("rukh_adapter_shape_a", "?")
+        shape_b = bundle.onnx.metadata.get("rukh_adapter_shape_b", "?")
+        typer.echo(f"adapter:  factors are inputs, A ({shape_a}) and B ({shape_b})")
     for name, result in bundle.parity.items():
+        label = "parity" if not bundle.adapter_inputs else "parity zeros"
         typer.echo(
-            f"parity {name}: {result.agreement:.4f} on {result.positions} "
+            f"{label} {name}: {result.agreement:.4f} on {result.positions} "
             f"{bundle.parity_source} positions "
+            f"(max |delta logits| {result.max_abs_logit_delta:.4g})"
+        )
+    for name, result in bundle.adapter_parity.items():
+        typer.echo(
+            f"parity {bundle.adapter_name} {name}: {result.agreement:.4f} on "
+            f"{result.positions} positions "
             f"(max |delta logits| {result.max_abs_logit_delta:.4g})"
         )
     for name, heads in bundle.heads_parity.items():

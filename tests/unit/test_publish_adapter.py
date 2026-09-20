@@ -7,11 +7,13 @@ one published without naming the base model would be publishing a file nobody ca
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
 import torch
 
+from rukh.export.adapter import WEB_ADAPTER_FILE, WEB_ADAPTER_META
 from rukh.models import DecoderConfig, MoveDecoder
 from rukh.models.lora import ADAPTER_CONFIG, ADAPTER_FILE, LoraConfig, apply_lora, save_adapter
 from rukh.publish.adapter import AdapterEffect, adapter_params, publish_adapter
@@ -105,16 +107,47 @@ def test_a_measured_adapter_publishes_what_it_changed_and_what_it_cost(
     assert "split_part(uci, ' ', 1) = 'e2e4'" in card
 
 
-def test_the_staged_folder_is_three_files_and_nothing_else(rukh_home: Path, run_dir: Path) -> None:
-    """No weights, no ONNX, no vocabulary: an adapter repository is small on purpose."""
+def test_the_staged_folder_is_the_adapter_and_nothing_heavy(rukh_home: Path, run_dir: Path) -> None:
+    """No weights, no ONNX, no vocabulary: an adapter repository is small on purpose.
+
+    Five files, and the two under ``web/`` are the same numbers a second time: one flat float32
+    buffer for the browser and its shapes. Both together are about twice 1.6 MB, which is still
+    three orders of magnitude below the model they correct.
+    """
     result = publish_adapter(
         run_dir, "rukh-lora-e4", "rukh-medium-elo", base_config=MEDIUM, dry_run=True
     )
     folder = Path(result.folder)
     assert sorted(path.name for path in folder.iterdir()) == sorted(
-        [ADAPTER_FILE, ADAPTER_CONFIG, "README.md"]
+        [ADAPTER_FILE, ADAPTER_CONFIG, "README.md", "web"]
     )
-    assert result.files == [ADAPTER_FILE, ADAPTER_CONFIG, "README.md"]
+    inside = sorted(path.name for path in (folder / "web").iterdir())
+    assert inside == ["adapter.bin", "adapter.json"]
+    assert result.files == [
+        ADAPTER_FILE,
+        ADAPTER_CONFIG,
+        "README.md",
+        WEB_ADAPTER_FILE,
+        WEB_ADAPTER_META,
+    ]
+
+
+def test_the_browser_copy_carries_its_own_shapes(rukh_home: Path, run_dir: Path) -> None:
+    """A flat buffer of floats says nothing about itself, so the sidecar has to."""
+    import json
+
+    result = publish_adapter(
+        run_dir, "rukh-lora-e4", "rukh-medium-elo", base_config=MEDIUM, dry_run=True
+    )
+    folder = Path(result.folder)
+    meta = json.loads((folder / WEB_ADAPTER_META).read_text(encoding="utf-8"))
+    assert meta["format"] == "rukh-lora-web-1"
+    assert meta["order"] == ["lora_a", "lora_b"]
+    assert meta["base_model"] == "chorcat/rukh-medium-elo"
+    # `A` is (layers, slices, r, d_model) and `B` is (layers, slices, d_model, r); the file is
+    # exactly the two of them, in that order, as float32.
+    floats = (folder / WEB_ADAPTER_FILE).stat().st_size / 4
+    assert floats == math.prod(meta["shape_a"]) + math.prod(meta["shape_b"])
 
 
 def test_the_published_config_names_the_base_model_too(rukh_home: Path, run_dir: Path) -> None:
