@@ -229,6 +229,7 @@ def write_checkpoint(
     manifest_sha: str | None,
     best_val: float,
     run_id: str | None,
+    state: dict[str, torch.Tensor] | None = None,
 ) -> Path:
     """One checkpoint with the provenance every ``rukh`` run records."""
     from rukh.tracking import git_sha
@@ -238,6 +239,7 @@ def write_checkpoint(
         step=step,
         model=model,
         optimizer=optimizer,
+        state=state,
         cfg=cfg.model_dump(mode="json"),
         model_cfg=model_cfg.model_dump(mode="json"),
         vocab_hash=vocab_hash,

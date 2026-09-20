@@ -234,15 +234,11 @@ def test_init_from_takes_the_weights_and_leaves_the_schedule_alone(
     assert payload["run_id"] != load_checkpoint(pretrained)["run_id"]
 
 
-def test_init_from_actually_starts_at_the_given_weights(
-    rukh_home: Path, tokens_dir: Path
-) -> None:
+def test_init_from_actually_starts_at_the_given_weights(rukh_home: Path, tokens_dir: Path) -> None:
     """With zero steps of training the fine-tune is the checkpoint it was pointed at."""
     pretrained = train(toy_config(max_steps=3, ckpt_every=3, run_name="base"), device="cpu")
     tuned = train(
-        toy_config(
-            max_steps=1, ckpt_every=1, lr=0.0, run_name="tuned", init_from=str(pretrained)
-        ),
+        toy_config(max_steps=1, ckpt_every=1, lr=0.0, run_name="tuned", init_from=str(pretrained)),
         device="cpu",
     )
     before = load_checkpoint(pretrained)["model_state"]["tokens.weight"]
@@ -363,3 +359,75 @@ def test_toy_pack_matches_the_packer_layout(tmp_path: Path) -> None:
     assert meta["n_games"] == 3
     assert np.load(directory / TOKENS_FILE).dtype == np.uint16
     assert np.load(directory / STARTS_FILE).tolist() == [0, 6, 12]
+
+
+def test_a_lora_run_trains_only_the_adapter_and_saves_a_plain_checkpoint(
+    rukh_home: Path, tokens_dir: Path
+) -> None:
+    """The two properties that let an adapter be a first-class artefact of this project.
+
+    It trains: the loss moves, so `A` and `B` are receiving gradients. And what lands on disk is
+    an ordinary decoder checkpoint -- same module names, no wrappers -- so the exporter, the
+    publisher and `rukh eval` never learn that LoRA happened. The adapter travels beside it as
+    its own small file.
+    """
+    from rukh.models.lora import ADAPTER_FILE, LoraConfig
+
+    base = train(toy_config(max_steps=2, ckpt_every=2, run_name="base"), device="cpu")
+    plain_keys = set(load_checkpoint(base)["model_state"])
+
+    final = train(
+        toy_config(
+            max_steps=4,
+            ckpt_every=4,
+            run_name="lora",
+            init_from=str(base),
+            lora=LoraConfig(r=2, alpha=4, targets=("q", "v")),
+        ),
+        device="cpu",
+    )
+    payload = load_checkpoint(final)
+    assert set(payload["model_state"]) == plain_keys  # no `.base.weight`, no `.a.0`
+    assert payload["opt_state"] is None  # two small matrices are not worth an optimizer state
+
+    adapter = final.parent / ADAPTER_FILE
+    assert adapter.is_file()
+    assert (final.parent / "adapter_config.json").is_file()
+    assert adapter.stat().st_size < payload_size(final) / 10  # small, by a wide margin
+
+
+def payload_size(path: Path) -> int:
+    return path.stat().st_size
+
+
+def test_a_lora_run_moves_the_weights_it_adapts_and_no_others(
+    rukh_home: Path, tokens_dir: Path
+) -> None:
+    from rukh.models.lora import LoraConfig
+
+    base = train(toy_config(max_steps=2, ckpt_every=2, run_name="base"), device="cpu")
+    before = load_checkpoint(base)["model_state"]
+    final = train(
+        toy_config(
+            max_steps=4,
+            ckpt_every=4,
+            run_name="lora",
+            lr=0.5,
+            init_from=str(base),
+            lora=LoraConfig(r=2, alpha=4, targets=("q", "v")),
+        ),
+        device="cpu",
+    )
+    after = load_checkpoint(final)["model_state"]
+    assert not torch.equal(before["blocks.0.attn.qkv.weight"], after["blocks.0.attn.qkv.weight"])
+    torch.testing.assert_close(before["tokens.weight"], after["tokens.weight"])
+    torch.testing.assert_close(before["blocks.0.mlp.fc.weight"], after["blocks.0.mlp.fc.weight"])
+
+
+def test_a_lora_run_cannot_be_resumed(rukh_home: Path, tokens_dir: Path) -> None:
+    """Its checkpoints hold merged weights, which no longer say where the adapter ended."""
+    from rukh.models.lora import LoraConfig
+
+    first = train(toy_config(max_steps=2, ckpt_every=2), device="cpu")
+    with pytest.raises(ValueError, match="cannot continue a LoRA run"):
+        train(toy_config(max_steps=4, lora=LoraConfig(r=2)), resume=first, device="cpu")

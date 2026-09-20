@@ -48,6 +48,7 @@ __all__ = [
     "load_adapter",
     "lora_modules",
     "merge_lora",
+    "merged_state_dict",
     "save_adapter",
 ]
 
@@ -237,6 +238,31 @@ def merge_lora(model: nn.Module) -> int:
             base.bias.requires_grad_(True)
         _set_module(model, name, base)
         merged += 1
+    return merged
+
+
+@torch.no_grad()
+def merged_state_dict(model: nn.Module) -> dict[str, Tensor]:
+    """The state dict this model *would* have if every adapter were folded in, without folding.
+
+    ``merge_lora`` mutates, which is what an export wants and what a training loop does not: a
+    checkpoint written mid-run must not leave the model unable to take another step. So the
+    folding is done on a copy of the numbers and the wrappers are left alone, and what comes out
+    has the module names of a plain ``MoveDecoder`` -- which is what every loader, exporter and
+    publisher in this project expects to read.
+    """
+    adapters = dict(lora_modules(model))
+    merged: dict[str, Tensor] = {}
+    for name, tensor in model.state_dict().items():
+        owner, _, leaf = name.rpartition(".")
+        base_owner, _, base_leaf = owner.rpartition(".")
+        if base_leaf == "base" and base_owner in adapters:
+            value = adapters[base_owner].merged_weight() if leaf == "weight" else tensor
+            merged[f"{base_owner}.{leaf}"] = value.detach().cpu()
+            continue
+        if any(name.startswith(f"{path}.{factor}.") for path in adapters for factor in ("a", "b")):
+            continue  # the adapter's own factors; they live in the adapter file, not here
+        merged[name] = tensor.detach().cpu()
     return merged
 
 

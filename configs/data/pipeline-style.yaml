@@ -1,0 +1,26 @@
+# The two style slices the LoRA adapters of M4 are trained on, and their token packs.
+#
+# The axis is White's first move, for one reason above the others: it is *visible*. A reader can
+# load the demo, pick an adapter and watch the model open `1. e4`, then pick the other and watch
+# it open `1. d4`. An adapter that shifted something real but invisible would be a better piece of
+# machine learning and a worse piece of teaching.
+#
+# `min_elo: 1800` on both sides so a style adapter is not secretly a weakness adapter: if the
+# `1. d4` games came from weaker players, "the adapter changed the opening" and "the adapter made
+# it worse" would be the same measurement.
+duckdb:
+  memory_limit: 32GB
+  threads: 0
+style:
+  sources: [data/uci]
+  out_dir: data/style
+  seed: 42
+  styles:
+    - name: e4
+      first_move: e2e4
+      min_elo: 1800
+      n_games: 200000
+    - name: d4
+      first_move: d2d4
+      min_elo: 1800
+      n_games: 200000

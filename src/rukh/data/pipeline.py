@@ -16,6 +16,7 @@ from rukh.data.pairs import PairsConfig
 from rukh.data.positions import PositionsConfig
 from rukh.data.publish import PublishConfig
 from rukh.data.puzzles import PuzzlesConfig
+from rukh.data.style import StyleConfig
 from rukh.data.uci import UciConfig
 
 
@@ -46,7 +47,7 @@ class TokenizeConfig(BaseConfig):
     max_len: int = Field(default=200, ge=8)
 
 
-DUCKDB_STEPS = ("positions", "evals", "puzzles", "elo_bins")
+DUCKDB_STEPS = ("positions", "evals", "puzzles", "elo_bins", "style")
 
 
 class PipelineConfig(BaseConfig):
@@ -65,6 +66,7 @@ class PipelineConfig(BaseConfig):
     pairs: PairsConfig = Field(default_factory=PairsConfig)
     elite: EliteConfig = Field(default_factory=EliteConfig)
     elo_bins: EloBinsConfig = Field(default_factory=EloBinsConfig)
+    style: StyleConfig = Field(default_factory=StyleConfig)
     publish: PublishConfig = Field(default_factory=PublishConfig)
 
     @model_validator(mode="after")

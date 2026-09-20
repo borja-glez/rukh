@@ -296,6 +296,30 @@ def data_elo_bins(config: PipelineOption = None, as_json: JsonOption = False) ->
     _echo_manifest(run(cfg), as_json, cfg.out_dir)
 
 
+@data_app.command("style")
+def data_style(config: PipelineOption = None, as_json: JsonOption = False) -> None:
+    """Cut one parquet per style: the games a LoRA adapter is trained to sound like."""
+    from rukh.data.pipeline import load_pipeline
+    from rukh.data.style import build_styles
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_pipeline(config).style
+    try:
+        manifests = build_styles(cfg)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(
+            "[" + ", ".join(m.model_dump_json(indent=2) for m in manifests.values()) + "]"
+        )
+        return
+    typer.echo(f"out_dir:  {cfg.out_dir}")
+    typer.echo("styles:")
+    for name, manifest in manifests.items():
+        typer.echo(f"  {name}: {manifest.counts[name]:,} games")
+
+
 @data_app.command("publish")
 def data_publish(
     name: Annotated[
