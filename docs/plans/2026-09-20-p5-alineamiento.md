@@ -46,7 +46,7 @@ esto:
 
 | Instrumento | Qué mide | Partidas para afirmar +50 Elo |
 |---|---|---:|
-| Escalera, dos tiradas y restar | dos fuerzas absolutas | **757 por lado** (1 514 en total) |
+| Escalera, dos tiradas y restar | dos fuerzas absolutas | **750 por lado** (1 500 en total) |
 | **Enfrentamiento directo** | la **diferencia**, una sola vez | **185 en total** |
 
 **Ocho veces más barato**, y sin el suelo de reproducibilidad de la escalera, porque los dos
@@ -55,7 +55,7 @@ modelos juegan la misma partida y no hay un tercero cuyo humor haya que promedia
 La aritmética es la misma de `labs/m4/games_needed.py` aplicada a dos poblaciones distintas. Una
 ventaja de 50 Elo es una tasa esperada de **0,5715** en un enfrentamiento directo, y para separar
 0,5715 de 0,5 al 95 % bastan 185 partidas. Contra la escalera, 50 Elo son 0,0712 de tasa sobre una
-base de 0,45, y separar eso pide 757 partidas **por condición**.
+base de 0,45, y separar eso pide 750 partidas **por condición**.
 
 **La regla que ordena el hito: para medir una diferencia, mide la diferencia.** No midas dos
 absolutos y los restes. Es la continuación natural de lo que P4 aprendió midiendo su propio ruido,

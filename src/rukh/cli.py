@@ -982,7 +982,7 @@ def eval_match_cmd(
     """Play two models against each other and report the Elo difference with its interval.
 
     This is the instrument for "is A stronger than B", and it is not the ladder. A 50-Elo edge
-    takes 185 games head to head and 757 games *per side* off the ladder, before adding the
+    takes 185 games head to head and 750 games *per side* off the ladder, before adding the
     ladder's own irreproducibility (about 40 Elo of one sigma, D-107). To measure a difference,
     measure the difference -- do not measure two absolutes and subtract them.
 

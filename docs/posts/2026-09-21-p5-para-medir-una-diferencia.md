@@ -47,7 +47,7 @@ Si lo que quieres saber es una diferencia, **mide la diferencia**: que los dos m
 sí. Desaparece el tercero cuyo humor hay que promediar, porque los dos juegan la misma partida.
 
 La aritmética es favorable y se puede calcular antes de pagarla. Detectar +50 Elo restando dos
-proporciones pide unas 757 partidas **por lado**; detectarlo en un enfrentamiento directo pide 185
+proporciones pide unas 750 partidas **por lado**; detectarlo en un enfrentamiento directo pide 185
 **en total**. Ocho veces más barato.
 
 Los mismos dos modelos de la tabla de arriba, enfrentados: **+40 Elo, de 11 a 69**. Cuatro minutos
@@ -92,7 +92,7 @@ Los tres baten a la base, y los tres con el intervalo separado del cero:
 |---|---|---|
 | DPO, pares de fuera | **+67** | 45 a 89 |
 | DPO, pares propios | **+57** | 36 a 79 |
-| GRPO | **+43** | 13 a 72 |
+| GRPO | **+44** | 23 a 66 |
 
 Es la primera vez en el proyecto que este criterio se mide separado del cero. Lo que cambió no fue
 el modelo: fue cómo se mira.
