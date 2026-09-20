@@ -1978,6 +1978,15 @@ Evidencia obtenida por el controlador, no por subagentes:
   criterio de `GOAL.md` (+50 Elo con intervalo) se cumple **en la estimación puntual** en los dos
   casos —+67 y +57— y **no** en el sentido estricto de que el extremo inferior del intervalo pase de
   50, que se queda en 45 y en 36. Se publican las dos lecturas.
+- **Con GRPO medido, hay un segundo triángulo y no dice lo mismo:**
+
+  | triángulo | residuo | |
+  |---|---:|---|
+  | base / DPO-off / DPO-on | **−45 Elo** | 2,6 σ · **no cierra** |
+  | base / GRPO / GRPO-rápido | +25 Elo | 1,3 σ · consistente |
+
+  Los dos residuos son grandes y solo uno está establecido. Se dice así —medido en un triángulo,
+  sugerido en el otro— en vez de convertirlo en una ley general sobre el Elo con una muestra de dos.
 - **La regla que deja:** mide las dos direcciones y agrúpalas, siempre. Y no ordenes modelos por un
   número: si te importa cuál de dos gana, enfréntalos. Restar dos enfrentamientos con un tercero es
   el mismo error que restar dos escaleras (D-110), un piso más arriba.
