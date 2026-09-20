@@ -412,10 +412,14 @@ def test_a_bar_that_is_not_met_is_said_in_words_with_its_reason() -> None:
             "chorcat/rukh-tiny", "tiny", ModelPublishConfig(), {"params": 1}, short, RUN, []
         )
     )
-    assert "**The Elo bar is not met**" in text
-    assert "5.9 M games" in text and "16 M" in text
-    assert "84 more Elo" in text
-    assert "data, not capacity" in text
+    assert "The Elo bar is not met" in text
+    assert "The legality bar is not met" in text
+    # Not only that it failed: why, and where the reader should look instead. The wording moves
+    # with the project -- it used to blame a 5.9 M-game corpus -- so pin the substance.
+    assert "rukh-medium-dpo" in text and "baseline" in text
+    assert "19.0 M games" in text
+    # And every card says the ratings replaced lower published ones, met or not.
+    assert "replace lower ones" in text and "428 and 581" in text
 
 
 def test_the_bars_are_omitted_rather_than_guessed_when_nothing_was_measured() -> None:
