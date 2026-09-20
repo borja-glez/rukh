@@ -1429,6 +1429,28 @@ Evidencia obtenida por el controlador, no por subagentes:
   la descarga, el backend de cuantización, la API del entrenador, el relleno del tokenizador, el
   guardado— y descubrirlo al final es la forma cara.
 
+### D-096 · Los factores de LoRA se creaban en CPU con el modelo ya en CUDA
+- **Qué pasó:** `apply_lora` construía `A` y `B` con `torch.empty(...)` sin dispositivo, y el bucle
+  aplica los adaptadores **después** de mover el modelo y cargar el checkpoint (cargar necesita los
+  nombres de módulo de un decoder limpio). Primer `forward` en la GPU: `Expected all tensors to be
+  on the same device`.
+- **Por qué los tests no lo veían:** los catorce tests de `test_lora.py` corren en CPU, donde el
+  fallo es invisible. Lo destapó un ensayo de veinte pasos sobre el modelo real —el mismo
+  procedimiento que en D-095— y ahora hay un test que comprueba la *propiedad* (los factores viven
+  donde el peso que corrigen) en vez del dispositivo en el que toque ejecutarse.
+
+### D-097 · Fundir un adaptador es exacto a 3,6e-6 relativo sobre 115 M de parámetros
+- **Medido** sobre `medium-v4` con un adaptador real de `r = 8`: diferencia máxima entre el modelo
+  con envoltorios y el mismo modelo fundido, **6,8e-5 absoluta sobre logits de escala 18,9**, o sea
+  3,6e-6 relativa, y **la jugada elegida es la misma** en todas las posiciones probadas.
+- **Por qué importa el número y no solo el test:** el test unitario comprueba la igualdad sobre un
+  decoder de juguete con tolerancias de `float32`; la afirmación que hace la lección —«publicar un
+  adaptador de 1,6 MB y aun así exportarlo como un modelo cualquiera»— es sobre el modelo de 115 M,
+  donde el error se acumula por dieciséis capas. Es exacta en lo que importa (el argmax) y no bit a
+  bit, y conviene decirlo así.
+- **El adaptador pesa 1,6 MB**, que es exactamente lo que predice `2 · r · d_model · capas ·
+  objetivos` = 393 216 números en `float32`.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

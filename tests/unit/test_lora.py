@@ -204,3 +204,21 @@ def test_scale_follows_alpha_over_r() -> None:
     base = torch.nn.Linear(4, 4)
     adapter = LoRALinear(base, r=2, alpha=8, dropout=0.0, slices=((0, 4),))
     assert adapter.scale == 4.0
+
+
+def test_the_factors_are_built_where_the_weight_they_correct_lives() -> None:
+    """`apply_lora` runs after the model has been moved to its device.
+
+    The training loop loads the checkpoint first -- loading needs the module names of a plain
+    decoder -- so by the time the adapters go on, the weights are already on the GPU. A factor
+    created on the CPU by default meets a CUDA activation on the first forward and the run dies
+    there. Every other test in this file runs on the CPU, where the bug cannot be seen; this one
+    checks the property that makes it impossible instead of the device it happens to run on.
+    """
+    model = _model()
+    base = model.blocks[0].attn.qkv.weight
+    apply_lora(model, LoraConfig(r=4, targets=("q", "v")))
+    for _, adapter in lora_modules(model):
+        for factor in [*adapter.a, *adapter.b]:
+            assert factor.device == base.device
+            assert factor.dtype == base.dtype

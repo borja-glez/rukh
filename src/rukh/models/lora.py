@@ -121,14 +121,20 @@ class LoRALinear(nn.Module):
         self.slices = tuple(slices)
         self.drop = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
         in_features = base.in_features
+        # Built where the weight they correct already lives. `apply_lora` runs *after* the model
+        # has been moved to the device (the training loop loads the checkpoint first, and loading
+        # needs the module names of a plain decoder), so a factor created on the CPU by default
+        # would meet a CUDA activation on the first forward. Every unit test of this file runs on
+        # the CPU, where the mistake is invisible.
+        where = {"device": base.weight.device, "dtype": base.weight.dtype}
         # `A` is drawn from the same Kaiming-uniform the paper uses and `B` starts at exactly
         # zero, so the adapted model *is* the base model at step 0. Any other initialisation
         # would move the weights before a single gradient arrived.
         self.a = nn.ParameterList(
-            nn.Parameter(torch.empty(r, in_features)) for _ in range(len(self.slices))
+            nn.Parameter(torch.empty(r, in_features, **where)) for _ in range(len(self.slices))
         )
         self.b = nn.ParameterList(
-            nn.Parameter(torch.zeros(stop - start, r)) for start, stop in self.slices
+            nn.Parameter(torch.zeros(stop - start, r, **where)) for start, stop in self.slices
         )
         for a in self.a:
             nn.init.kaiming_uniform_(a, a=math.sqrt(5))
