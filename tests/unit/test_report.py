@@ -220,3 +220,31 @@ def test_a_stage_without_a_diversity_measurement_writes_no_section() -> None:
     markdown = render_markdown(result())
     assert "## Opening diversity" not in markdown
     assert "| Opening diversity | n/a |" in markdown
+
+
+def test_a_retracted_row_can_be_removed_from_the_table(tmp_path: Path) -> None:
+    """A measurement can turn out to be wrong, and the table has to be able to stop carrying it.
+
+    It happened: D-070 found four of the eight Elo rungs had invented ratings, wrong by about five
+    hundred points. The corrected runs went in under new stage names, so the old rows stayed and
+    the project page kept serving retracted numbers.
+    """
+    from rukh.eval.report import drop_rows
+
+    table = tmp_path / "results.json"
+    for stage, elo in (("tiny", 64.0), ("small-greedy", 1007.0), ("medium-v4-greedy", 1504.0)):
+        upsert_row(table, row_of(result(stage=stage, elo=elo)))
+
+    removed, kept = drop_rows(table, ["tiny", "nothing-like-this"])
+    assert removed == ["tiny"]
+    assert sorted(item["stage"] for item in kept) == ["medium-v4-greedy", "small-greedy"]
+
+    payload = json.loads(table.read_text(encoding="utf-8"))
+    assert [item["stage"] for item in payload["rows"]] == ["medium-v4-greedy", "small-greedy"]
+    assert "updated_at" in payload
+
+
+def test_dropping_from_a_table_that_is_not_there_is_not_an_error(tmp_path: Path) -> None:
+    from rukh.eval.report import drop_rows
+
+    assert drop_rows(tmp_path / "nope.json", ["tiny"]) == ([], [])

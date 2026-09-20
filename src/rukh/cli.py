@@ -711,6 +711,43 @@ def eval_cmd(
         typer.echo(f"table:    {report.web}")
 
 
+@eval_app.command("drop")
+def eval_drop_cmd(
+    stages: Annotated[
+        str, typer.Option("--stages", help="Rows to remove from the table, comma separated.")
+    ],
+    table: Annotated[
+        Path | None, typer.Option("--table", help="Results file (default: the shared one).")
+    ] = None,
+    yes: Annotated[bool, typer.Option("--yes", help="Do it without asking.")] = False,
+) -> None:
+    """Retract rows from the single results table.
+
+    A measurement can turn out to be wrong, and when it does the table has to be able to say so by
+    not carrying it any more. It happened once: D-070 found four of the eight rungs of the Elo
+    ladder had invented ratings, wrong by about five hundred points. The corrected runs went in
+    under new stage names, so the old rows stayed and the project page kept serving retracted
+    numbers.
+    """
+    from rukh.eval.report import drop_rows
+    from rukh.paths import resolve
+
+    target = table or resolve("artifacts/web/results.json")
+    wanted = [name.strip() for name in stages.split(",") if name.strip()]
+    if not wanted:
+        typer.echo("error: --stages must name at least one row", err=True)
+        raise typer.Exit(code=2)
+    if not yes and not typer.confirm(f"Remove {', '.join(wanted)} from {target}?"):
+        raise typer.Abort
+    removed, kept = drop_rows(target, wanted)
+    missing = sorted(set(wanted) - set(removed))
+    for name in removed:
+        typer.echo(f"removed:  {name}")
+    for name in missing:
+        typer.echo(f"not there: {name}")
+    typer.echo(f"rows left: {len(kept)}")
+
+
 @eval_app.command("openings")
 def eval_openings_cmd(
     model: Annotated[str, typer.Option("--model", help="Checkpoint or Hub id to read.")],

@@ -233,6 +233,34 @@ def upsert_row(path: Path, row: TableRow) -> list[dict[str, Any]]:
     return rows
 
 
+def drop_rows(path: Path, stages: list[str]) -> tuple[list[str], list[dict[str, Any]]]:
+    """Remove rows from the shared results file; return ``(removed stages, rows that stay)``.
+
+    A measurement can be **retracted**, and when it is, the table has to be able to say so by not
+    carrying it any more. It happened once already: D-070 found that four of the eight rungs of
+    the Elo ladder had invented ratings, wrong by about five hundred points, which made every Elo
+    published before it wrong. The corrected runs were written under new stage names, so the old
+    rows stayed in the table and the project page kept serving retracted numbers for a day.
+
+    Deliberately explicit and per stage rather than a filter or a wildcard: dropping a row is
+    throwing away a measurement, and it should take saying its name.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return [], []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    found = payload.get("rows") if isinstance(payload, dict) else payload
+    rows = [item for item in found if isinstance(item, dict)] if isinstance(found, list) else []
+    wanted = set(stages)
+    removed = sorted({str(item.get("stage")) for item in rows if item.get("stage") in wanted})
+    kept = [item for item in rows if item.get("stage") not in wanted]
+    document = {"updated_at": datetime.now(UTC).isoformat(timespec="seconds"), "rows": kept}
+    path.write_text(
+        json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+    )
+    return removed, kept
+
+
 def _percent(value: float | None) -> str:
     return "n/a" if value is None else f"{value * 100:.1f} %"
 
