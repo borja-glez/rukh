@@ -1175,6 +1175,46 @@ Evidencia obtenida por el controlador, no por subagentes:
   el método, era la falta de holgura en 39 M parámetros. Enseñarlo sin esa corrección sería
   generalizar desde un solo punto de operación.
 
+## P4 · Fine-tuning e instrucción (2026-09-20)
+
+### D-079 · El corpus entero empieza en 1800, así que media escala de Elo nunca se entrenó
+- **Qué se encontró:** `configs/data/lichess-2025-01-02.yaml` fija `min_elo: 1800` y el filtro se
+  aplica a **los dos** jugadores. Todo lo que ha visto cualquier modelo del proyecto —los 19 M de
+  partidas de `tokens-v4`, la Elite DB incluida— está entre 1800 y ~3100.
+  `data/elo-bins/manifest.json` lo confirma sin ambigüedad: su bin más bajo es **1800**.
+- **Consecuencia:** los tokens `<w1000>`…`<w1700>` y sus gemelos de negras **nunca han recibido un
+  gradiente**. Su embedding sigue en la inicialización. Pedirle al modelo publicado que «juegue
+  como 1500» no le pide nada: le pone delante un vector aleatorio.
+- **Qué reinterpreta:** D-069 midió que condicionar a 2600 no daba Elo y concluyó que imitar a un
+  fuerte no compra táctica. Eso sigue en pie para el extremo alto. Pero el extremo **bajo**, que es
+  el que pide el criterio de P4 y el que un jugador humano querría, no se había probado nunca
+  porque no había datos con los que probarlo.
+- **Qué se hace:** un segundo corpus con el mismo filtro salvo el rango (`min_elo: 1000`,
+  `max_elo: 1799`, `configs/data/lichess-low.yaml`) en su propio `out_dir`, para que `data/uci`
+  siga significando exactamente aquello con lo que se entrenó lo publicado.
+- **Si está mal:** que el eje no se aprenda ni con datos, y entonces el problema no era el corpus
+  sino la capacidad del condicionamiento por prefijo. Lo decidirá `rukh eval sweep`, no una
+  opinión.
+
+### D-080 · Leer un mes por `hf://` dejó de funcionar; se descarga shard a shard
+- **Qué pasó:** el primer intento de descargar la banda baja murió con `HTTP 429 Too Many Requests`
+  después de minutos de trabajo y sin fichero parcial. El segundo, ya autenticado y con ocho
+  reintentos, se quedó **cincuenta minutos a 0,02 MB/s** con 8,6 GB de buffer en memoria y cero
+  bytes escritos.
+- **Por qué:** un mes son 72 ficheros de ~1 GB y leerlos en remoto son miles de peticiones de
+  rango contra un solo host. El anfitrión responde 429 y DuckDB entra en una espera que se
+  cuadruplica a cada intento. Medido el mismo día: descargar **un shard entero** va a 14,8 MB/s.
+- **Qué se hace:** cada shard se descarga una vez con `huggingface_hub` (que cachea, reanuda y
+  espera bien), se filtra en local a un fichero de parte y se borra. El pico de disco es un shard,
+  el mes reanuda donde se quedó, y `limit` ahora **para la descarga** en vez de solo recortar el
+  resultado: con 505 547 partidas de la banda 1000-1799 en el primer shard, 1,2 M salen de tres.
+- **Lo que no cambia:** el filtro. `where_clause` se construye una vez y se usa en los dos sitios
+  —la consulta que imprime el ensayo y cada shard descargado— para que lo documentado sea lo que
+  corre.
+- **Coste:** una conexión DuckDB ahora crea un secreto de Hugging Face cuando hay token local, y el
+  presupuesto de reintentos sube de 3 a 8. Firmar las peticiones también sube el límite del
+  anfitrión, así que es lo correcto aunque no hubiera 429.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

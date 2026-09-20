@@ -17,4 +17,8 @@ terminations: ['Normal', 'Time forfeit']
 min_plies: 20
 exclude_variants: true
 out_dir: data/raw-low
-limit: 3000000
+# 1.2 M games a month is far more than the balanced sample needs (four 200-Elo bands at up to
+# 200 000 each), and the limit stops the download: club games are the bulk of Lichess, so the
+# band fills after a handful of the month's 72 one-gigabyte shards instead of all of them.
+limit: 1200000
+cache_dir: data/hf-cache
