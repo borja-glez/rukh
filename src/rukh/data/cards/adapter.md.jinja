@@ -1,0 +1,83 @@
+---
+license: {{ license }}
+library_name: rukh
+base_model: {{ base_repo }}
+tags:
+  - chess
+  - rukh
+  - lora
+  - adapter
+---
+
+# {{ repo_id }}
+
+A LoRA adapter for [`{{ base_repo }}`](https://huggingface.co/{{ base_repo }}). On its own it does
+nothing: it is {{ "{:,}".format(params) }} numbers ({{ "%.1f"|format(bytes / 1048576) }} MB) that
+correct that model's weights, and without them there is no model to correct.
+
+Written by hand rather than imported, as part of [Rukh]({{ repository_url }}), a course that builds
+a chess language model end to end. How it works and why: [{{ course_url }}]({{ course_url }}).
+
+## What it is
+
+| | |
+|---|---|
+| Rank `r` | {{ lora.r }} |
+| Scaling `alpha` | {{ lora.alpha }} ({{ lora.alpha }}/{{ lora.r }} applied to `B·A`) |
+| Adapted matrices | `{{ targets }}`, in every block |
+| Trainable parameters | {{ "{:,}".format(params) }} |
+| File size | {{ "%.1f"|format(bytes / 1048576) }} MB |
+
+The base weights never move. Everything outside `A` and `B` is frozen during training, which is
+what makes the file this small and what limits what it can learn: the correction has to pass
+through {{ lora.r }} dimensions per matrix.
+
+## What it changed
+
+{% if effect.share_before is not none and effect.share_after is not none -%}
+Measured over {{ effect.games }} self-play openings, base and adapted, same sampling and same seed:
+
+| | share of games opening `{{ effect.first_move }}` |
+|---|---:|
+| `{{ base_repo }}` | {{ "%.1f"|format(effect.share_before * 100) }} % |
+| with this adapter | {{ "%.1f"|format(effect.share_after * 100) }} % |
+{%- else %}
+Not measured yet.
+{%- endif %}
+
+{% if effect.elo_base is not none and effect.elo_adapted is not none -%}
+And what the style cost in strength, on the same Stockfish ladder as every other stage of the
+project:
+
+| | Elo |
+|---|---:|
+| `{{ base_repo }}` | {{ "%.0f"|format(effect.elo_base) }} |
+| with this adapter | {{ "%.0f"|format(effect.elo_adapted) }} |
+{%- endif %}
+
+## How it was trained
+
+{% if effect.train_games is not none -%}
+{{ "{:,}".format(effect.train_games) }} games selected with `{{ effect.predicate }}`, from the
+1800+ Lichess corpus of the project.
+{%- else -%}
+See the course for the corpus and the recipe.
+{%- endif %}
+
+## Using it
+
+```python
+from rukh.models import MoveDecoder
+from rukh.models.lora import load_adapter
+from rukh.train import load_model
+
+model, _ = load_model("<the base checkpoint>")
+load_adapter(model, "adapter.safetensors")   # the config travels next to it
+```
+
+`rukh.models.lora.merge_lora(model)` folds it into the weights, after which the model is an
+ordinary `MoveDecoder`: same module names, same state dict, exportable to ONNX like any other.
+
+## Licence
+
+{{ license }}, the same as the base model.

@@ -1,5 +1,6 @@
 """Publishing trained models to the Hugging Face Hub with cards generated from MLflow."""
 
+from rukh.publish.adapter import AdapterEffect, AdapterPublishResult, publish_adapter
 from rukh.publish.model import (
     CONFIG_NAME,
     ONNX_FILES,
@@ -30,6 +31,8 @@ from rukh.publish.model import (
 
 __all__ = [
     "CONFIG_NAME",
+    "AdapterEffect",
+    "AdapterPublishResult",
     "ONNX_FILES",
     "PARITY_NAME",
     "README_NAME",
@@ -45,6 +48,7 @@ __all__ = [
     "counterpart_stage",
     "encoder_acceptance_bars",
     "parity_context",
+    "publish_adapter",
     "publish_model",
     "publish_state",
     "read_eval",
