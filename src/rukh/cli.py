@@ -87,14 +87,18 @@ def data_fetch(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print the plan; touch neither network nor disk.")
     ] = False,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Refetch months whose parquet is already on disk.")
+    ] = False,
     as_json: Annotated[bool, typer.Option("--json", help="Print the plan as JSON only.")] = False,
 ) -> None:
     """Fetch filtered Lichess games as parquet files plus a manifest."""
     from rukh.config import load_yaml
     from rukh.data.fetch import FetchConfig, run
 
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
     cfg = load_yaml(config, FetchConfig)
-    fetch_plan = run(cfg, dry_run=dry_run)
+    fetch_plan = run(cfg, dry_run=dry_run, overwrite=overwrite)
     if as_json:
         typer.echo(fetch_plan.model_dump_json(indent=2))
         return

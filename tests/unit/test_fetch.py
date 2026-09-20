@@ -243,6 +243,41 @@ def test_run_writes_parquet_and_manifest_from_local_source(
     assert "min_plies" not in manifest.filters
 
 
+def test_a_month_already_on_disk_is_not_fetched_again(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reading a month is tens of minutes of range requests and the host answers 429 eventually.
+
+    Without this, the second month failing would throw away the first one, which is the
+    expensive half of the work and is already sitting correct on disk.
+    """
+    _write_hive_source(rukh_home, monkeypatch)
+    cfg = FetchConfig(months=["2025-01"])
+    run(cfg)
+    target = rukh_home / "data" / "raw" / "year=2025" / "month=01" / "games.parquet"
+    stamp = target.stat().st_mtime_ns
+
+    run(cfg)
+    assert target.stat().st_mtime_ns == stamp  # kept, not rewritten
+    counts = json.loads((rukh_home / "data" / "raw" / "manifest.json").read_text())["counts"]
+    assert counts == {"2025-01": 1}  # and it still gets counted into the manifest
+
+    run(cfg, overwrite=True)
+    assert target.stat().st_mtime_ns != stamp
+
+
+def test_the_stub_a_failed_copy_leaves_behind_is_refetched(
+    rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A zero-byte file is what a `COPY` that died mid-flight leaves; it is not a fetched month."""
+    _write_hive_source(rukh_home, monkeypatch)
+    target = rukh_home / "data" / "raw" / "year=2025" / "month=01" / "games.parquet"
+    target.parent.mkdir(parents=True)
+    target.touch()
+    run(FetchConfig(months=["2025-01"]))
+    assert target.stat().st_size > 0
+
+
 def test_run_drops_correspondence_games_instead_of_aborting(
     rukh_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

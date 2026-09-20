@@ -10,6 +10,7 @@ with comments (``%clk``, ``%eval``) in SQL is unreliable. The manifest therefore
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from rukh import paths
 from rukh.config import BaseConfig
 from rukh.data.db import DuckDbConfig, connect
 from rukh.data.manifest import FileHash, Manifest
+
+log = logging.getLogger(__name__)
 
 MONTH_RE = re.compile(r"^(\d{4})-(0[1-9]|1[0-2])$")
 
@@ -145,6 +148,11 @@ def plan(cfg: FetchConfig) -> FetchPlan:
     )
 
 
+def _is_empty(path: Path) -> bool:
+    """Whether the month still has to be fetched: missing, or the stub a failed COPY leaves."""
+    return not path.is_file() or path.stat().st_size == 0
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
@@ -153,7 +161,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def run(cfg: FetchConfig, dry_run: bool = False) -> FetchPlan:
+def run(cfg: FetchConfig, dry_run: bool = False, overwrite: bool = False) -> FetchPlan:
     """Plan the fetch and, unless ``dry_run``, execute it month by month.
 
     With ``dry_run=True`` nothing touches the network or the disk. Otherwise each month is
@@ -161,6 +169,11 @@ def run(cfg: FetchConfig, dry_run: bool = False) -> FetchPlan:
     month) and a ``manifest.json`` with filters, counts and file hashes is written last. The
     manifest stores file paths relative to ``out_dir`` and ``min_plies`` as
     ``min_plies_deferred`` because plies are only filtered in P1, after UCI conversion.
+
+    A month whose file is already on disk is kept rather than fetched again, unless
+    ``overwrite``. Reading a month is tens of minutes of range requests and the host answers
+    ``429`` when it has had enough; without this, the second month failing would throw away the
+    first one, which is the expensive half of the work.
     """
     fetch_plan = plan(cfg)
     if dry_run:
@@ -174,9 +187,14 @@ def run(cfg: FetchConfig, dry_run: bool = False) -> FetchPlan:
         for month, out_path in zip(cfg.months, fetch_plan.out_paths, strict=True):
             target = out_dir / out_path
             target.parent.mkdir(parents=True, exist_ok=True)
-            month_query = build_query(cfg.model_copy(update={"months": [month]}))
+            if not (overwrite or _is_empty(target)):
+                log.info("%s is already there, keeping it (pass overwrite=True to refetch)", target)
+            else:
+                month_query = build_query(cfg.model_copy(update={"months": [month]}))
+                target_sql = _sql_string(target.as_posix())
+                log.info("fetching %s into %s", month, target)
+                con.execute(f"COPY ({month_query}) TO {target_sql} (FORMAT PARQUET)")
             target_sql = _sql_string(target.as_posix())
-            con.execute(f"COPY ({month_query}) TO {target_sql} (FORMAT PARQUET)")
             row = con.execute(
                 f"SELECT count(*) FROM read_parquet({target_sql}, hive_partitioning = false)"
             ).fetchone()
