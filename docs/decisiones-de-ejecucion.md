@@ -129,6 +129,21 @@ se decide o se desvía durante la ejecución.
 - **Por qué:** fallo conocido de chrome-launcher en Windows; no afecta al runner.
 - **Si está mal:** los scripts `lighthouse*` de los `package.json` no cambian; es solo el modo de
   ejecutarlos en la máquina de referencia.
+- **Ampliación (2026-09-20, P4):** hay un camino más corto que lanzar Chrome aparte, y es el que se
+  usa ahora. El `EPERM` ocurre en `Launcher.kill`, **después** de escribir el informe, así que basta
+  con llamar al CLI de Lighthouse que trae `@lhci/cli` e ignorar el código de salida:
+
+  ```bash
+  node node_modules/.pnpm/lighthouse@12.6.1/node_modules/lighthouse/cli/index.js     "http://127.0.0.1:4402/curso/m4/01-fine-tuning/" --preset=desktop --quiet     --output=json --output-path=informe.json --chrome-flags="--headless=new --disable-gpu"
+  ```
+
+  El fichero está escrito aunque el proceso termine en 1. Dos avisos para la próxima: `lighthouse`
+  no es un binario expuesto en estos repos —hay que llamar al `cli/index.js` de dentro de
+  `.pnpm`—, y Node en Windows no entiende las rutas `/c/...` de MSYS, así que el `--output-path` y
+  el `require` del informe tienen que ir en `C:/...`.
+- **Medido así el 2026-09-20:** `rukh-lab` `/curso/m4/01-fine-tuning/` **1 / 1 / 1 / 1** en
+  escritorio, igual que `/curso/m3/01-el-encoder/`; `rukh-web` **1 / 1 / 1 / 1** en escritorio y
+  **0,99 / 1 / 1 / 1** en móvil.
 
 ## Verificación de P0 (2026-09-18, máquina de referencia)
 
