@@ -71,6 +71,9 @@ def to_fp16(path: Path, out: Path | None = None) -> QuantizeResult:
         log.info(
             "retyped %d Cast node(s) the fp16 conversion left disagreeing with the graph", repaired
         )
+    constants = _align_constant_outputs(converted)
+    if constants:
+        log.info("retyped %d constant node(s) the fp16 conversion left in float32", constants)
     onnx.save(converted, str(target))
     return QuantizeResult(
         path=target.as_posix(),
@@ -107,6 +110,54 @@ def _align_cast_outputs(model: object) -> int:
             if attribute.name == "to" and attribute.i != wanted:
                 attribute.i = int(wanted)
                 repaired += 1
+    return repaired
+
+
+def _align_constant_outputs(model: object) -> int:
+    """Retype every constant whose value still says float32 while its output says float16.
+
+    The same fault as ``_align_cast_outputs`` in a different node. ``convert_float_to_float16``
+    retypes the graph's values but leaves the ``value`` attribute of ``Constant`` and
+    ``ConstantOfShape`` alone, so a node that produces a block of zeros keeps producing float32
+    ones into a graph that now expects float16, and onnxruntime refuses the file with the same
+    ``Type Error`` message.
+
+    The decoder that takes its LoRA factors as inputs is what found this: the correction is
+    assembled with ``cat`` over the projection's full width, and the ranges nobody adapts are a
+    ``ConstantOfShape`` of zeros. Without this the fp16 build of every swappable model would fail
+    to load, and the fp32 one -- which nothing serves -- would be fine.
+
+    A ``ConstantOfShape`` with **no** ``value`` attribute is the same fault written as an absence:
+    the specification says its default is a float32 zero, so the node the exporter wrote without
+    one quietly stops matching a graph that is now float16. That case gets the attribute it was
+    relying on the default for.
+    """
+    import numpy as np
+    from onnx import TensorProto, helper, numpy_helper
+
+    graph = model.graph  # type: ignore[attr-defined]
+    declared = {value.name: value.type.tensor_type.elem_type for value in graph.value_info}
+    kinds = {TensorProto.FLOAT: np.float32, TensorProto.FLOAT16: np.float16}
+    repaired = 0
+    for node in graph.node:
+        if node.op_type not in {"Constant", "ConstantOfShape"} or not node.output:
+            continue
+        wanted = declared.get(node.output[0])
+        if wanted not in kinds:
+            continue
+        value = next((entry for entry in node.attribute if entry.name == "value"), None)
+        if value is None:
+            if node.op_type != "ConstantOfShape" or wanted == TensorProto.FLOAT:
+                continue  # `Constant` always has one; the default is already float32
+            fill = numpy_helper.from_array(np.zeros(1, dtype=kinds[wanted]), "value")
+            node.attribute.append(helper.make_attribute("value", fill))
+            repaired += 1
+            continue
+        if value.t.data_type not in kinds or value.t.data_type == wanted:
+            continue
+        array = numpy_helper.to_array(value.t).astype(kinds[wanted])
+        value.t.CopyFrom(numpy_helper.from_array(array, value.t.name))
+        repaired += 1
     return repaired
 
 

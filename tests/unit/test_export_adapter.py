@@ -191,3 +191,27 @@ def test_the_web_file_is_the_same_from_the_model_and_from_the_saved_adapter(tmp_
         tmp_path / "adapter.safetensors", tmp_path / "b" / "adapter.bin", "chorcat/toy"
     )
     assert from_model.read_bytes() == from_file.read_bytes()
+
+
+def test_the_quantized_files_still_take_the_adapter(tmp_path):
+    """int8 and fp16 are what the browser actually loads, so the swap has to survive both.
+
+    Dynamic quantization rewrites the `MatMul`s whose other side is an initialiser, and the
+    adapter's two are not: both of their inputs come from outside the graph. Nothing guarantees
+    the converters leave them alone, so it is checked rather than assumed.
+    """
+    from rukh.export.quantize import quantize_int8, to_fp16
+
+    model = _with_lora(_toy())
+    _trained_adapter(model)
+    feed = adaptable_inputs(model)
+    result = export_adaptable_onnx(_toy(), tmp_path / "model.onnx", LORA, seq_len=SEQ)
+    layout = adapter_layout(_with_lora(_toy()))
+    idx = torch.randint(1, 64, (1, 9)).numpy()
+
+    for quantized in (to_fp16(pathlib.Path(result.path)), quantize_int8(pathlib.Path(result.path))):
+        session = _session(quantized.path)
+        assert [i.name for i in session.get_inputs()] == [INPUT_NAME, A_INPUT, B_INPUT]
+        without = session.run(None, {INPUT_NAME: idx, **zero_inputs(layout)})[0]
+        with_adapter = session.run(None, {INPUT_NAME: idx, **feed})[0]
+        assert np.abs(with_adapter - without).max() > 1e-3, quantized.kind
