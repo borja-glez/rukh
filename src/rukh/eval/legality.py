@@ -113,12 +113,21 @@ def sample_positions(
     seed: int = 0,
     pool: int = 50_000,
     block: int = 200,
+    header_elo: int | None = None,
 ) -> list[Position]:
     """Sample ``n`` prefixes from a UCI games parquet, one per game, at a random ply.
 
     Only the first ``pool`` rows are read (a validation month is millions of games and the
     harness never needs more than a few tens of thousands); which of them are used, and at which
     ply, is decided by ``seed``.
+
+    ``header_elo`` replaces the ratings the game really had. It is off by default, because the
+    honest way to score next-move accuracy is to show the model the header the game actually
+    carried. It is on for the Elo sweep, and for the same reason the puzzles need it: every
+    position is prompted with the *condition* being tested, so "asked to play at 1200, does it
+    play worse or does it play illegally?" becomes a question the table can answer. Without it
+    those two columns are identical in every row -- true, and indistinguishable from evidence
+    that the condition does nothing.
     """
     import polars as pl
 
@@ -144,8 +153,8 @@ def sample_positions(
                 int(row["game_id"]),
                 moves,
                 ply,
-                int(row["white_elo"]),
-                int(row["black_elo"]),
+                header_elo if header_elo is not None else int(row["white_elo"]),
+                header_elo if header_elo is not None else int(row["black_elo"]),
                 block=block,
             )
         )

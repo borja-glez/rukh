@@ -85,12 +85,15 @@ class EvalConfig(BaseConfig):
     accuracy_positions: int = 10_000
     position_pool: int = 50_000
     puzzles_per_band: int = 2_000
-    puzzles_use_header: bool = False
-    """Prompt every puzzle with ``header_elo`` instead of the ratings its own players had.
+    force_header: bool = False
+    """Prompt everything with ``header_elo`` instead of the ratings the game really had.
 
-    Off everywhere except the Elo sweep. Almost every puzzle carries real ratings, so with it off
-    the puzzle rate is the same in every row of a sweep -- correct, and indistinguishable from
-    evidence that the condition does nothing."""
+    Off everywhere except the Elo sweep, where it is what makes the table readable. Validation
+    positions carry their own players' ratings and almost every puzzle carries its game's, so
+    with it off the legality, the accuracy and the puzzle rate come out **identical in every row**
+    of a sweep: correct by their own definition, and indistinguishable from evidence that the
+    condition does nothing. The Elo games never had this problem -- they are played from the
+    starting position and the header is the only thing that says who is playing."""
     header_elo: int = 1_800
     """The Elo the model is asked to play at (``<wXXXX> <bXXXX>``).
 
@@ -143,7 +146,10 @@ class EvalConfig(BaseConfig):
         # Only when it is on. A cache key is a promise that two runs with the same key measured
         # the same thing, and a flag that is off *is* the behaviour every cached game was played
         # under; adding it unconditionally would throw away the 17 MB of games P2 and P3 paid for.
-        if self.puzzles_use_header:
+        # The key keeps the old name on purpose: puzzles are the only thing this flag changes
+        # that is *cached* (legality and accuracy are recomputed every run), so renaming it would
+        # throw away the games and the attempts of a sweep that is already paid for.
+        if self.force_header:
             fields["puzzles_use_header"] = True
         return fields
 
@@ -214,6 +220,7 @@ def _positions(cfg: EvalConfig, tok: UciTokenizer, notes: list[str]) -> list[Any
         seed=cfg.seed,
         pool=cfg.position_pool,
         block=cfg.block,
+        header_elo=cfg.header_elo if cfg.force_header else None,
     )
 
 
@@ -416,7 +423,7 @@ def evaluate(
                 items,
                 cache=cache,
                 header_elo=cfg.header_elo,
-                force_header=cfg.puzzles_use_header,
+                force_header=cfg.force_header,
             )
             if result.puzzles.prompt_style != GAME_PREFIX:
                 notes.append(PUZZLE_PROMPT_NOTE)

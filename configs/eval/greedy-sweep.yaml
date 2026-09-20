@@ -1,10 +1,11 @@
 # The suite the Elo sweep of M4 runs once per condition.
 #
 # Identical to `greedy.yaml` -- the sampling every published number was read at (D-047) -- with
-# one change: `puzzles_use_header`. Almost every puzzle in the split carries the real ratings of
-# the players whose game it came from, so with it off the puzzle column would be the same in
-# every row of the sweep. Correct, and indistinguishable from evidence that the condition does
-# nothing, which is the one thing this table must not be ambiguous about.
+# one change: `force_header`. Validation positions carry their own players' ratings and almost
+# every puzzle carries its game's, so with it off the legality, the accuracy and the puzzle rate
+# come out identical in every row of the sweep. Correct by their own definition, and
+# indistinguishable from evidence that the condition does nothing, which is the one thing this
+# table must not be ambiguous about.
 #
 # Its own cache, for the same reason: these puzzle attempts answer a different question from the
 # ones `cache-greedy.sqlite` holds and must not be confused with them.
@@ -15,7 +16,7 @@ legality_positions: 1000
 accuracy_positions: 1000
 position_pool: 20000
 puzzles_per_band: 2000
-puzzles_use_header: true
+force_header: true
 elo_games: 20
 elo_move_time: 0.1
 bootstrap: 500

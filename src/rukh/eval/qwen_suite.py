@@ -121,7 +121,7 @@ def evaluate_qwen(
                 items,
                 cache=cache,
                 header_elo=cfg.header_elo,
-                force_header=cfg.puzzles_use_header,
+                force_header=cfg.force_header,
             )
         else:
             notes.append(f"puzzles not found at {puzzle_path}: puzzle suite skipped")
