@@ -84,6 +84,10 @@ class QwenReport(BaseConfig):
     train_samples: int
     steps: int
     final_loss: float | None = None
+    weights_memory_mb: float | None = None
+    """What the loaded model occupies before a single step. This is the number QLoRA exists for,
+    and the only one that separates the two precisions: the peak during training is dominated by
+    activations and optimizer state, which 4-bit does not touch."""
     peak_memory_mb: float | None = None
 
     @property
@@ -174,6 +178,7 @@ def train_qwen(cfg: QwenConfig, device: str | None = None) -> QwenReport:
         model = model.to(where)
     model.config.use_cache = False
 
+    weights_memory = torch.cuda.memory_allocated() / 1e6 if where == "cuda" else None
     adapted = get_peft_model(
         model,
         PeftLoraConfig(
@@ -238,6 +243,7 @@ def train_qwen(cfg: QwenConfig, device: str | None = None) -> QwenReport:
         train_samples=len(trainer.train_dataset),
         steps=cfg.max_steps,
         final_loss=float(result.training_loss) if result.training_loss is not None else None,
+        weights_memory_mb=weights_memory,
         peak_memory_mb=peak,
     )
     (out_dir / "run.json").write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")

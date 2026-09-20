@@ -30,7 +30,7 @@ from pydantic import BaseModel, ConfigDict
 from rukh.data.pgn_text import prompt_for
 
 if TYPE_CHECKING:
-    from rukh.tokenize.uci_vocab import UciTokenizer
+    pass
 
 log = logging.getLogger(__name__)
 
@@ -180,24 +180,3 @@ def qwen_source(player: QwenPlayer) -> Any:
         return move
 
     return choose
-
-
-def top1_accuracy(
-    player: QwenPlayer,
-    positions: list[Any],
-    tok: UciTokenizer | None = None,  # noqa: ARG001 - signature parity with the decoder's metric
-) -> tuple[int, int]:
-    """``(hits, counted)`` against the human move, on the same positions the decoder is scored on.
-
-    A position the model answers with nonsense is a miss, not a skip: the decoder is never given
-    that option either.
-    """
-    hits = 0
-    for position in positions:
-        board = chess.Board()
-        for uci in position.moves:
-            board.push(chess.Move.from_uci(uci))
-        move, _ = player.propose(board)
-        if move is not None and move.uci() == position.target:
-            hits += 1
-    return hits, len(positions)

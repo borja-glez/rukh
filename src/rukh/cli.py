@@ -507,8 +507,10 @@ def train_qwen_cmd(
     typer.echo(f"samples:   {report.train_samples:,} over {report.steps:,} steps")
     if report.final_loss is not None:
         typer.echo(f"loss:      {report.final_loss:.4f}")
+    if report.weights_memory_mb is not None:
+        typer.echo(f"weights:   {report.weights_memory_mb:,.0f} MB on the device")
     if report.peak_memory_mb is not None:
-        typer.echo(f"peak mem:  {report.peak_memory_mb:,.0f} MB")
+        typer.echo(f"peak mem:  {report.peak_memory_mb:,.0f} MB during training")
     typer.echo(f"adapter:   {report.adapter_dir}")
 
 

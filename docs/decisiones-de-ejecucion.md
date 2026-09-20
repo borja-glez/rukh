@@ -1396,6 +1396,39 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Los dos se detectaron en Chrome real**, no en `astro check` ni en el build, que pasaron los dos
   en verde con la lección rota.
 
+### D-094 · QLoRA funciona en sm_120 y a 0,6 B no ahorra lo que dice su nombre
+- **Medido** con la misma corrida de dos pasos, cambiando solo `four_bit`:
+
+  | Precisión | pesos en la tarjeta | pico durante el entrenamiento |
+  |---|---|---|
+  | bf16 | 1 192 MB | 1 963 MB |
+  | 4 bits NF4 | **851 MB** | **1 956 MB** |
+
+- **El ahorro real es 341 MB sobre los pesos (29 %) y 7 MB sobre el pico (0,4 %).** El pico lo
+  dominan las activaciones y el estado del optimizador, que la cuantización no toca. La razón de
+  existir de QLoRA —caber en una tarjeta que sin ella no llegaría— no aplica a esta escala, y el
+  módulo lo dice en vez de presentar la técnica como si se hubiera demostrado algo.
+- **Por qué solo 341 MB y no ~900:** `bitsandbytes` no cuantiza la tabla de embeddings ni la cabeza
+  atada, y en Qwen3-0.6B esa tabla son 151 936 × 1024 = **155,6 M parámetros, el 25,9 %** del
+  modelo. Un cuarto de los pesos se queda en bf16 por construcción.
+- **La contabilidad también engaña si no se corrige:** `numel()` sobre un `Params4bit` devuelve la
+  mitad de los parámetros que representa, porque hay dos valores por byte. Sin corregirlo, la línea
+  de «solo el 0,764 % es entrenable» saldría el doble de favorable.
+- **`bitsandbytes` 0.50.2 instala y carga** en Windows con CUDA 12.8 y sm_120 sin `nvcc`. Entra en
+  el extra `hf`.
+
+### D-095 · El ensayo de dos pasos encontró un fallo que habría aparecido a los veinticinco minutos
+- **Qué se hizo:** antes de la corrida real de Qwen (media hora de GPU) se ejecutó la misma receta
+  con `max_steps: 2` y cien partidas, y la evaluación con una suite de doce posiciones, nueve
+  puzles y una partida.
+- **Qué encontró:** `estimate(records, bootstrap=...)` — el parámetro se llama `samples`. Un
+  `TypeError` que solo se dispara después de jugar todas las partidas, es decir, al final de la
+  fase más cara de la evaluación.
+- **La regla:** una receta nueva se ensaya con el presupuesto más pequeño en el que todavía pasa por
+  todas sus fases. Todo lo que puede fallar en un afinado falla en los primeros treinta segundos —
+  la descarga, el backend de cuantización, la API del entrenador, el relleno del tokenizador, el
+  guardado— y descubrirlo al final es la forma cara.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

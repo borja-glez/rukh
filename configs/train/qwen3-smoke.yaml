@@ -1,0 +1,22 @@
+# Two steps over a hundred games: not a run, a rehearsal.
+#
+# The real Qwen fine-tune is half an hour of GPU and everything that can fail in it fails in the
+# first thirty seconds -- the model download, the quantisation backend, the `trl` API, the tokenizer
+# padding, the save. Finding that out at minute twenty-five is the expensive way.
+model: Qwen/Qwen3-0.6B
+data_dir: data/pgn-text
+out_dir: checkpoints
+run_name: qwen3-smoke
+max_length: 512
+batch_size: 2
+grad_accum: 1
+lr: 2.0e-4
+max_steps: 2
+warmup: 0
+r: 16
+alpha: 32
+dropout: 0.05
+targets: [q_proj, k_proj, v_proj, o_proj]
+four_bit: true
+n_train: 100
+seed: 42

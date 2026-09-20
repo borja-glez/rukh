@@ -139,7 +139,7 @@ def evaluate_qwen(
                 header_elo=cfg.header_elo,
                 player=player,
             )
-            result.elo = estimate(records, bootstrap=cfg.bootstrap, seed=cfg.seed)
+            result.elo = estimate(records, samples=cfg.bootstrap, seed=cfg.seed)
     finally:
         cache.close()
     # `result.written` stays the snapshot taken over the validation positions and nothing else.
