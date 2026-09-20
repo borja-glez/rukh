@@ -20,6 +20,6 @@
   "module": "attn.qkv",
   "r": 8,
   "scale_applied": 2.0,
-  "base_model": "chorcat/rukh-medium",
+  "base_model": "chorcat/rukh-medium-lora",
   "bytes": 1572864
 }
