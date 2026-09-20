@@ -2192,6 +2192,34 @@ Evidencia obtenida por el controlador, no por subagentes:
   a un pelo del umbral, el pelo es la respuesta. Un criterio que se cumple añadiendo partidas hasta
   que se cumple no era un criterio.
 
+### D-128 · Alinear baja la imitación y sube los puzles, y solo uno de los dos se puede afirmar
+- **La suite canónica sobre los dos modelos que se publican**, con las mismas 1 000 posiciones,
+  los mismos 6 000 puzles y la misma escalera que cada etapa desde M2:
+
+  | etapa | legalidad | top-1 | top-3 | puzles 1000-1500 | 1500-2000 | 2000+ | Elo escalera |
+  |---|---|---|---|---|---|---|---|
+  | `medium-v4` (base) | **99,8 %** | **54,4 %** | **82,2 %** | 57,9 % | 38,0 % | 16,6 % | 1504 (1446-1558) |
+  | `+ DPO on-policy` | 99,2 % | 52,3 % | 79,9 % | **59,0 %** | **40,3 %** | 17,8 % | 1560 (1500-1617) |
+  | `+ GRPO` | 99,3 % | 53,3 % | 80,3 % | 58,9 % | 39,1 % | 17,8 % | 1572 (1512-1640) |
+
+- **Lo que baja es la imitación, y baja porque se le ha pedido.** El top-1 mide cuántas veces el
+  modelo elige la jugada que eligió el humano; a estos dos se les entrenó explícitamente para que
+  prefirieran la que el motor puntúa mejor. Que la métrica de imitación caiga al alinear es la
+  definición de haberlo hecho, no un defecto. Y la legalidad cae con ella, que es el peaje de D-121
+  visto en la suite en vez de en las partidas.
+- **Los puzles suben en las seis comparaciones**, entre 1,0 y 2,3 puntos, y eso es lo más parecido a
+  fuerza táctica que el proyecto mide. Pero **ninguna banda lo establece sola**: las seis
+  diferencias están entre 0,6 y 1,5 sigmas, y los dos modelos no son independientes entre sí, así
+  que el «seis de seis» vale menos que su p de 0,016. Los afinados de M4 también subían, entre 0,2 y
+  0,7 puntos. Lo que se puede decir es que los alineados suben **más** y siempre en la misma
+  dirección; lo que no, que la suite de puzles lo demuestre.
+- **Y la escalera vuelve a coincidir sin poder afirmar:** 1504 → 1560 y 1572, con los intervalos
+  solapados. Es el mismo instrumento del principio del hito dando otra vez la misma media
+  respuesta, y la razón de haber empezado cambiándolo.
+- **La regla que deja:** una mejora que se ve en tres instrumentos débiles y en uno fuerte se
+  afirma con el fuerte y se apoya con los otros tres. Al revés —afirmarla porque tres débiles
+  coinciden— es contar el mismo ruido tres veces.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
