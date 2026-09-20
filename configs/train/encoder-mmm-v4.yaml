@@ -1,0 +1,46 @@
+# The bidirectional `PositionEncoder` at 38,971,392 parameters -- the size of the `small`
+# decoder, up from the 15 M of the first run -- pretrained on the 1.68 B-token corpus instead of
+# the 240 M one.
+#
+# Why bother, when D-057 showed the labels saturate at 110 000 rows: because that is exactly what
+# says the value head is limited by the representation and not by the supervision. The first
+# encoder was not data-starved the way the decoder was (691 M tokens of compute over 15 M
+# parameters is 46 per parameter), so this run buys capacity, not tokens: 16 000 steps is 922 M
+# tokens, about 24 per parameter, and 0.55 passes over the corpus instead of 2.9.
+model:
+  input: moves
+  n_layer: 12
+  n_head: 8
+  d_model: 512
+
+tokens_dir: data/tokens-v4/uci
+block: 200
+batch_size: 96
+grad_accum: 3 # 288 effective sequences of 200 tokens
+lr: 5.0e-4
+min_lr_ratio: 0.1
+warmup: 1000
+max_steps: 16000
+weight_decay: 0.1
+betas: [0.9, 0.95]
+grad_clip: 1.0
+precision: bf16
+compile: true
+eval_every: 500
+eval_batches: 50
+ckpt_every: 1000
+out_dir: checkpoints
+seed: 42
+run_name: encoder-mmm-v4
+# A timestamp is appended: a second run must not overwrite the step-*.pt series.
+unique_run_name: true
+workers: 4
+log_every: 10
+masking:
+  # BERT's recipe, unchanged: 15 % of the *moves* are hidden, and of those 80 % become <mask>,
+  # 10 % become another move and 10 % are left alone. Control tokens are never hidden.
+  prob: 0.15
+  mask_ratio: 0.8
+  random_ratio: 0.1
+  keep_ratio: 0.1
+  seed: 0

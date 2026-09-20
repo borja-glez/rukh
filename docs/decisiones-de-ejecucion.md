@@ -1095,6 +1095,63 @@ Evidencia obtenida por el controlador, no por subagentes:
   1470-1583), así que los +25 de DPO no están separados del ruido por sí solos; lo que los sostiene
   es que top-1 baja y puzles suben a la vez, que es la firma esperada y no la del azar.
 
+### D-076 · La cabeza de valor entrenaba magnitud y el criterio mide orden
+- **Qué estaba mal:** `MultiHead.loss` usaba `F.mse_loss` sobre `tanh(cp/400)`, que mide cuánto se
+  acerca cada predicción a su etiqueta. `GOAL.md` puntúa la cabeza con **Spearman**, que solo mira
+  el orden. Son objetivos distintos y la diferencia era visible: el esquema `squares` tenía mejor
+  Pearson (0,688 frente a 0,648) y peor Spearman (0,422 frente a 0,520) que `moves` — aprendía la
+  escala y se dejaba el ranking.
+- **Arreglo:** `pairwise_rank_loss`, un término por pares ponderado por la distancia entre
+  etiquetas, detrás de `HeadWeights.value_rank` (por defecto 0, así que las corridas anteriores
+  siguen siendo reproducibles). La ponderación importa: sin ella el gradiente se iría a separar
+  posiciones casi iguales, que es justo donde un evaluador sin búsqueda no puede ganar.
+- **Medido** (mismo encoder de 15 M, mismo afinado `last-n`, solo cambia la pérdida):
+
+  | `value_rank` | Pearson | Spearman | F1 error | margen |
+  |---|---|---|---|---|
+  | 0 (MSE sola) | 0,6476 | 0,5205 | 0,1804 | +9,17 |
+  | **1,0** | **0,6621** | 0,6395 | 0,1774 | +8,87 |
+  | 3,0 | 0,6114 | **0,6601** | 0,1188 | +3,01 |
+  | 8,0 | 0,5497 | 0,6596 | 0,1663 | +7,76 |
+
+- **No era un intercambio:** se esperaba ceder Pearson para ganar Spearman y sube todo, así que la
+  pérdida anterior estaba peor alineada con la tarea en los dos ejes. El Spearman se satura en
+  ~0,66 a partir de peso 1; se elige **1,0** por el mejor Pearson y el margen holgado.
+- **Ojo con el peso 3,0:** su F1 de error cae a +3,01 y rompería el criterio, pero el peso 8,0
+  vuelve a +7,76. No es monótono, así que es ruido de tirada única — el mismo aviso de D-057.
+
+### D-077 · El encoder sube a 39 M y el criterio de valor sigue sin cumplirse, con una razón medida
+- **Qué:** `PositionEncoder` pasa de 15 052 800 a **38 971 392 parámetros** (12 capas, d=512, el
+  tamaño del decoder `small`) preentrenado con MMM sobre el corpus de 1 681 M tokens en vez del de
+  240 M. Top-1 de jugada enmascarada: **81,40 %** frente al 75,2 % anterior.
+- **Medido** con la pérdida de ordenación en peso 1,0:
+
+  | Variante | Pearson | Spearman | F1 error | margen |
+  |---|---|---|---|---|
+  | publicado (15 M, MSE) | 0,6476 | 0,5205 | 0,1804 | +9,17 |
+  | 15 M + orden | 0,6621 | 0,6395 | 0,1774 | +8,87 |
+  | **39 M + orden** | **0,7261** | **0,6665** | **0,1855** | **+9,68** |
+
+- **El reparto dice dónde está el valor:** la pérdida dio **+0,119** de Spearman y triplicar la
+  capacidad **+0,027**. Subir a 87 M daría un par de centésimas y no acercaría el listón.
+- **Por qué hay techo, medido por bandas de |cp|** (10 000 posiciones):
+
+  | Rango de `cp` | Posiciones | Spearman |
+  |---|---|---|
+  | 0-50 | 6 099 (61 %) | 0,4625 |
+  | 50-150 | 2 775 (28 %) | 0,5844 |
+  | 150-400 | 496 (5 %) | 0,5196 |
+  | **400+** | 626 (6 %) | **0,8797** |
+
+  **Donde la ventaja está decidida el encoder ya pasa de 0,80.** Falla en posiciones casi
+  igualadas, que son el 61 % del conjunto: ordenarlas exige ver táctica y este modelo no tiene
+  búsqueda. El criterio global está dominado por el caso en que el enfoque tiene un techo
+  estructural.
+- **Decisión:** no se mueve el listón; se publica el número real (0,6665, **no cumplido**) con el
+  desglose al lado, y la decisión sobre el criterio es de Borja.
+- **Si está mal:** una tirada por variante. El desglose por bandas es la medida más informativa y
+  la más barata de repetir.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

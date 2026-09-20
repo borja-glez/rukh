@@ -1,0 +1,48 @@
+# The same fine-tuning as `encoder-heads.yaml`, on the other input scheme: the position is the
+# *line that reached it* instead of the board itself. This is the scheme `encoder-mmm.yaml`
+# pretrains, so this is the run that uses the masked-move checkpoint; `encoder-heads.yaml` on
+# `squares` is the comparison it is measured against (docs/spec/02, Componente 2).
+#
+# Caveat worth knowing before reading the numbers: the supervised table is deduplicated by
+# `fen4`, so the prefix is *a* line reaching the position, not necessarily the labelled game's.
+encoder_ckpt: checkpoints/encoder-mmm-20260919-093554//best.pt
+input: moves
+pooling: mean
+mode: last-n
+last_n: 2
+fraction: 1.0
+curve: []
+weights:
+  value: 1.0
+  blunder: 1.0
+  result: 0.5
+  value_rank: 3.0   # optimise the ordering GOAL.md scores, not only the magnitude (D-076)
+labels:
+  positions_eval: data/evals/positions-eval.parquet
+  games_dir: data/uci # only this scheme reads it: the prefixes come from the P1 games
+  out_dir: data/labels
+  value_scale: 400.0
+  blunder_cp: 100
+  val_fraction: 0.1
+  seed: 42
+block: 200 # the decoder's context, so a pretrained encoder fits without reshaping its positions
+batch_size: 128 # half of `squares`: a prefix is up to 200 tokens, a board is always 69
+grad_accum: 1
+lr: 1.0e-3
+min_lr_ratio: 0.1
+warmup: 200
+max_steps: 4000
+weight_decay: 0.01
+betas: [0.9, 0.95]
+grad_clip: 1.0
+precision: bf16
+compile: false # variable-length prefixes recompile on every new shape; not worth it here
+eval_every: 250
+eval_batches: 50
+ckpt_every: 1000
+out_dir: checkpoints
+seed: 42
+run_name: encoder-heads-rank30
+unique_run_name: true
+workers: 4
+log_every: 10

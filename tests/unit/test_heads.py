@@ -7,6 +7,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 import torch
+import torch.nn.functional as F
 from conftest import cli_options
 
 from rukh.models import EncoderConfig, MultiHead, PositionEncoder
@@ -405,3 +406,53 @@ def test_each_scheme_only_loads_its_own_pretrained_encoder(
         wrong = cfg.model_copy(update={"encoder_ckpt": f"{other}.pt"})
         with pytest.raises(ValueError, match=f"was trained on the {other!r} scheme"):
             load_encoder_for(wrong, where)
+
+
+def test_rank_loss_rewards_the_right_order_not_the_right_magnitude() -> None:
+    """The value head is scored with Spearman, so the loss has to care about order.
+
+    MSE cannot tell these two apart in the way the metric does: a prediction that is far from
+    every target but ranks them perfectly scores a perfect Spearman, and one that is close to
+    every target but swaps two of them does not.
+    """
+    from rukh.models.heads import pairwise_rank_loss
+
+    target = torch.tensor([-0.9, -0.1, 0.4, 0.8])
+    ordered = target * 0.2 - 5.0  # perfect order, hopeless magnitude
+    reversed_ = -target  # perfect magnitude scale, order inverted
+
+    assert float(pairwise_rank_loss(ordered, target)) < float(pairwise_rank_loss(reversed_, target))
+    assert float(F.mse_loss(ordered, target)) > float(F.mse_loss(reversed_, target))
+
+
+def test_rank_loss_weighs_clear_pairs_above_close_ones() -> None:
+    """Inside a batch, swapping a win and a loss costs more than swapping two equal positions.
+
+    Near-equal positions are where a static evaluator has no chance without search, so an
+    unweighted ranking loss would spend most of its gradient on pairs it cannot win. The
+    comparison has to be within one batch: the loss normalises by the total weight, so two
+    separate batches are scaled to the same size by construction.
+    """
+    from rukh.models.heads import pairwise_rank_loss
+
+    target = torch.tensor([-1.0, 1.0, 0.50, 0.52])
+    far_swapped = torch.tensor([1.0, -1.0, 0.50, 0.52])
+    near_swapped = torch.tensor([-1.0, 1.0, 0.52, 0.50])
+
+    assert float(pairwise_rank_loss(far_swapped, target)) > float(
+        pairwise_rank_loss(near_swapped, target)
+    )
+
+
+def test_rank_loss_is_zero_when_there_is_no_order_to_learn() -> None:
+    from rukh.models.heads import pairwise_rank_loss
+
+    flat = torch.full((4,), 0.3)
+    assert float(pairwise_rank_loss(torch.randn(4), flat)) == 0.0
+
+
+def test_the_rank_term_is_off_unless_asked_for() -> None:
+    """Existing runs keep plain MSE, so the published numbers stay reproducible."""
+    from rukh.models.heads import HeadWeights
+
+    assert HeadWeights().value_rank == 0.0

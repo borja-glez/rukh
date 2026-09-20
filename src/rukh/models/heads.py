@@ -33,12 +33,44 @@ HEADS = ("value", "blunder", "result")
 RESULT_CLASSES = 3
 
 
+
+def pairwise_rank_loss(pred: Tensor, target: Tensor, margin: float = 0.0) -> Tensor:
+    """A differentiable stand-in for "did the ordering come out right?".
+
+    Every pair in the batch votes: when ``target[i] > target[j]`` the prediction should put
+    ``i`` above ``j`` too. The vote is a logistic on the predicted difference, weighted by how
+    far apart the targets are, so telling a winning position from a losing one matters more than
+    splitting two equal ones -- which is also where a static evaluator has no chance without
+    search, and where an unweighted ranking loss would spend most of its gradient.
+
+    Returns zero for a batch whose targets are all equal, which has no ordering to learn.
+    """
+    diff_target = target.unsqueeze(1) - target.unsqueeze(0)
+    diff_pred = pred.unsqueeze(1) - pred.unsqueeze(0)
+    weight = diff_target.abs()
+    sign = torch.sign(diff_target)
+    total = weight.sum()
+    if not bool(total > 0):
+        return torch.zeros((), device=pred.device, dtype=pred.dtype)
+    penalty = F.softplus(-(sign * diff_pred - margin))
+    return (weight * penalty).sum() / total
+
 class HeadWeights(BaseConfig):
     """Weight of each head in the joint loss; ``0`` switches a head off without removing it."""
 
     value: float = 1.0
     blunder: float = 1.0
     result: float = 0.5
+    value_rank: float = 0.0
+    """Weight of the pairwise ranking term inside the value loss. 0 keeps plain MSE.
+
+    ``GOAL.md`` scores the value head with **Spearman**, which only looks at the order of the
+    predictions, while ``F.mse_loss`` only looks at how close each one is to its target. Those
+    are not the same objective, and the gap shows: the ``squares`` scheme reaches a better
+    Pearson (0.688 against 0.648) and a worse Spearman (0.422 against 0.520) than ``moves``. It
+    learns the magnitude and misses the ordering. This term optimises the thing being measured
+    (D-076).
+    """
 
 
 class ValueHead(nn.Module):
@@ -117,8 +149,14 @@ class MultiHead(nn.Module):
         (the rows that have a label at all) and ``result`` (class index).
         """
         zero = torch.zeros((), device=outputs["value"].device, dtype=outputs["value"].dtype)
+        value_target = targets["value"].to(outputs["value"].dtype)
+        value_loss = F.mse_loss(outputs["value"], value_target)
+        if self.weights.value_rank:
+            value_loss = value_loss + self.weights.value_rank * pairwise_rank_loss(
+                outputs["value"], value_target
+            )
         parts = {
-            "value": F.mse_loss(outputs["value"], targets["value"].to(outputs["value"].dtype)),
+            "value": value_loss,
             "blunder": zero,
             "result": F.cross_entropy(outputs["result"], targets["result"].long()),
         }
