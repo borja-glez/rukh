@@ -416,3 +416,9 @@ Isla nueva `EloDial.tsx`: el dial de condición con el Elo medido y su intervalo
   Stockfish y la 5090 responden.
 - Al final del hito: **decidir el merge** de `p4-finetuning` en los tres repos y **probar la demo**
   con el selector de Elo, a ser posible también en el móvil.
+- **Decidir la subida al Hub.** El criterio 1 no se cumple —está medido y explicado, no pendiente—,
+  y la instrucción fue no subir nada hasta que los objetivos estuvieran cumplidos. Los cinco
+  repositorios se preparan enteros con `--dry-run` y se suben en cuanto digas.
+- **Dónde va el «post 2»** que `GOAL.md` lista entre los entregables de P4. No existe ningún post en
+  los tres repos, tampoco el «post 1» de P2, así que no hay un sitio establecido. Se redacta el
+  borrador en `docs/posts/` y tú decides si va a `borjaglez.com` o a otro lado.
