@@ -261,6 +261,108 @@ def drop_rows(path: Path, stages: list[str]) -> tuple[list[str], list[dict[str, 
     return removed, kept
 
 
+BENCHMARKS_MARK = "## Resultados"
+"""Heading of ``docs/benchmarks.md`` from which everything is rewritten by ``render_benchmarks``."""
+
+BENCHMARKS_COLUMNS: list[tuple[str, str]] = [
+    ("Etapa", ""),
+    ("Legalidad sin máscara (%)", "---:"),
+    ("Top-1 (%)", "---:"),
+    ("Top-3 (%)", "---:"),
+    ("Puzles 1000-1500 (%)", "---:"),
+    ("Puzles 1500-2000 (%)", "---:"),
+    ("Puzles 2000+ (%)", "---:"),
+    ("Elo estimado (IC 95 %)", ""),
+    ("Δcp medio", "---:"),
+    ("Entropía 1.ª jugada (bits)", "---:"),
+    ("Fecha", ""),
+]
+
+
+def _band(row: dict[str, Any], key: str, band: str) -> str:
+    value = (row.get(key) or {}).get(band)
+    return _percent(value if isinstance(value, int | float) else None)
+
+
+def _elo_cell(row: dict[str, Any]) -> str:
+    """The Elo of a row with its interval, or the one-sided bound when every game went one way."""
+    if row.get("elo_separated"):
+        if row.get("elo_lower") is not None:
+            return f"> {row['elo_lower']:.0f}"
+        if row.get("elo_upper") is not None:
+            return f"< {row['elo_upper']:.0f}"
+    elo = row.get("elo")
+    if elo is None:
+        return "n/a"
+    interval = row.get("elo_ci")
+    if not (isinstance(interval, list) and len(interval) == 2):
+        return f"{elo:.0f}"
+    return f"{elo:.0f} ({interval[0]:.0f}-{interval[1]:.0f})"
+
+
+def render_benchmarks(rows: list[dict[str, Any]]) -> str:
+    """The results table of ``docs/benchmarks.md``, rendered from the measured rows.
+
+    Written rather than typed, and for the reason the whole project keeps repeating: a table
+    copied by hand from a report is a second source of truth that starts drifting on the day it
+    is written. The encoder's rows are left out -- they share not one column with these -- and so
+    is every row that has no measurement at all.
+    """
+    playing = sorted(
+        (row for row in rows if row.get("kind") != "encoder"), key=lambda row: str(row.get("stage"))
+    )
+    header = "| " + " | ".join(name for name, _ in BENCHMARKS_COLUMNS) + " |"
+    rule = "|" + "|".join(align or "---" for _, align in BENCHMARKS_COLUMNS) + "|"
+    lines = [BENCHMARKS_MARK, "", header, rule]
+    for row in playing:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    f"`{row.get('stage')}`",
+                    _percent(row.get("legality")),
+                    _percent(row.get("top1")),
+                    _percent(row.get("top3")),
+                    _band(row, "puzzles", "1000-1500"),
+                    _band(row, "puzzles", "1500-2000"),
+                    _band(row, "puzzles", "2000+"),
+                    _elo_cell(row),
+                    "n/a" if row.get("delta_cp") is None else f"{row['delta_cp']:.1f}",
+                    "n/a"
+                    if row.get("first_move_entropy") is None
+                    else f"{row['first_move_entropy']:.4f}",
+                    str(row.get("date") or ""),
+                ]
+            )
+            + " |"
+        )
+    lines.append("")
+    lines.append(
+        f"{len(playing)} etapas medidas con la misma suite. Las filas del encoder viven aparte "
+        "porque no comparten una sola columna con estas; las que una medición retiró no están "
+        "(`rukh eval drop`)."
+    )
+    return "\n".join(lines) + "\n"
+
+
+def write_benchmarks(results: Path | str, out: Path | str) -> int:
+    """Rewrite the results section of ``docs/benchmarks.md``; returns how many rows it wrote.
+
+    Everything above ``## Resultados`` is the document's own text -- what each column means and
+    how it is measured -- and is left exactly as it is. Only the table is generated.
+    """
+    payload = json.loads(Path(results).read_text(encoding="utf-8"))
+    found = payload.get("rows") if isinstance(payload, dict) else payload
+    rows = [item for item in found if isinstance(item, dict)] if isinstance(found, list) else []
+    target = Path(out)
+    document = target.read_text(encoding="utf-8")
+    head, mark, _ = document.partition(BENCHMARKS_MARK)
+    if not mark:
+        raise ValueError(f"{target} has no `{BENCHMARKS_MARK}` heading to rewrite")
+    target.write_text(head + render_benchmarks(rows), encoding="utf-8", newline="\n")
+    return len([row for row in rows if row.get("kind") != "encoder"])
+
+
 def _percent(value: float | None) -> str:
     return "n/a" if value is None else f"{value * 100:.1f} %"
 

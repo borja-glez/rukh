@@ -748,6 +748,38 @@ def eval_drop_cmd(
     typer.echo(f"rows left: {len(kept)}")
 
 
+@eval_app.command("benchmarks")
+def eval_benchmarks_cmd(
+    table: Annotated[
+        Path | None, typer.Option("--table", help="Results file (default: the shared one).")
+    ] = None,
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", help="Document to rewrite (default: docs/benchmarks.md)."),
+    ] = None,
+) -> None:
+    """Rewrite the results table of `docs/benchmarks.md` from the measured rows.
+
+    Only the table under `## Resultados` is generated; everything above it -- what each column
+    means and how it is measured -- is the document's own text and is left alone. A table copied
+    by hand from a report is a second source of truth that starts drifting the day it is written.
+    """
+    from rukh.eval.report import write_benchmarks
+    from rukh.paths import resolve
+
+    source = table or resolve("artifacts/web/results.json")
+    target = out or resolve("docs/benchmarks.md")
+    if not Path(source).is_file():
+        typer.echo(f"error: no results table at {source}", err=True)
+        raise typer.Exit(code=1)
+    try:
+        written = write_benchmarks(source, target)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"{target}: {written} stage(s) from {source}")
+
+
 @eval_app.command("openings")
 def eval_openings_cmd(
     model: Annotated[str, typer.Option("--model", help="Checkpoint or Hub id to read.")],
