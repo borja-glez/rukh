@@ -174,38 +174,10 @@ weights are the same, the arithmetic is not.
 ## Training recipe
 
 
-| Parameter | Value |
-|---|---|
-| `batch_size` | `128` |
-| `betas` | `[0.9, 0.95]` |
-| `block` | `200` |
-| `ckpt_every` | `1000` |
-| `compile` | `True` |
-| `data_manifest_sha` | `2274906c04342b8fc1632d3e1c3bff82e33f535936af742c7a7f9e4b052afa31` |
-| `device` | `cuda` |
-| `eval_batches` | `50` |
-| `eval_every` | `250` |
-| `grad_accum` | `2` |
-| `grad_clip` | `1.0` |
-| `log_every` | `10` |
-| `lr` | `0.001` |
-| `max_steps` | `6000` |
-| `min_lr_ratio` | `0.1` |
-| `model` | `None` |
-| `num_params` | `5258752` |
-| `out_dir` | `checkpoints` |
-| `precision` | `bf16` |
-| `preset` | `tiny` |
-| `run_name` | `tiny` |
-| `seed` | `42` |
-| `tokens_dir` | `data/tokens/uci` |
-| `unique_run_name` | `True` |
-| `vocab_hash` | `527c5dda224cab570cb84da8f7dcda0f43fe53edaf86822f899568f5dd824b46` |
-| `warmup` | `500` |
-| `weight_decay` | `0.1` |
-| `workers` | `4` |
+The MLflow run for this checkpoint was not available when the card was generated; the shape of
+the model is in `config.json`.
 
-MLflow run: `0a25dd056bfe4ca9b89204a6d75686f3`.
+
 
 ```json
 {
@@ -256,6 +228,15 @@ converted from SAN to legal UCI. Validation uses a month the model never saw.
   covers sampling noise only. The rungs below Stockfish's 1320 floor are nominal `Skill Level`
   anchors rather than measured ratings, and games that run out of context are adjudicated on the
   final position instead of being scored as draws.
+
+## In the course
+
+- Built in [M2 · El decoder: entrenarlo y medirlo](https://lab.rukh.borjaglez.com/curso/m2/02-entrenar-y-medir/), the lesson that runs every command behind this repository.
+- Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/) as the stage `tiny-greedy`: every stage of the course, the same suite, the same day.
+- Play it in the browser: [https://rukh.borjaglez.com/?stage=tiny-int8](https://rukh.borjaglez.com/?stage=tiny-int8).
+- Bring it to the paths the configs read: `uv run rukh pull tiny`.
+
+
 
 ## License
 

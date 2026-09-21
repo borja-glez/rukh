@@ -274,6 +274,14 @@ The pretraining checkpoint the heads started from: `checkpoints/encoder-mmm-v4-2
 - It was trained on games between 1800+ humans on Lichess; the positions it knows best are the
   positions those games reach.
 
+## In the course
+
+- Built in [M3 · El encoder: los labs](https://lab.rukh.borjaglez.com/curso/m3/03-labs-del-encoder/), the lesson that runs every command behind this repository.
+- Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/) as the stage `encoder-v4`: every stage of the course, the same suite, the same day.
+- Bring it to the paths the configs read: `uv run rukh pull encoder-v4`.
+
+
+
 ## License
 
 APACHE-2.0. The code and the weights are released under the Apache License 2.0;

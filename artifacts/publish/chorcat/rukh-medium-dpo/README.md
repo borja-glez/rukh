@@ -208,6 +208,15 @@ converted from SAN to legal UCI. Validation uses a month the model never saw.
   anchors rather than measured ratings, and games that run out of context are adjudicated on the
   final position instead of being scored as draws.
 
+## In the course
+
+- Built in [M5 · Alineamiento: los labs](https://lab.rukh.borjaglez.com/curso/m5/03-labs-de-alineamiento/), the lesson that runs every command behind this repository.
+- Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/) as the stage `medium-v4-dpo-onpolicy-greedy`: every stage of the course, the same suite, the same day.
+- Play it in the browser: [https://rukh.borjaglez.com/?stage=medium-dpo-fp16](https://rukh.borjaglez.com/?stage=medium-dpo-fp16).
+- Bring it to the paths the configs read: `uv run rukh pull medium-v4-dpo-onpolicy`.
+
+
+
 ## License
 
 APACHE-2.0. The code and the weights are released under the Apache License 2.0;

@@ -22,12 +22,12 @@ that builds a chess language model end to end: 115,120,128 parameters, a
 vocabulary of 2030 fixed tokens and a context of
 200 moves.
 
-The demo at [https://rukh.borjaglez.com](https://rukh.borjaglez.com) serves the `tiny` and `small` stages, not this one; this repository is for running the weights yourself · read how it was built:
+Play against it in the browser: [https://rukh.borjaglez.com/?stage=medium-fp16](https://rukh.borjaglez.com/?stage=medium-fp16) · read how it was built:
 [https://lab.rukh.borjaglez.com](https://lab.rukh.borjaglez.com)
 
 ## Results
 
-Measured with `rukh eval --suite full` on 2026-09-19.
+Measured with `rukh eval --suite full` on 2026-09-20.
 
 | Metric | Value |
 |---|---|
@@ -232,6 +232,15 @@ converted from SAN to legal UCI. Validation uses a month the model never saw.
   covers sampling noise only. The rungs below Stockfish's 1320 floor are nominal `Skill Level`
   anchors rather than measured ratings, and games that run out of context are adjudicated on the
   final position instead of being scored as draws.
+
+## In the course
+
+- Built in [M2 · Más datos, no más red: de small a medium-v4](https://lab.rukh.borjaglez.com/curso/m2/04-mas-datos-no-mas-red/), the lesson that runs every command behind this repository.
+- Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/) as the stage `medium-v4-greedy`: every stage of the course, the same suite, the same day.
+- Play it in the browser: [https://rukh.borjaglez.com/?stage=medium-fp16](https://rukh.borjaglez.com/?stage=medium-fp16).
+- Bring it to the paths the configs read: `uv run rukh pull medium-v4`.
+
+
 
 ## License
 

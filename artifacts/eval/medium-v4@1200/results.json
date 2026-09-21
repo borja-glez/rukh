@@ -3,6 +3,7 @@
   "suite": "full",
   "checkpoint": "checkpoints/medium-v4-20260919-174623/best.pt",
   "model_sha": "98e05fcdfa2d1619ba33294e2d7f775c677b898e947b570ec2633de0e824b85e",
+  "weights_sha": "a10e2be5783b1fba47f4d1c6a987468cc0da32edb6585ad0d7877720e28ee403",
   "params": 115120128,
   "date": "2026-09-20",
   "device": "cuda",

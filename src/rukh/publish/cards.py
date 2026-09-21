@@ -84,7 +84,7 @@ def stage_card(artefact: Artefact, cfg: ModelPublishConfig) -> Path:
         from rukh.publish.reward import publish_reward
 
         result = publish_reward(target, artefact.repo_id, cfg, dry_run=True)
-        return Path(result.card_path)
+        return Path(result.folder) / README_NAME
     from rukh.publish.model import publish_model
 
     onnx = ONNX_DIRS.get(artefact.name)

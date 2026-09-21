@@ -278,24 +278,30 @@ def check_eval_matches(ckpt: Path, stage: str, evaluation: dict[str, Any] | None
     time only paired the two sampling points; this one compares what is actually being shipped
     against what was actually measured (D-074).
 
-    The evaluation stores ``sha256`` of the checkpoint file, so ``best.pt`` and a ``step-*.pt``
-    with identical weights are still different files and still refused. That is the safe
-    direction: publish the file that was measured.
+    The evaluation stores ``sha256`` of the checkpoint file and, since P6, of its tensors alone
+    (``weights_sha``). A different file with the same weights -- the copy ``rukh pull`` brings
+    back, which ``rukh publish`` wrote without the optimizer -- passes on the second; a
+    ``step-*.pt`` whose weights differ from ``best.pt`` is still refused (D-135).
     """
     if not evaluation:
         return
     measured = str(evaluation.get("model_sha") or "")
     if not measured:
         return
-    from rukh.eval.cache import file_sha
+    from rukh.eval.cache import file_sha, weights_sha
 
     actual = file_sha(Path(ckpt))
-    if measured != actual:
-        raise ValueError(
-            f"stage {stage!r} was measured on a different checkpoint: its results.json records "
-            f"model_sha {measured[:12]} and {Path(ckpt).as_posix()} hashes to {actual[:12]}. "
-            f"Evaluate this checkpoint under this stage, or publish the one that was evaluated."
-        )
+    if measured == actual:
+        return
+    measured_weights = str(evaluation.get("weights_sha") or "")
+    if measured_weights and measured_weights == weights_sha(Path(ckpt)):
+        return
+    raise ValueError(
+        f"stage {stage!r} was measured on a different checkpoint: its results.json records "
+        f"model_sha {measured[:12]} and {Path(ckpt).as_posix()} hashes to {actual[:12]}"
+        + (f" (weights {measured_weights[:12]} vs the file's own)" if measured_weights else "")
+        + ". Evaluate this checkpoint under this stage, or publish the one that was evaluated."
+    )
 
 
 def counterpart_stage(stage: str) -> str:

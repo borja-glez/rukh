@@ -68,6 +68,7 @@ from rukh.config import BaseConfig
 from rukh.data.labels import LabelsConfig, build_labels
 from rukh.eval import heuristic
 from rukh.eval.cache import EvalCache, config_sha, file_sha
+from rukh.eval.cache import weights_sha as tensor_sha
 from rukh.eval.report import (
     ReportPaths,
     encoder_row_of,
@@ -219,6 +220,8 @@ class EncoderResult(BaseModel):
     suite: str = SUITE
     checkpoint: str
     model_sha: str
+    weights_sha: str | None = None
+    """SHA-256 of the tensors alone, so a pulled copy of the same weights is recognised."""
     params: int
     date: str
     device: str = "cpu"
@@ -800,6 +803,7 @@ def evaluate_encoder(
         stage=cfg.stage or path.parent.name,
         checkpoint=path.as_posix(),
         model_sha=file_sha(path),
+        weights_sha=tensor_sha(path),
         params=sum(parameter.numel() for parameter in model.parameters()),
         date=datetime.now(UTC).date().isoformat(),
         device=str(where),

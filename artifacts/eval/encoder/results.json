@@ -3,6 +3,7 @@
   "suite": "encoder",
   "checkpoint": "checkpoints/encoder-heads-moves-20260919-101904/best.pt",
   "model_sha": "321baaf4a06bfb96e837b0b2ae2fb0a668115f27f892173fbcba87569f20b367",
+  "weights_sha": "80e6e72c335cbc813f9a65203b6a7eb35e634bdb8ee3e9d713fe08b75a09729e",
   "params": 15054725,
   "date": "2026-09-19",
   "device": "cuda",

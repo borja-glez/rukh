@@ -3,6 +3,7 @@
   "suite": "full",
   "checkpoint": "checkpoints/medium-v4-grpo/grpo.pt",
   "model_sha": "ade81558d491e041bc9fa784de6a213dd42c7d73920d1ecd12a200076df51c8c",
+  "weights_sha": "87f2c18fc082caf45438d43484e08ab8156fc6c049cba175ed06656023360aed",
   "params": 115120128,
   "date": "2026-09-20",
   "device": "cuda",

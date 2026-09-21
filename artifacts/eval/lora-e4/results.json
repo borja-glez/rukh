@@ -3,6 +3,7 @@
   "suite": "full",
   "checkpoint": "checkpoints/lora-e4-20260920-160133/step-1500.pt",
   "model_sha": "da7025c4de105d00b8c6fe70f3f64b02781bcde993be138efee26cca8e74eaa6",
+  "weights_sha": "1412c5c4666ff640d4c86112fe6ce4bff88555076a28ed5174e90b91349f4012",
   "params": 115120128,
   "date": "2026-09-20",
   "device": "cuda",

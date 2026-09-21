@@ -111,9 +111,9 @@ sobre `pipeline-v3.yaml`) están en el repo y se ejecutan igual; `rukh-small` en
 | 5 | `uv run rukh eval encoder --model checkpoints/encoder-heads-moves/best.pt --stage encoder` | ~5 min | F1 frente a la heurística, correlaciones |
 | 6 | `uv run rukh train encoder --config configs/train/encoder-mmm-v4.yaml` | 40 min | `checkpoints/encoder-mmm-v4-*/best.pt` (39 M, 81,4 %) — o `rukh pull encoder-mmm-v4` |
 | 7 | `uv run rukh train heads --config configs/train/encoder-heads-v4.yaml --mode last-n` | 3 min | `checkpoints/encoder-heads-v4-*/best.pt` — o `rukh pull encoder-v4` |
-| 8 | `uv run rukh eval encoder --model checkpoints/encoder-v4/best.pt --stage encoder-v4` | ~5 min | 18,6 % de F1 (+9,7 sobre la línea base), Spearman 0,666 |
-| 9 | `uv run rukh export --ckpt checkpoints/encoder-v4/best.pt --out artifacts/onnx/encoder --kind encoder --fp16 --int8 --check-parity` | ~5 min | el encoder que sirve la demo |
-| 10 | `uv run rukh encoder embed --positions data/evals/positions-eval.parquet --out artifacts/embeddings/positions.npy --ckpt checkpoints/encoder-v4/best.pt` | min | embeddings para la fase 2 |
+| 8 | `uv run rukh eval encoder --model checkpoints/encoder-heads-v4/step-4000.pt --stage encoder-v4` | ~5 min | 18,6 % de F1 (+9,7 sobre la línea base), Spearman 0,666 |
+| 9 | `uv run rukh export --ckpt checkpoints/encoder-heads-v4/step-4000.pt --out artifacts/onnx/encoder --kind encoder --fp16 --int8 --check-parity` | ~5 min | el encoder que sirve la demo |
+| 10 | `uv run rukh encoder embed --positions data/evals/positions-eval.parquet --out artifacts/embeddings/positions.npy --ckpt checkpoints/encoder-heads-v4/step-4000.pt` | min | embeddings para la fase 2 |
 | 11 | `uv run python labs/m3/value_bar_export.py` | min | `artifacts/web/value-bar.json` |
 
 ## M4 · Fine-tuning e instrucción
@@ -142,10 +142,10 @@ enfrentamientos en las dos direcciones, la galería y la publicación.
 | `rukh pull` | Repositorio | Escribe | Es |
 |---|---|---|---|
 | `tiny` | `chorcat/rukh-tiny` | `checkpoints/tiny/best.pt` | M2 lab 3 |
-| `small` | `chorcat/rukh-small` | `checkpoints/small/best.pt` | `small-v3`, M2 parte 4 |
+| `small` | `chorcat/rukh-small` | `checkpoints/small-v3/best.pt` | `small-v3`, M2 parte 4 |
 | `medium-v4` | `chorcat/rukh-medium` | `checkpoints/medium-v4/best.pt` | M2 parte 4; base de M4 y M5 |
 | `encoder-mmm-v4` | `chorcat/rukh-encoder-mmm` | `checkpoints/encoder-mmm-v4/best.pt` | M3 paso 6 |
-| `encoder-v4` | `chorcat/rukh-encoder` | `checkpoints/encoder-v4/best.pt` | M3 paso 7 |
+| `encoder-v4` | `chorcat/rukh-encoder` | `checkpoints/encoder-heads-v4/step-4000.pt` | M3 paso 7 |
 | `medium-elo`, `medium-masters` | `chorcat/rukh-medium-{elo,masters}` | `checkpoints/<nombre>/step-3800.pt` | M4 pasos 4 y 5 |
 | `lora-e4`, `lora-d4` | `chorcat/rukh-lora-{e4,d4}` | `checkpoints/lora-{e4,d4}/adapter.safetensors` | M4 paso 6 |
 | `qwen3-pgn-qlora` | `chorcat/rukh-qwen3-pgn-qlora` | `checkpoints/qwen3-pgn-qlora/` | M4 lab 8 |

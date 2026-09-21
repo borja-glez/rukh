@@ -97,6 +97,14 @@ headline number moves with that. Four seeds of this exact configuration gave
 uv run rukh train reward --config configs/train/rm.yaml
 ```
 
+## In the course
+
+- Built in [M5 · Alineamiento: los labs](https://lab.rukh.borjaglez.com/curso/m5/03-labs-de-alineamiento/), the lesson that runs every command behind this repository.
+- Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/): every stage of the course, the same suite, the same day.
+- Bring it to the paths the configs read: `uv run rukh pull rm`.
+
+
+
 ## Licence
 
 apache-2.0. Trained on engine evaluations of public Lichess games.

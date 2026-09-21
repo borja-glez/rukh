@@ -1,7 +1,7 @@
 ---
 license: apache-2.0
 library_name: rukh
-base_model: chorcat/rukh-medium-lora
+base_model: chorcat/rukh-medium
 tags:
   - chess
   - rukh
@@ -11,7 +11,7 @@ tags:
 
 # chorcat/rukh-lora-d4
 
-A LoRA adapter for [`chorcat/rukh-medium-lora`](https://huggingface.co/chorcat/rukh-medium-lora). On its own it does
+A LoRA adapter for [`chorcat/rukh-medium`](https://huggingface.co/chorcat/rukh-medium). On its own it does
 nothing: it is 393,216 numbers (1.6 MB) that
 correct that model's weights, and without them there is no model to correct.
 
@@ -40,13 +40,13 @@ weights and two readings agree to the last decimal:
 
 | | P(`d2d4`) | first-move entropy |
 |---|---:|---:|
-| `chorcat/rukh-medium-lora` | 26.68 % | 1.7695 bits |
+| `chorcat/rukh-medium` | 26.68 % | 1.7695 bits |
 | with this adapter | 99.88 % | 0.0160 bits |
 
 And what the style cost, on the same suite every other stage of the project is measured with --
 same validation positions, same puzzles, same seed:
 
-| | `chorcat/rukh-medium-lora` | with this adapter |
+| | `chorcat/rukh-medium` | with this adapter |
 |---|---:|---:|
 | Legality without the mask, argmax | 99.8 % | 99.8 % |
 | Top-1 next move | 54.4 % | 55.1 % |
@@ -79,11 +79,19 @@ ordinary `MoveDecoder`: same module names, same state dict, exportable to ONNX l
 order they run, with the `alpha/r` scaling already applied. `web/adapter.json` carries the shapes,
 because a buffer of floats says nothing about itself.
 
-It is meant for the ONNX export of `chorcat/rukh-medium-lora` that takes its LoRA factors as **inputs of the
+It is meant for the ONNX export of `chorcat/rukh-medium` that takes its LoRA factors as **inputs of the
 graph** (`lora_a` and `lora_b`) rather than baked into the weights. Fed an adapter of zeros that
 file is the base model exactly; fed this one it is this style. So the demo changes style by
 downloading 1.6 MB instead of a second copy of the model, which is
 the only reason a low-rank correction is worth keeping low-rank once it leaves the training loop.
+
+## In the course
+
+- Built in [M4 · Fine-tuning: los labs](https://lab.rukh.borjaglez.com/curso/m4/03-labs-de-afinado/), the lesson that runs every command behind this repository.
+- Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/) as the stage `lora-d4`: every stage of the course, the same suite, the same day.
+- Bring it to the paths the configs read: `uv run rukh pull lora-d4`.
+
+
 
 ## Licence
 

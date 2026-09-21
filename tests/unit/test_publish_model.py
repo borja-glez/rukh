@@ -557,3 +557,33 @@ def test_publish_refuses_another_models_numbers(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="measured on a different checkpoint"):
         check_eval_matches(ckpt, "small-greedy", {"model_sha": file_sha(other)})
+
+
+def test_a_pulled_copy_of_the_measured_weights_is_the_same_model(tmp_path: Path) -> None:
+    """`rukh pull` writes the weights without the optimizer, so the file sha never matches the
+    checkpoint the nightly measured; the tensors do, and that is what identifies a model (D-135).
+    """
+    import torch
+
+    from rukh.eval.cache import file_sha, weights_sha
+    from rukh.publish.model import check_eval_matches
+
+    state = {"w": torch.arange(6, dtype=torch.float32).reshape(2, 3), "b": torch.zeros(2)}
+    measured = tmp_path / "best.pt"
+    torch.save({"model_state": state, "optimizer": {"junk": 1}}, measured)
+    pulled = tmp_path / "pulled.pt"
+    torch.save({"model_state": {k: v.clone() for k, v in state.items()}}, pulled)
+    assert file_sha(measured) != file_sha(pulled)
+    assert weights_sha(measured) == weights_sha(pulled)
+
+    evaluation = {"model_sha": file_sha(measured), "weights_sha": weights_sha(measured)}
+    check_eval_matches(pulled, "tiny-greedy", evaluation)
+
+    other = tmp_path / "other.pt"
+    torch.save({"model_state": {"w": state["w"] + 1, "b": state["b"]}}, other)
+    with pytest.raises(ValueError, match="weights"):
+        check_eval_matches(other, "tiny-greedy", evaluation)
+    bare = tmp_path / "bare.pt"
+    torch.save({"config": {}}, bare)
+    with pytest.raises(ValueError, match="holds no model_state"):
+        weights_sha(bare)

@@ -3,6 +3,7 @@
   "suite": "full",
   "checkpoint": "checkpoints/small-v3-dpo-anchored/dpo.pt",
   "model_sha": "b65a39a70c53340eac5b62e9d13b7c38d0350861e834273e940bc7100fc138c3",
+  "weights_sha": "3b6e468097153fdb762315702c224e66697e5fb2fe0161d8ecf03750212c6855",
   "params": 38971392,
   "date": "2026-09-19",
   "device": "cuda",

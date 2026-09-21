@@ -3,6 +3,7 @@
   "suite": "full",
   "checkpoint": "checkpoints/medium-v4-dpo-onpolicy/dpo.pt",
   "model_sha": "67eeee8a3712c7a6bb1e01eb1f879323ef15574e6ebc0a099e4dd8fd0e4bde33",
+  "weights_sha": "4836fd8c91d1f0dbef574ad149b770ba2d5d5825a8b14c7020c1fdc758396261",
   "params": 115120128,
   "date": "2026-09-20",
   "device": "cuda",

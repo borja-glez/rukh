@@ -51,6 +51,41 @@ def file_sha(path: Path) -> str:
     return digest.hexdigest()
 
 
+def weights_sha(path: Path) -> str:
+    """SHA-256 of the tensors under ``model_state``, independent of how the file was written.
+
+    Two files can hold the same weights and differ byte for byte: ``best.pt`` keeps the optimizer
+    and the run's provenance, the copy ``rukh publish`` uploads (and ``rukh pull`` brings back)
+    does not, and ``torch.save`` is not even stable across versions. What an evaluation measured
+    is the weights, so this is the identity a pulled checkpoint shares with the one that was
+    evaluated. Names, dtypes, shapes and bytes, in name order; a tied head (``lm_head.weight``
+    when it is the embedding under another name) is left out, because the publisher drops it
+    and the loader re-ties it, so both files hold the same model.
+    """
+    import torch
+
+    from rukh.train.checkpoint import TIED_SOURCES
+
+    try:
+        payload = torch.load(Path(path), map_location="cpu", weights_only=True)
+    except Exception:  # noqa: BLE001 - reward checkpoints carry objects the safe loader refuses
+        payload = torch.load(Path(path), map_location="cpu", weights_only=False)
+    state = payload.get("model_state") if isinstance(payload, dict) else None
+    if not isinstance(state, dict) or not state:
+        raise ValueError(f"{Path(path).as_posix()} holds no model_state to hash")
+    names = sorted(state)
+    for head, embedding in TIED_SOURCES.items():
+        if head in state and embedding in state and torch.equal(state[head], state[embedding]):
+            names.remove(head)
+    digest = hashlib.sha256()
+    for name in names:
+        tensor = state[name].detach().cpu().contiguous()
+        digest.update(f"{name}|{tensor.dtype}|{tuple(tensor.shape)}|".encode())
+        raw = tensor.view(torch.int16) if tensor.dtype == torch.bfloat16 else tensor
+        digest.update(raw.numpy().tobytes())
+    return digest.hexdigest()
+
+
 class EvalCache:
     """Key-value store of evaluation items; ``enabled=False`` turns every call into a no-op."""
 

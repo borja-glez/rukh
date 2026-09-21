@@ -5,7 +5,7 @@
   "model_type": "rukh-position-encoder",
   "library_name": "rukh",
   "rukh_version": "0.0.1",
-  "stage": "encoder-mmm-v4",
+  "stage": "encoder-mmm",
   "step": 16000,
   "params": 38971392,
   "tokenizer": "moves",

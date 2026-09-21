@@ -3,6 +3,7 @@
   "suite": "encoder",
   "checkpoint": "checkpoints/encoder-heads-rank-20260920-110936/step-4000.pt",
   "model_sha": "400e4bca3e0d163b6429d0783bce91cf285148c8faac9c8ced5421b57960b306",
+  "weights_sha": "332523edc155550efa22eb813df807e739a2d6a5e645e2e750ca1c73425864f9",
   "params": 15054725,
   "date": "2026-09-20",
   "device": "cuda",

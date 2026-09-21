@@ -3,6 +3,7 @@
   "suite": "full",
   "checkpoint": "checkpoints/medium-elo-20260920-143756/step-3800.pt",
   "model_sha": "bcb67028547ca0037634d3fdd97862f9251abe2fe74da0cdcc7586668b755cf6",
+  "weights_sha": "da3a321e993250a0f40d535b79cd420868c63174602e066c62e13f19a9e0b1ec",
   "params": 115120128,
   "date": "2026-09-20",
   "device": "cuda",

@@ -44,6 +44,7 @@ class NightlyRecord(BaseModel):
     measure: str
     checkpoint: str | None = None
     model_sha: str | None = None
+    weights_sha: str | None = None
     seconds: float = 0.0
     status: str = "planned"
     """``planned`` (dry run), ``measured``, ``skipped`` or ``failed``."""
@@ -156,7 +157,7 @@ def run_nightly(
     out: Path | None = None,
 ) -> NightlyReport:
     """Measure every catalogued stage under one config and rewrite the table around them."""
-    from rukh.eval.cache import file_sha
+    from rukh.eval.cache import file_sha, weights_sha
     from rukh.eval.report import write_benchmarks
 
     started = time.perf_counter()
@@ -175,6 +176,7 @@ def run_nightly(
             record.checkpoint = checkpoint.as_posix()
             if checkpoint.is_file():
                 record.model_sha = file_sha(checkpoint)
+                record.weights_sha = weights_sha(checkpoint)
             log.info("nightly: %s as %s from %s", artefact.name, record.stage, checkpoint)
             if artefact.measure == "decoder":
                 _run_decoder(checkpoint, config, record.stage, use_cache, device)

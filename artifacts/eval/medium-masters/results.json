@@ -3,6 +3,7 @@
   "suite": "full",
   "checkpoint": "checkpoints/medium-masters-20260920-154035/step-3800.pt",
   "model_sha": "41adcf286008ef471301bcef5f1131b64ce705afbf3857f4b5501202bd4bf684",
+  "weights_sha": "17bbf344b215afe6ea8e6fc8ee62175863b239580c7c71cb3018ac85049927b9",
   "params": 115120128,
   "date": "2026-09-20",
   "device": "cuda",

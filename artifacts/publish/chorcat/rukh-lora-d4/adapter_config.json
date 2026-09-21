@@ -8,6 +8,6 @@
       "v"
     ]
   },
-  "base_model": "chorcat/rukh-medium-lora",
+  "base_model": "chorcat/rukh-medium",
   "format": "rukh-lora-1"
 }

@@ -26,6 +26,7 @@ from rukh import paths
 from rukh.config import BaseConfig
 from rukh.eval.accuracy import AccuracyResult, accuracy
 from rukh.eval.cache import EvalCache, config_sha, file_sha
+from rukh.eval.cache import weights_sha as tensor_sha
 from rukh.eval.diversity import DiversityResult, opening_diversity
 from rukh.eval.elo import DEFAULT_RUNGS, EloResult, EloRung, estimate, play_rungs
 from rukh.eval.legality import LegalityResult, legality, sample_positions
@@ -194,6 +195,8 @@ class SuiteResult(BaseModel):
     suite: str
     checkpoint: str
     model_sha: str
+    weights_sha: str | None = None
+    """SHA-256 of the tensors alone, so a pulled copy of the same weights is recognised."""
     params: int
     date: str
     device: str = "cpu"
@@ -423,6 +426,7 @@ def evaluate(
             suite=suite,
             checkpoint=ckpt.as_posix(),
             model_sha=weights_sha,
+            weights_sha=tensor_sha(ckpt),
             params=model.num_params(non_embedding=False),
             date=datetime.now(UTC).date().isoformat(),
             device=str(where),

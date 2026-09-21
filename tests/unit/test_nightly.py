@@ -77,7 +77,7 @@ def test_the_run_measures_in_catalogue_order_and_records_what_it_did(
     )
     # `tiny` under its stamped run folder: the stable name resolves to it.
     _toy(rukh_home / "checkpoints" / "tiny-20260919-060101" / "best.pt")
-    _toy(rukh_home / "checkpoints" / "encoder-v4" / "best.pt")
+    _toy(rukh_home / "checkpoints" / "encoder-heads-v4" / "step-4000.pt")
     (rukh_home / "checkpoints" / "qwen3-pgn-qlora").mkdir(parents=True)
     results = rukh_home / "artifacts" / "web" / "results.json"
     results.parent.mkdir(parents=True)
@@ -92,7 +92,7 @@ def test_the_run_measures_in_catalogue_order_and_records_what_it_did(
         results=results,
         benchmarks=benchmarks,
     )
-    assert measured == [("tiny-greedy", "best.pt"), ("encoder-v4", "best.pt")]
+    assert measured == [("tiny-greedy", "best.pt"), ("encoder-v4", "step-4000.pt")]
     by_name = {r.name: r for r in report.records}
     assert by_name["tiny"].status == "measured" and by_name["tiny"].model_sha
     assert by_name["tiny"].checkpoint.endswith("tiny-20260919-060101/best.pt")

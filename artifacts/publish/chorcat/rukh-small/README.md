@@ -233,6 +233,15 @@ converted from SAN to legal UCI. Validation uses a month the model never saw.
   anchors rather than measured ratings, and games that run out of context are adjudicated on the
   final position instead of being scored as draws.
 
+## In the course
+
+- Built in [M2 · El decoder: entrenarlo y medirlo](https://lab.rukh.borjaglez.com/curso/m2/02-entrenar-y-medir/), the lesson that runs every command behind this repository.
+- Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/) as the stage `small-v3-greedy`: every stage of the course, the same suite, the same day.
+- Play it in the browser: [https://rukh.borjaglez.com/?stage=small-fp16](https://rukh.borjaglez.com/?stage=small-fp16).
+- Bring it to the paths the configs read: `uv run rukh pull small`.
+
+
+
 ## License
 
 APACHE-2.0. The code and the weights are released under the Apache License 2.0;
