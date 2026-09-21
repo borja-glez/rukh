@@ -93,3 +93,5 @@ lecciones se escriben en el mismo hito que su lab (no se dejan para el final).
 > palabras. La primera parte conserva el slug del módulo; la cheatsheet se muestra solo en la
 > última; cada parte abre diciendo de dónde viene y a dónde va, y la parte de labs abre con un
 > «punto de partida» que dice qué hay que tener en disco y el `rukh pull` que lo trae.
+> Cada módulo cierra, y el siguiente abre, con `RepoTag`: el enlace a la etiqueta del repo
+> `rukh` de ese día y la línea para clonarla, con el aviso de que es una fotografía.

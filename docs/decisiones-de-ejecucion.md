@@ -2320,6 +2320,9 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Qué cuesta si está mal:** las lecciones pierden el hilo entre partes. Cada parte abre diciendo
   de dónde viene y cierra diciendo a dónde va, y la navegación anterior/siguiente ya recorría el
   curso en orden de módulo y lección.
+- **Añadido el mismo día, a petición de Borja:** cada módulo cierra y el siguiente abre con el
+  enlace a la etiqueta del repo `rukh` de ese día (`RepoTag`), para quien quiera clonarlo en ese
+  punto, con el aviso de que es una fotografía y de que para ejecutar se usa `main` y `rukh pull`.
 
 ## Publicación en Hugging Face (2026-09-19)
 
