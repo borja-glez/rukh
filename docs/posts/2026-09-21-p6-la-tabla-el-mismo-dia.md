@@ -47,7 +47,7 @@ Y la comparación entre la tabla nueva y la vieja es la mejor lección del curso
 reproducibilidad. Legalidad, top-1, top-3, puzles y entropía **no se movieron nada**: a
 temperatura 0,05 el muestreo es casi determinista y esas medidas no juegan contra nadie. La única
 columna que se movió es la única que juega contra Stockfish, y se movió lo que su intervalo dice
-que se puede mover: seis de siete diferencias caben en un semiancho de intervalo.
+que se puede mover: siete de nueve diferencias caben en un semiancho de intervalo.
 
 | Etapa | Al cerrar su hito | El 2026-09-21 |
 |---|---|---|
@@ -95,7 +95,12 @@ quién compararse en la tabla.
 
 En el segundo módulo medí que el int8 de `medium-v4` elige la misma jugada que el modelo original
 en el 95,1 % de las posiciones, y dejé la pregunta importante sin responder: ¿cuánto peor juega
-el 4,9 % restante? La paridad no lo dice. Hay que jugar. ⟦PARIDAD-POST⟧
+el 4,9 % restante? La paridad no lo dice. Hay que jugar. Puse los tres grafos ONNX (fp32, fp16, int8) en la misma
+escalera, con el rival por nodos porque ONNX Runtime juega en CPU: **1472, 1535 y 1524**, con
+intervalos de unos ±55 que se superponen. El int8 no cuesta nada que 160 partidas puedan ver. Y el
+fp32, que es la misma red que el checkpoint, salió 60 puntos por debajo del fp16: otra vez el suelo
+del instrumento, en la misma tarde. Para ver el coste del int8 hará falta un enfrentamiento directo
+fp16 contra int8 de varios cientos de partidas; con la escalera, no.
 
 ## Lo que queda
 

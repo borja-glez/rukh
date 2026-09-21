@@ -146,12 +146,12 @@ publican.
 
 | Paso | Comando | Tarda | Deja |
 |---|---|---|---|
-| 1 | `uv run python labs/m6/ladder_check.py --games 40` | ~40 min | los ocho peldaños medidos contra el ancla, motor contra motor (D-070) |
+| 1 | `uv run python labs/m6/ladder_check.py --games 40` | 35 min | los ocho peldaños medidos contra el ancla, motor contra motor (D-070) |
 | 2 | `uv run rukh eval --model checkpoints/medium-v4/best.pt --config configs/eval/ladder-time.yaml --stage ladder-time-a --no-cache` (y `-b`; luego `ladder-nodes.yaml`, `-a` y `-b`) | ~12 min cada una | las cuatro tiradas del suelo del instrumento (D-137) |
 | 3 | `uv run python labs/m6/ladder_floor_export.py --decision time` | s | `artifacts/web/ladder-floor.json` |
-| 4 | `uv run rukh eval nightly` | horas | la tabla entera: `artifacts/eval/<etapa>/`, `artifacts/web/results.json`, `docs/benchmarks.md`, `artifacts/eval/nightly.json` |
-| 5 | `uv run rukh eval karvonen` | ~20 min | el baseline público en la tabla (`karvonen-8l`) |
-| 6 | `uv run python labs/m6/parity_cost.py --onnx artifacts/onnx/medium-v4 --config configs/eval/ladder-nodes.yaml` | ~1 h (ORT en CPU) | fp32, fp16 e int8 del mismo modelo en la misma escalera; `artifacts/web/parity-cost.json` |
+| 4 | `uv run rukh eval nightly` | 2 h 48 min (11 etapas) | la tabla entera: `artifacts/eval/<etapa>/`, `artifacts/web/results.json`, `docs/benchmarks.md`, `artifacts/eval/nightly.json` |
+| 5 | `uv run rukh eval nightly --only karvonen-8l` | 15 min | el baseline público en la tabla (`karvonen-8l`) |
+| 6 | `uv run python labs/m6/parity_cost.py --onnx artifacts/onnx/medium-v4 --config configs/eval/ladder-nodes.yaml` | 41 min (14 por precisión, ORT en CPU) | fp32, fp16 e int8 del mismo modelo en la misma escalera; `artifacts/web/parity-cost.json` |
 | 7 | `uv run python labs/m6/puzzles_export.py` | s | `artifacts/web/puzzles.json`, los 150 puzles de la demo |
 | 8 | `uv run rukh publish cards --dry-run` y después sin `--dry-run` | ~3 min | cada `README.md` del Hub regenerado desde la tabla y el curso |
 | 9 | `uv run rukh publish collection` | s | la colección `Rukh` del Hub, igual al catálogo de `rukh pull` |

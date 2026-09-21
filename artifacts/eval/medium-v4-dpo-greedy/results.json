@@ -5,7 +5,7 @@
   "model_sha": "9105b36ecb58e31086012cf7b2eea3d5f734b3bcb0908168933f47e4b810e83f",
   "weights_sha": "21df6bc391b38ced70c259945029195bc478fd3df38896dafe06410f9039ff39",
   "params": 115120128,
-  "date": "2026-09-20",
+  "date": "2026-09-21",
   "device": "cuda",
   "run_id": null,
   "legality_argmax": {
@@ -88,20 +88,20 @@
     "prompt_style": "game-prefix"
   },
   "elo": {
-    "elo": 1529.1977893987314,
-    "ci_low": 1469.5818759502806,
-    "ci_high": 1583.3547865042515,
+    "elo": 1586.0101194526849,
+    "ci_low": 1529.9069410773766,
+    "ci_high": 1650.5156641470553,
     "games": 160,
-    "score": 0.44375,
+    "score": 0.50625,
     "rungs": [
       {
         "name": "uci-1320",
         "opponent_elo": 1320,
         "games": 20,
-        "wins": 12,
-        "draws": 3,
-        "losses": 5,
-        "score": 0.675,
+        "wins": 16,
+        "draws": 1,
+        "losses": 3,
+        "score": 0.825,
         "cut": 0,
         "adjudicated": 0
       },
@@ -109,32 +109,32 @@
         "name": "skill-0",
         "opponent_elo": 1381,
         "games": 20,
-        "wins": 15,
+        "wins": 16,
         "draws": 3,
-        "losses": 2,
-        "score": 0.825,
-        "cut": 1,
-        "adjudicated": 1
+        "losses": 1,
+        "score": 0.875,
+        "cut": 0,
+        "adjudicated": 0
       },
       {
         "name": "skill-1",
         "opponent_elo": 1467,
         "games": 20,
-        "wins": 10,
-        "draws": 1,
+        "wins": 9,
+        "draws": 2,
         "losses": 9,
-        "score": 0.525,
-        "cut": 1,
-        "adjudicated": 1
+        "score": 0.5,
+        "cut": 0,
+        "adjudicated": 0
       },
       {
         "name": "uci-1500",
         "opponent_elo": 1500,
         "games": 20,
-        "wins": 12,
-        "draws": 2,
-        "losses": 6,
-        "score": 0.65,
+        "wins": 7,
+        "draws": 3,
+        "losses": 10,
+        "score": 0.425,
         "cut": 0,
         "adjudicated": 0
       },
@@ -142,10 +142,10 @@
         "name": "skill-2",
         "opponent_elo": 1589,
         "games": 20,
-        "wins": 7,
-        "draws": 4,
+        "wins": 10,
+        "draws": 1,
         "losses": 9,
-        "score": 0.45,
+        "score": 0.525,
         "cut": 0,
         "adjudicated": 0
       },
@@ -153,10 +153,10 @@
         "name": "skill-3",
         "opponent_elo": 1678,
         "games": 20,
-        "wins": 2,
-        "draws": 4,
-        "losses": 14,
-        "score": 0.2,
+        "wins": 6,
+        "draws": 3,
+        "losses": 11,
+        "score": 0.375,
         "cut": 0,
         "adjudicated": 0
       },
@@ -164,10 +164,10 @@
         "name": "uci-1800",
         "opponent_elo": 1800,
         "games": 20,
-        "wins": 2,
-        "draws": 1,
-        "losses": 17,
-        "score": 0.125,
+        "wins": 6,
+        "draws": 5,
+        "losses": 9,
+        "score": 0.425,
         "cut": 1,
         "adjudicated": 1
       },
@@ -179,12 +179,12 @@
         "draws": 0,
         "losses": 18,
         "score": 0.1,
-        "cut": 1,
-        "adjudicated": 1
+        "cut": 0,
+        "adjudicated": 0
       }
     ],
-    "cut": 4,
-    "adjudicated": 4,
+    "cut": 1,
+    "adjudicated": 1,
     "separated": false,
     "elo_lower": null,
     "elo_upper": null
@@ -227,7 +227,7 @@
   "notes": [
     "legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.",
     "the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for",
-    "4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws"
+    "1 of 160 games hit the context limit and were adjudicated (1 of them) instead of being scored as draws"
   ],
   "config": {
     "stage": "medium-v4-dpo-greedy",
@@ -292,6 +292,7 @@
       }
     ],
     "elo_move_time": 0.1,
+    "elo_nodes": null,
     "elo_max_plies": null,
     "bootstrap": 500,
     "diversity_games": 200,

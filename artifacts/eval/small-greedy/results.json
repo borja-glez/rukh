@@ -5,7 +5,7 @@
   "model_sha": "7130d64ac1c409332dfd9b753281b38a7b0b434103eb1908533942e30c243f4e",
   "weights_sha": "dd3966e5844278b6145b9b26f957185420de5131544a2c4519a50ce50884c81b",
   "params": 38971392,
-  "date": "2026-09-20",
+  "date": "2026-09-21",
   "device": "cuda",
   "run_id": null,
   "legality_argmax": {
@@ -88,31 +88,31 @@
     "prompt_style": "game-prefix"
   },
   "elo": {
-    "elo": 1321.0835469867977,
-    "ci_low": 1246.7385273382718,
-    "ci_high": 1383.0813078653516,
+    "elo": 1355.493056294831,
+    "ci_low": 1297.449577957488,
+    "ci_high": 1419.5351054554008,
     "games": 160,
-    "score": 0.23125,
+    "score": 0.2625,
     "rungs": [
       {
         "name": "uci-1320",
         "opponent_elo": 1320,
         "games": 20,
-        "wins": 9,
-        "draws": 0,
-        "losses": 11,
-        "score": 0.45,
-        "cut": 1,
-        "adjudicated": 1
+        "wins": 13,
+        "draws": 1,
+        "losses": 6,
+        "score": 0.675,
+        "cut": 0,
+        "adjudicated": 0
       },
       {
         "name": "skill-0",
         "opponent_elo": 1381,
         "games": 20,
-        "wins": 9,
-        "draws": 1,
-        "losses": 10,
-        "score": 0.475,
+        "wins": 11,
+        "draws": 2,
+        "losses": 7,
+        "score": 0.6,
         "cut": 2,
         "adjudicated": 2
       },
@@ -120,21 +120,21 @@
         "name": "skill-1",
         "opponent_elo": 1467,
         "games": 20,
-        "wins": 2,
-        "draws": 5,
-        "losses": 13,
-        "score": 0.225,
-        "cut": 1,
-        "adjudicated": 1
+        "wins": 4,
+        "draws": 2,
+        "losses": 14,
+        "score": 0.25,
+        "cut": 0,
+        "adjudicated": 0
       },
       {
         "name": "uci-1500",
         "opponent_elo": 1500,
         "games": 20,
-        "wins": 6,
-        "draws": 1,
-        "losses": 13,
-        "score": 0.325,
+        "wins": 5,
+        "draws": 0,
+        "losses": 15,
+        "score": 0.25,
         "cut": 0,
         "adjudicated": 0
       },
@@ -142,32 +142,32 @@
         "name": "skill-2",
         "opponent_elo": 1589,
         "games": 20,
-        "wins": 3,
-        "draws": 1,
-        "losses": 16,
-        "score": 0.175,
-        "cut": 0,
-        "adjudicated": 0
+        "wins": 1,
+        "draws": 2,
+        "losses": 17,
+        "score": 0.1,
+        "cut": 1,
+        "adjudicated": 1
       },
       {
         "name": "skill-3",
         "opponent_elo": 1678,
         "games": 20,
-        "wins": 1,
-        "draws": 2,
-        "losses": 17,
+        "wins": 2,
+        "draws": 0,
+        "losses": 18,
         "score": 0.1,
-        "cut": 2,
-        "adjudicated": 2
+        "cut": 0,
+        "adjudicated": 0
       },
       {
         "name": "uci-1800",
         "opponent_elo": 1800,
         "games": 20,
-        "wins": 1,
-        "draws": 1,
+        "wins": 0,
+        "draws": 2,
         "losses": 18,
-        "score": 0.075,
+        "score": 0.05,
         "cut": 0,
         "adjudicated": 0
       },
@@ -175,16 +175,16 @@
         "name": "uci-2000",
         "opponent_elo": 2000,
         "games": 20,
-        "wins": 0,
+        "wins": 1,
         "draws": 1,
-        "losses": 19,
-        "score": 0.025,
-        "cut": 0,
-        "adjudicated": 0
+        "losses": 18,
+        "score": 0.075,
+        "cut": 1,
+        "adjudicated": 1
       }
     ],
-    "cut": 6,
-    "adjudicated": 6,
+    "cut": 4,
+    "adjudicated": 4,
     "separated": false,
     "elo_lower": null,
     "elo_upper": null
@@ -227,7 +227,7 @@
   "notes": [
     "legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.",
     "the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for",
-    "6 of 160 games hit the context limit and were adjudicated (6 of them) instead of being scored as draws"
+    "4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws"
   ],
   "config": {
     "stage": "small-greedy",
@@ -292,6 +292,7 @@
       }
     ],
     "elo_move_time": 0.1,
+    "elo_nodes": null,
     "elo_max_plies": null,
     "bootstrap": 500,
     "diversity_games": 200,

@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "generated": "2026-09-21T16:57:14+00:00",
+    "games": 20,
+    "regime": "200000 nodes"
+  },
+  "model": "medium-v4",
+  "variants": [
+    {
+      "name": "fp32",
+      "parity": 1.0,
+      "elo": 1472,
+      "lo": 1415,
+      "hi": 1527,
+      "games": 160
+    },
+    {
+      "name": "fp16",
+      "parity": 0.999,
+      "elo": 1535,
+      "lo": 1484,
+      "hi": 1600,
+      "games": 160
+    },
+    {
+      "name": "int8",
+      "parity": 0.951,
+      "elo": 1524,
+      "lo": 1467,
+      "hi": 1576,
+      "games": 160
+    }
+  ]
+}

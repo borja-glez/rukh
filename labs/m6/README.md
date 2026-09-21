@@ -7,8 +7,8 @@ root. Nothing here trains: the module measures, exports and publishes what M1-M5
 |---|---|---|
 | `ladder_check.py` | Stockfish | 1 · every rung of the ladder against the anchor, engine against engine |
 | `ladder_floor_export.py` | the four `ladder-*` results | 1 · the floor of the instrument: two runs on a clock, two on nodes |
-| `parity_cost.py` | the ONNX export of a model, Stockfish | 2 · what fp16 and int8 cost in Elo, on the same ladder |
-| `puzzles_export.py` | `data/puzzles/` | 5 · the 150 puzzles the demo plays live |
+| `parity_cost.py` | the ONNX export of a model, Stockfish | 3 · what fp16 and int8 cost in Elo, on the same ladder |
+| `puzzles_export.py` | `data/puzzles/` | 6 · the 150 puzzles the demo plays live |
 
 ## Starting point
 

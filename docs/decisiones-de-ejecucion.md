@@ -2404,6 +2404,53 @@ Evidencia obtenida por el controlador, no por subagentes:
   fila de Qwen habría jugado por reloj bajo una config por nodos. Corregido antes de que la
   tabla se reconstruyera.
 
+### D-139 · La tabla única es de un día: trece filas de decoder con la misma fecha
+- **Qué se hizo:** `rukh eval nightly` volvió a medir las once etapas del catálogo el 2026-09-21
+  (2 h 48 min), más el baseline de Karvonen en una segunda pasada (el hash de pesos de D-135 no
+  conocía el `model` de nanoGPT; corregido). Las dos filas de decoder que no están en el catálogo
+  porque no se publicaron (`small-greedy`, la v1 de M2, y `medium-v4-dpo-greedy`, el DPO fuera de
+  política de M5) se midieron a mano el mismo día en vez de retirarse: 1355 (1297-1420) y 1586
+  (1530-1651). Las dos filas del encoder que llevaban el nombre de su carpeta de corrida (backlog
+  de P3) se retiraron con `rukh eval drop`; las tres del encoder de M3 (`encoder`, `encoder-rank`,
+  `encoder-squares`) se conservan con su fecha porque son la comparación de esquemas de aquel
+  módulo y no comparten columna con nada de lo de hoy.
+- **Lo que enseñó comparar la tabla nueva con la vieja:** legalidad, top-1, top-3, puzles y
+  entropía dieron **exactamente** lo mismo que el día de cada hito (muestreo a 0,05, sin rival);
+  el Elo se movió entre −143 (`tiny`, intervalo de 425 puntos) y +72 (`dpo-onpolicy`), siete de
+  nueve diferencias dentro de un semiancho de intervalo. La ventaja del alineado sobre su base
+  pasó de +56 a +97 sin que cambiara ningún peso: la medida sigue siendo el enfrentamiento directo
+  de M5, +57 (36-79).
+- **Cards y colección:** las veintiuna cards se regeneraron desde la tabla final y se subieron
+  (solo el `README.md`, `rukh publish cards`); la colección `Rukh` del Hub
+  (`chorcat/rukh-6ab14873918eabbc3ee287b5`, 21 repositorios) se creó con `rukh publish collection`
+  al segundo intento, tras cambiar el token por uno con permiso de colecciones (la descripción
+  tiene un tope de 150 caracteres que el primer intento superó).
+- **La regla que deja:** una fila de la tabla es comparable con otra si tienen la misma fecha; la
+  que no, se vuelve a medir o se retira. El nightly no retira nada por sí mismo.
+
+### D-140 · El int8 no cuesta nada que 160 partidas puedan ver, y el fp32 salió 60 por debajo del fp16
+- **La medición:** los tres grafos ONNX de `medium-v4` como jugadores en la misma escalera a
+  través del mismo `DecoderPlayer` (`OnnxDecoder`), rival por nodos porque ONNX Runtime juega en
+  CPU y por reloj habría cambiado también al motor: fp32 **1472** (1415-1527), fp16 **1535**
+  (1484-1600), int8 **1524** (1467-1576). Paridad 100 % / 99,9 % / 95,1 %.
+- **Qué se decidió:** el int8 se sigue sirviendo en móvil como etapa distinta con su propio nombre
+  (D-047 aplicado a la precisión), y la card y la lección dicen que su fuerza no se distingue de la
+  del fp16 con este presupuesto. Lo que M2 dejó abierto se cierra con un «menos de lo que la
+  escalera ve»; el instrumento para verlo sería un enfrentamiento directo fp16 contra int8 de
+  varios cientos de partidas (queda como ejercicio de la lección, no como deuda).
+- **La anomalía que enseña:** el fp32 es la misma red que el checkpoint y sale 60 puntos por debajo
+  del fp16. No hay mecanismo; es D-137 con el rival por nodos y la CPU cargada por el propio
+  jugador. Se publica tal cual, porque una tabla que oculta sus anomalías no enseña a leerlas.
+- **La calibración de la escalera por reloj** (`labs/m6/ladder_check.py --games 40`, 35 min): el
+  control `uci-1500` sale a +168 sobre el ancla (esperado ≈ +180) y las siete etiquetas caen
+  dentro del intervalo de su medición, así que los peldaños de D-070 se sostienen; los tres altos
+  tienen intervalos hasta 2520 porque el ancla pierde el 90-95 % contra ellos, que es la limitación
+  de calibrar con un solo ancla.
+- **Fuera del hito, por decisión:** la página en inglés del proyecto que el plan pedía no aplica
+  desde que el curso es solo en español (2026-09-21); el bot de Lichess era opcional y necesita una
+  cuenta de bot; `onnxruntime-gpu` haría el lab del int8 diez veces más rápido y no cambiaría el
+  resultado, y no se toca el entorno en el hito de cierre.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

@@ -1,0 +1,111 @@
+{
+  "precision": "fp16",
+  "file": "E:/work/ai/chess-lm/rukh/artifacts/onnx/medium-v4/model-fp16.onnx",
+  "parity": 0.999,
+  "games": 20,
+  "regime": "200000 nodes",
+  "seed": 42,
+  "seconds": 837,
+  "elo": {
+    "elo": 1534.8681214260762,
+    "ci_low": 1483.785356400924,
+    "ci_high": 1599.609873013841,
+    "games": 160,
+    "score": 0.45,
+    "rungs": [
+      {
+        "name": "uci-1320",
+        "opponent_elo": 1320,
+        "games": 20,
+        "wins": 13,
+        "draws": 4,
+        "losses": 3,
+        "score": 0.75,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "skill-0",
+        "opponent_elo": 1381,
+        "games": 20,
+        "wins": 13,
+        "draws": 2,
+        "losses": 5,
+        "score": 0.7,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "skill-1",
+        "opponent_elo": 1467,
+        "games": 20,
+        "wins": 14,
+        "draws": 1,
+        "losses": 5,
+        "score": 0.725,
+        "cut": 1,
+        "adjudicated": 1
+      },
+      {
+        "name": "uci-1500",
+        "opponent_elo": 1500,
+        "games": 20,
+        "wins": 11,
+        "draws": 2,
+        "losses": 7,
+        "score": 0.6,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "skill-2",
+        "opponent_elo": 1589,
+        "games": 20,
+        "wins": 7,
+        "draws": 3,
+        "losses": 10,
+        "score": 0.425,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "skill-3",
+        "opponent_elo": 1678,
+        "games": 20,
+        "wins": 2,
+        "draws": 1,
+        "losses": 17,
+        "score": 0.125,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "uci-1800",
+        "opponent_elo": 1800,
+        "games": 20,
+        "wins": 4,
+        "draws": 2,
+        "losses": 14,
+        "score": 0.25,
+        "cut": 2,
+        "adjudicated": 2
+      },
+      {
+        "name": "uci-2000",
+        "opponent_elo": 2000,
+        "games": 20,
+        "wins": 0,
+        "draws": 1,
+        "losses": 19,
+        "score": 0.025,
+        "cut": 1,
+        "adjudicated": 1
+      }
+    ],
+    "cut": 4,
+    "adjudicated": 4,
+    "separated": false,
+    "elo_lower": null,
+    "elo_upper": null
+  }
+}

@@ -5,7 +5,7 @@
 - Weights SHA-256: `9105b36ecb58e31086012cf7b2eea3d5f734b3bcb0908168933f47e4b810e83f`
 - Parameters: 115,120,128
 - Device: `cuda`
-- Date: 2026-09-20
+- Date: 2026-09-21
 - MLflow run: not tracked
 
 ## Headline
@@ -17,7 +17,7 @@
 | Top-1 next move | 53.4 % |
 | Top-3 next move | 80.5 % |
 | Puzzles solved | 38.8 % |
-| Estimated Elo | 1529 (95 % CI 1470-1583) |
+| Estimated Elo | 1586 (95 % CI 1530-1651) |
 | Mean centipawn loss | n/a |
 | Opening diversity | 0.993 |
 
@@ -75,19 +75,19 @@ Prompt: game-prefix.
 
 | Rung | Opponent Elo | Games | W | D | L | Score | Cut | Adjudicated |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| uci-1320 | 1320 | 20 | 12 | 3 | 5 | 0.675 | 0 | 0 |
-| skill-0 | 1381 | 20 | 15 | 3 | 2 | 0.825 | 1 | 1 |
-| skill-1 | 1467 | 20 | 10 | 1 | 9 | 0.525 | 1 | 1 |
-| uci-1500 | 1500 | 20 | 12 | 2 | 6 | 0.650 | 0 | 0 |
-| skill-2 | 1589 | 20 | 7 | 4 | 9 | 0.450 | 0 | 0 |
-| skill-3 | 1678 | 20 | 2 | 4 | 14 | 0.200 | 0 | 0 |
-| uci-1800 | 1800 | 20 | 2 | 1 | 17 | 0.125 | 1 | 1 |
-| uci-2000 | 2000 | 20 | 2 | 0 | 18 | 0.100 | 1 | 1 |
+| uci-1320 | 1320 | 20 | 16 | 1 | 3 | 0.825 | 0 | 0 |
+| skill-0 | 1381 | 20 | 16 | 3 | 1 | 0.875 | 0 | 0 |
+| skill-1 | 1467 | 20 | 9 | 2 | 9 | 0.500 | 0 | 0 |
+| uci-1500 | 1500 | 20 | 7 | 3 | 10 | 0.425 | 0 | 0 |
+| skill-2 | 1589 | 20 | 10 | 1 | 9 | 0.525 | 0 | 0 |
+| skill-3 | 1678 | 20 | 6 | 3 | 11 | 0.375 | 0 | 0 |
+| uci-1800 | 1800 | 20 | 6 | 5 | 9 | 0.425 | 1 | 1 |
+| uci-2000 | 2000 | 20 | 2 | 0 | 18 | 0.100 | 0 | 0 |
 
-4 of 160 games hit the context limit; 4 of those were adjudicated on the final position (shallow engine analysis, or the material count when no engine was available) rather than scored as draws.
+1 of 160 games hit the context limit; 1 of those were adjudicated on the final position (shallow engine analysis, or the material count when no engine was available) rather than scored as draws.
 
 ## Notes
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
-- 4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws
+- 1 of 160 games hit the context limit and were adjudicated (1 of them) instead of being scored as draws
