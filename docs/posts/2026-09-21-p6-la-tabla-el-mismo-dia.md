@@ -85,7 +85,11 @@ con unos miles de partidas encima.
 El nanoGPT de ajedrez de Adam Karvonen (8 capas, 25,7 M, PGN carácter a carácter) lo reimplementé
 sin depender de su repositorio y lo puse en la misma escalera, con su formato de prompt exacto y
 una regla más dura que la suya ante una jugada ilegal (él reintenta cinco veces; yo pregunto una
-y la cuento). ⟦KARVONEN-POST⟧
+y la cuento). Salió en 1328 (1250-1391), con un 99,6 % de
+legalidad que supera a mi `small-v3`, y por debajo de `small-v3` en puzles difíciles y en Elo
+(1425, 1367-1484). Es la fila que sitúa el proyecto: un modelo de 39 M con vocabulario de jugadas
+gana a uno de 26 M carácter a carácter con tres veces más partidas, y el de 115 M ya no tiene con
+quién compararse en la tabla.
 
 ## Lo que cuesta el int8
 

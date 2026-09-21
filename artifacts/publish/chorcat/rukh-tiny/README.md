@@ -27,7 +27,7 @@ Play against it in the browser: [https://rukh.borjaglez.com/?stage=tiny-int8](ht
 
 ## Results
 
-Measured with `rukh eval --suite full` on 2026-09-20.
+Measured with `rukh eval --suite full` on 2026-09-21.
 
 | Metric | Value |
 |---|---|
@@ -36,7 +36,7 @@ Measured with `rukh eval --suite full` on 2026-09-20.
 | Top-1 next move | 40.3 % |
 | Top-3 next move | 67.1 % |
 | Puzzles solved | 8.9 % |
-| Estimated Elo | 921 (95 % CI 713-1040) |
+| Estimated Elo | 778 (95 % CI 479-904) |
 
 Puzzles by difficulty band:
 
@@ -66,7 +66,7 @@ flattering or not.
 | Bar | Target | Measured | Verdict |
 |---|---|---|---|
 | Legality without the mask, argmax | at least 99 % | 94.5 % | **not met** |
-| Estimated Elo | at least 1200 | 921 (95 % CI 713-1040) | **not met** |
+| Estimated Elo | at least 1200 | 778 (95 % CI 479-904) | **not met** |
 
 **The legality bar is not met**: without the legality mask the weights propose an illegal move
 more often than one time in a hundred. The demo masks before sampling and therefore never plays
@@ -98,23 +98,11 @@ Every stage was then re-evaluated on the measured ladder, and the numbers on thi
 those runs. The correction moves all stages by a similar amount, so comparisons between them are
 unchanged.
 
-### An Elo belongs to the pair model+sampling
-
-The same weights (`4591cf8cca0b`) measure **921 Elo** at
-temperature 0.05, top-k 1 and **64 Elo** at temperature 0.6, top-k 20.
-Nothing about the tensors changed between the two runs; only the way a move is drawn from them
-did. A rating is therefore a property of the pair model+sampling and not of the file you
-download, and any table that compares stages has to fix the sampling first.
-
-The results above are the temperature 0.05, top-k 1 point. The demo samples for variety
-rather than always playing its best move, so what a player meets over the board is the weaker of
-the two numbers.
-
 How to read these numbers:
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
-- 3 of 160 games hit the context limit and were adjudicated (3 of them) instead of being scored as draws
+- 1 of 160 games hit the context limit and were adjudicated (1 of them) instead of being scored as draws
 
 
 ## Input and output

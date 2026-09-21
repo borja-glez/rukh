@@ -27,7 +27,7 @@ Play against it in the browser: [https://rukh.borjaglez.com/?stage=medium-elo-fp
 
 ## Results
 
-Measured with `rukh eval --suite full` on 2026-09-20.
+Measured with `rukh eval --suite full` on 2026-09-21.
 
 | Metric | Value |
 |---|---|
@@ -36,7 +36,7 @@ Measured with `rukh eval --suite full` on 2026-09-20.
 | Top-1 next move | 54.9 % |
 | Top-3 next move | 82.5 % |
 | Puzzles solved | 37.8 % |
-| Estimated Elo | 1558 (95 % CI 1500-1609) |
+| Estimated Elo | 1592 (95 % CI 1532-1650) |
 
 
 ## What the Elo header does
@@ -91,7 +91,7 @@ flattering or not.
 | Bar | Target | Measured | Verdict |
 |---|---|---|---|
 | Legality without the mask, argmax | at least 99 % | 99.7 % | met |
-| Estimated Elo | at least 1200 | 1558 (95 % CI 1500-1609) | met |
+| Estimated Elo | at least 1200 | 1592 (95 % CI 1532-1650) | met |
 
 ### The ratings on this card replace lower ones
 

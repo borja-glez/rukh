@@ -20,6 +20,7 @@ Cómo se mide cada columna:
 
 | Etapa | Legalidad sin máscara (%) | Top-1 (%) | Top-3 (%) | Puzles 1000-1500 (%) | Puzles 1500-2000 (%) | Puzles 2000+ (%) | Elo estimado (IC 95 %) | Δcp medio | Entropía 1.ª jugada (bits) | Fecha |
 |---|---:|---:|---:|---:|---:|---:|---|---:|---:|---|
+| `karvonen-8l` (externo) | 99.6 % | 50.7 % | n/a | 47.5 % | 26.0 % | 10.8 % | 1328 (1250-1391) | n/a | n/a | 2026-09-21 |
 | `lora-d4` | 99.8 % | 55.1 % | 83.0 % | 57.4 % | 37.5 % | 16.9 % | 1535 (1481-1582) | n/a | 0.0160 | 2026-09-21 |
 | `lora-e4` | 99.8 % | 54.7 % | 83.3 % | 58.1 % | 38.2 % | 17.2 % | 1538 (1488-1604) | n/a | 0.0209 | 2026-09-21 |
 | `medium-elo` | 99.7 % | 54.9 % | 82.5 % | 59.8 % | 37.1 % | 16.6 % | 1592 (1532-1650) | n/a | 1.7408 | 2026-09-21 |
@@ -33,4 +34,4 @@ Cómo se mide cada columna:
 | `small-v3-greedy` | 99.1 % | 52.4 % | 80.5 % | 41.0 % | 27.0 % | 12.2 % | 1425 (1367-1484) | n/a | 1.6393 | 2026-09-21 |
 | `tiny-greedy` | 94.5 % | 40.3 % | 67.1 % | 14.1 % | 8.6 % | 3.9 % | 778 (479-904) | n/a | 1.7214 | 2026-09-21 |
 
-12 etapas medidas con la misma suite. Las filas del encoder viven aparte porque no comparten una sola columna con estas; las que una medición retiró no están (`rukh eval drop`).
+13 etapas medidas con la misma suite, 1 de ellas externas (modelos de otros autores, marcados como `(externo)`, medidos con este mismo harness como control). Las filas del encoder viven aparte porque no comparten una sola columna con estas; las que una medición retiró no están (`rukh eval drop`).

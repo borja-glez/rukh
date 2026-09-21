@@ -29,7 +29,7 @@ See it evaluate a live game: [https://rukh.borjaglez.com](https://rukh.borjaglez
 
 ## Results
 
-Measured with `rukh eval encoder` on 2026-09-20, over
+Measured with `rukh eval encoder` on 2026-09-21, over
 10000 held-out positions (7453 of them with a blunder label).
 
 | Metric | Value |

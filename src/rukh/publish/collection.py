@@ -21,11 +21,10 @@ log = logging.getLogger(__name__)
 
 TITLE = "Rukh"
 DESCRIPTION = (
-    "A chess language model built from scratch as a course on generative and agentic AI: the "
-    "decoders, the encoder, the reward model, the aligned models, the adapters and the datasets, "
-    "in the order the course built them. Course: https://lab.rukh.borjaglez.com · results table: "
-    "https://lab.rukh.borjaglez.com/proyecto/ · play: https://rukh.borjaglez.com"
+    "A chess language model built from scratch as a course on generative and agentic AI: every "
+    "model, adapter and dataset, in course order."
 )
+"""The Hub caps a collection's description at 150 characters."""
 
 
 class CollectionSync(BaseModel):

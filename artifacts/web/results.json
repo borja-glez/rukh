@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-21T14:34:52+00:00",
+  "updated_at": "2026-09-21T15:02:31+00:00",
   "rows": [
     {
       "stage": "encoder",
@@ -84,6 +84,35 @@
       "positions": 10000,
       "date": "2026-09-21",
       "run_id": "829c82a71fb44edba2c6fc3c87ca130b"
+    },
+    {
+      "stage": "karvonen-8l",
+      "params": 25714688,
+      "legality": 0.996,
+      "legality_sampled": null,
+      "top1": 0.507,
+      "top3": null,
+      "top1_by_band": {},
+      "top3_by_band": {},
+      "puzzles": {
+        "1000-1500": 0.475,
+        "1500-2000": 0.26,
+        "2000+": 0.108
+      },
+      "elo": 1328.1584626835665,
+      "elo_ci": [
+        1250.151958760017,
+        1390.8817880582226
+      ],
+      "elo_lower": null,
+      "elo_upper": null,
+      "elo_separated": false,
+      "delta_cp": null,
+      "diversity": null,
+      "first_move_entropy": null,
+      "date": "2026-09-21",
+      "run_id": null,
+      "baseline": true
     },
     {
       "stage": "lora-d4",

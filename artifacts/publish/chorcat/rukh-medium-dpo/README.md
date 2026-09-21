@@ -27,7 +27,7 @@ Play against it in the browser: [https://rukh.borjaglez.com/?stage=medium-dpo-fp
 
 ## Results
 
-Measured with `rukh eval --suite full` on 2026-09-20.
+Measured with `rukh eval --suite full` on 2026-09-21.
 
 | Metric | Value |
 |---|---|
@@ -36,7 +36,7 @@ Measured with `rukh eval --suite full` on 2026-09-20.
 | Top-1 next move | 52.3 % |
 | Top-3 next move | 79.9 % |
 | Puzzles solved | 39.1 % |
-| Estimated Elo | 1560 (95 % CI 1500-1617) |
+| Estimated Elo | 1632 (95 % CI 1567-1706) |
 
 Puzzles by difficulty band:
 
@@ -66,7 +66,7 @@ flattering or not.
 | Bar | Target | Measured | Verdict |
 |---|---|---|---|
 | Legality without the mask, argmax | at least 99 % | 99.2 % | met |
-| Estimated Elo | at least 1200 | 1560 (95 % CI 1500-1617) | met |
+| Estimated Elo | at least 1200 | 1632 (95 % CI 1567-1706) | met |
 
 ### The ratings on this card replace lower ones
 
@@ -93,7 +93,7 @@ How to read these numbers:
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
-- 5 of 160 games hit the context limit and were adjudicated (5 of them) instead of being scored as draws
+- 4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws
 
 
 ## Input and output
