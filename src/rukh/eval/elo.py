@@ -373,6 +373,7 @@ def play_rung(
     cache: EvalCache | None = None,
     header_elo: int = 1800,
     player: Player | None = None,
+    nodes: int | None = None,
 ) -> list[GameRecord]:
     """Play ``games`` games against one rung, alternating colours, reusing cached games.
 
@@ -397,7 +398,9 @@ def play_rung(
     if not missing:
         return sorted(records, key=lambda r: r.index)
 
-    opponent = StockfishOpponent(elo=rung.uci_elo or 1320, skill=rung.skill, move_time=move_time)
+    opponent = StockfishOpponent(
+        elo=rung.uci_elo or 1320, skill=rung.skill, move_time=move_time, nodes=nodes
+    )
     try:
         for index in missing:
             model_white = index % 2 == 0
@@ -448,6 +451,7 @@ def play_rungs(
     cache: EvalCache | None = None,
     header_elo: int = 1800,
     player: Player | None = None,
+    nodes: int | None = None,
 ) -> list[GameRecord]:
     """Play every rung and return all the game records."""
     records: list[GameRecord] = []
@@ -464,6 +468,7 @@ def play_rungs(
                 cache=cache,
                 header_elo=header_elo,
                 player=player,
+                nodes=nodes,
             )
         )
     return records

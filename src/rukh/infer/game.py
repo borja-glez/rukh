@@ -119,6 +119,7 @@ class StockfishOpponent:
         move_time: float = MOVE_TIME_SECONDS,
         path: Path | None = None,
         skill: int | None = None,
+        nodes: int | None = None,
     ) -> None:
         from rukh.engine import EngineNotFound, find_stockfish
 
@@ -126,14 +127,26 @@ class StockfishOpponent:
         if binary is None:
             raise EngineNotFound("Stockfish not found; set RUKH_STOCKFISH or run get_stockfish.py")
         self.move_time = move_time
+        # A node budget instead of a clock: the search stops after ``nodes`` positions whatever
+        # the machine is doing, so the opponent no longer weakens under CPU load (D-068) and two
+        # identical runs see the same opponent. 0.1 s is about 200 000 nodes on the reference
+        # machine at these settings, which is where `elo_nodes` in the suite starts from.
+        self.nodes = nodes
         self.engine = chess.engine.SimpleEngine.popen_uci(str(binary))
         if skill is None:
             self.engine.configure({"UCI_LimitStrength": True, "UCI_Elo": elo})
         else:
             self.engine.configure({"UCI_LimitStrength": False, "Skill Level": skill})
 
+    @property
+    def limit(self) -> chess.engine.Limit:
+        """How far the opponent searches: a node budget when given, the clock otherwise."""
+        if self.nodes is not None:
+            return chess.engine.Limit(nodes=self.nodes)
+        return chess.engine.Limit(time=self.move_time)
+
     def choose(self, board: chess.Board) -> chess.Move:
-        played = self.engine.play(board, chess.engine.Limit(time=self.move_time))
+        played = self.engine.play(board, self.limit)
         if played.move is None:
             raise chess.engine.EngineError("Stockfish returned no move")
         return played.move

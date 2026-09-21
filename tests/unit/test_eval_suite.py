@@ -265,6 +265,6 @@ def test_the_cache_key_keeps_its_old_name_so_a_paid_sweep_survives(repo_root: Pa
     """Renaming the field must not rename the key: puzzles are the only cached thing it changes."""
     from rukh.eval.suite import EvalConfig
 
-    assert "puzzles_use_header" in EvalConfig(force_header=True).cache_fields()
-    assert "force_header" not in EvalConfig(force_header=True).cache_fields()
-    assert "puzzles_use_header" not in EvalConfig().cache_fields()
+    assert "puzzles_use_header" in EvalConfig(force_header=True).cache_fields("puzzles")
+    assert "force_header" not in EvalConfig(force_header=True).cache_fields("puzzles")
+    assert "puzzles_use_header" not in EvalConfig().cache_fields("puzzles")

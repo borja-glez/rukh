@@ -105,6 +105,10 @@ class EvalConfig(BaseConfig):
     elo_games: int = 100
     elo_rungs: list[EloRung] = Field(default_factory=lambda: list(DEFAULT_RUNGS))
     elo_move_time: float = 0.1
+    elo_nodes: int | None = None
+    """Search budget of the opponent in nodes. When set, the clock (``elo_move_time``) is not
+    used: the rung searches the same number of positions on any machine under any load, which is
+    what makes two runs of the ladder comparable (D-107 measured 1498 and 1558 on the clock)."""
     elo_max_plies: int | None = None
     bootstrap: int = 1_000
     diversity_games: int = 200
@@ -131,27 +135,45 @@ class EvalConfig(BaseConfig):
     track: bool = True
     """Log the suite to the local MLflow store (the model card reads those metrics back)."""
 
-    def cache_fields(self) -> dict[str, Any]:
-        """The settings that change what a cached game or puzzle means."""
-        fields: dict[str, Any] = {
+    def cache_fields(self, family: str = "games") -> dict[str, Any]:
+        """The settings that change what a cached item of ``family`` means.
+
+        One key per family, not one for the suite: a game is the same game whatever the puzzle
+        settings are, and a puzzle attempt does not care how long the engine thinks. Under one
+        shared key, raising ``elo_games`` from 20 to 40 threw away the twenty games already
+        played although game ``rung:index`` is exactly the same game (its seed is ``seed +
+        index``), and forcing the header for a sweep invalidated every game (P4 backlog). The
+        number of games is deliberately absent: it changes how many items are read, not what
+        any of them is.
+        """
+        shared: dict[str, Any] = {
             "temperature": self.temperature,
             "top_k": self.top_k,
-            "elo_move_time": self.elo_move_time,
-            "elo_max_plies": self.elo_max_plies,
-            "elo_games": self.elo_games,
-            "rungs": [rung.model_dump(mode="json") for rung in self.elo_rungs],
             "seed": self.seed,
             "block": self.block,
         }
-        # Only when it is on. A cache key is a promise that two runs with the same key measured
-        # the same thing, and a flag that is off *is* the behaviour every cached game was played
-        # under; adding it unconditionally would throw away the 17 MB of games P2 and P3 paid for.
-        # The key keeps the old name on purpose: puzzles are the only thing this flag changes
-        # that is *cached* (legality and accuracy are recomputed every run), so renaming it would
-        # throw away the games and the attempts of a sweep that is already paid for.
-        if self.force_header:
-            fields["puzzles_use_header"] = True
-        return fields
+        if family == "games":
+            fields = {
+                **shared,
+                "elo_max_plies": self.elo_max_plies,
+                "rungs": [rung.model_dump(mode="json") for rung in self.elo_rungs],
+            }
+            # The clock and the node budget are two different opponents; only the one in use
+            # is in the key, so a run on the clock keeps its games when ``elo_nodes`` appears
+            # in the config later with ``null``.
+            if self.elo_nodes is not None:
+                fields["elo_nodes"] = self.elo_nodes
+            else:
+                fields["elo_move_time"] = self.elo_move_time
+            return fields
+        if family == "puzzles":
+            fields = dict(shared)
+            # Only when it is on: a flag that is off *is* the behaviour every cached attempt was
+            # played under, and the key keeps the old name so a sweep's paid-for attempts survive.
+            if self.force_header:
+                fields["puzzles_use_header"] = True
+            return fields
+        raise ValueError(f"unknown cache family {family!r}: games or puzzles")
 
     def sampling(self) -> SampleConfig:
         """The sampler the Elo games use: masked, seeded, as the demo plays."""
@@ -240,6 +262,7 @@ def _elo(
             max_plies=cfg.elo_max_plies,
             cache=cache,
             header_elo=cfg.header_elo,
+            nodes=cfg.elo_nodes,
         )
     except EngineNotFound as exc:
         notes.append(f"Elo skipped: {exc}")
@@ -381,11 +404,16 @@ def evaluate(
     log.info("evaluating %s on %s", ckpt, where)
     tok = UciTokenizer()
     notes: list[str] = [_legality_note(cfg)]
-    cache = EvalCache(
-        paths.resolve(cfg.cache_db) if use_cache else None,
-        file_sha(ckpt),
+    weights_sha = file_sha(ckpt)
+    cache_path = paths.resolve(cfg.cache_db) if use_cache else None
+    games_cache = EvalCache(
+        cache_path, weights_sha, enabled=use_cache, config_sha=config_sha(cfg.cache_fields("games"))
+    )
+    puzzles_cache = EvalCache(
+        cache_path,
+        weights_sha,
         enabled=use_cache,
-        config_sha=config_sha(cfg.cache_fields()),
+        config_sha=config_sha(cfg.cache_fields("puzzles")),
     )
     try:
         positions = _positions(cfg, tok, notes)
@@ -394,7 +422,7 @@ def evaluate(
             stage=cfg.stage or ckpt.parent.name,
             suite=suite,
             checkpoint=ckpt.as_posix(),
-            model_sha=cache.model_sha,
+            model_sha=weights_sha,
             params=model.num_params(non_embedding=False),
             date=datetime.now(UTC).date().isoformat(),
             device=str(where),
@@ -423,7 +451,7 @@ def evaluate(
                 model_source(model, tok),
                 tok,
                 items,
-                cache=cache,
+                cache=puzzles_cache,
                 header_elo=cfg.header_elo,
                 force_header=cfg.force_header,
             )
@@ -448,11 +476,12 @@ def evaluate(
             )
             result.diversity_detail = detail
             result.diversity = detail.normalised
-        result.elo = _elo(model, tok, cfg, cache, notes)
+        result.elo = _elo(model, tok, cfg, games_cache, notes)
         _elo_notes(result.elo, cfg, notes)
         result.notes = notes  # pydantic copied the list at construction time
     finally:
-        cache.close()
+        games_cache.close()
+        puzzles_cache.close()
     return result
 
 

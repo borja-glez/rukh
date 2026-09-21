@@ -1,0 +1,30 @@
+# The ladder on a node budget, run for the instrument and not for the table.
+#
+# The same eight rungs as `ladder-time.yaml`, but every opponent searches exactly 200 000 nodes
+# per move instead of 0.1 s: that is what 0.1 s bought on the reference machine at these
+# settings (median over three positions at `UCI_Elo` 1320, 2000 and `Skill Level` 0), so the
+# opponents are meant to be about as strong, and now indifferent to what else the machine is
+# doing. Two runs of this file with the cache off say how much of D-107's 60-Elo gap was the
+# clock. The Elo scale of a node-limited ladder is its own: the rungs are recalibrated with
+# `labs/m6/ladder_check.py` before any number from it is compared with a published one.
+games: data/uci/year=2025/month=02/games.parquet
+puzzles: data/puzzles/puzzles.parquet
+puzzle_split: test
+legality_positions: 0
+accuracy_positions: 0
+position_pool: 20000
+puzzles_per_band: 0
+elo_games: 20
+elo_move_time: 0.1
+elo_nodes: 200000
+bootstrap: 500
+diversity_games: 0
+temperature: 0.05
+top_k: 1
+block: 200
+seed: 42
+header_elo: 1800
+out_dir: artifacts/eval
+web_results: null
+cache_db: artifacts/eval/cache-ladder.sqlite
+track: false

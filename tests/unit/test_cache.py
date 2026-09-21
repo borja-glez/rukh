@@ -107,6 +107,48 @@ def test_different_settings_do_not_share_results(tmp_path: Path) -> None:
         assert again.get("elo", "uci-1500:0") == {"score": 1.0}
 
 
+def test_one_key_per_family_so_more_games_reuse_the_ones_already_played() -> None:
+    """The P4 backlog item: raising ``elo_games`` must not throw away the games on disk.
+
+    A game is ``rung:index`` with seed ``seed + index``, the same game whatever the total is, and
+    the same game whatever the puzzle settings are. So the games key ignores the count and the
+    puzzle flags, and the puzzles key ignores the clock and the rungs.
+    """
+    from rukh.eval.suite import EvalConfig
+
+    base = EvalConfig(elo_games=20)
+    games_key = config_sha(base.cache_fields("games"))
+    puzzles_key = config_sha(base.cache_fields("puzzles"))
+    assert config_sha(EvalConfig(elo_games=40).cache_fields("games")) == games_key
+    assert config_sha(EvalConfig(elo_games=40).cache_fields("puzzles")) == puzzles_key
+    # What changes a game: the sampler, the clock (or the node budget), the plies, the rungs.
+    assert config_sha(EvalConfig(temperature=0.05).cache_fields("games")) != games_key
+    assert config_sha(EvalConfig(elo_move_time=0.05).cache_fields("games")) != games_key
+    assert config_sha(EvalConfig(elo_nodes=200_000).cache_fields("games")) != games_key
+    assert config_sha(EvalConfig(elo_max_plies=100).cache_fields("games")) != games_key
+    # What does not: the puzzle header flag.
+    assert config_sha(EvalConfig(force_header=True).cache_fields("games")) == games_key
+    # And the mirror image for puzzles.
+    assert config_sha(EvalConfig(elo_move_time=0.05).cache_fields("puzzles")) == puzzles_key
+    assert config_sha(EvalConfig(elo_nodes=200_000).cache_fields("puzzles")) == puzzles_key
+    assert config_sha(EvalConfig(force_header=True).cache_fields("puzzles")) != puzzles_key
+    assert config_sha(EvalConfig(temperature=0.05).cache_fields("puzzles")) != puzzles_key
+    with pytest.raises(ValueError, match="unknown cache family"):
+        base.cache_fields("weather")
+
+
+def test_the_node_budget_replaces_the_clock_in_the_opponent() -> None:
+    """With ``nodes`` the opponent's limit is a node count; without it, the clock."""
+    from rukh.infer.game import StockfishOpponent
+
+    on_clock = StockfishOpponent.__new__(StockfishOpponent)
+    on_clock.move_time, on_clock.nodes = 0.1, None
+    assert on_clock.limit.time == 0.1 and on_clock.limit.nodes is None
+    on_nodes = StockfishOpponent.__new__(StockfishOpponent)
+    on_nodes.move_time, on_nodes.nodes = 0.1, 200_000
+    assert on_nodes.limit.nodes == 200_000 and on_nodes.limit.time is None
+
+
 def test_the_config_hash_ignores_key_order_and_reads_every_field() -> None:
     fields = {"temperature": 0.6, "top_k": 20, "seed": 42}
     assert config_sha(fields) == config_sha(dict(reversed(list(fields.items()))))
