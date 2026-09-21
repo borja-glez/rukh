@@ -29,8 +29,21 @@ from rukh.paths import resolve
 
 LOGGER = logging.getLogger(__name__)
 PAIRS_FILE = "pairs.parquet"
+PROMPTS_FILE = "dpo-prompts.parquet"
 PHASES = ("opening", "middlegame", "endgame")
 BATCH_ROWS = 50_000
+PROMPT_COLUMNS = [
+    "game_id",
+    "ply",
+    "chosen",
+    "rejected",
+    "cp_chosen",
+    "cp_rejected",
+    "phase",
+    "white_elo",
+    "black_elo",
+    "prefix",
+]
 
 
 class PairsConfig(BaseConfig):
@@ -38,6 +51,8 @@ class PairsConfig(BaseConfig):
 
     positions_eval: str = "data/evals/positions-eval.parquet"
     out_dir: str = "data/pairs"
+    games_dir: str = "data/uci"
+    """The converted games the pairs came from, to recover the moves that led to each position."""
     min_delta_cp: int = Field(default=100, ge=1)
     max_per_phase: int = Field(default=200_000, ge=1)
     seed: int = 42
@@ -146,8 +161,48 @@ def balance(frame: pl.DataFrame, max_per_phase: int, seed: int) -> pl.DataFrame:
     return pl.concat(parts)
 
 
+def build_prompts(pairs: pl.DataFrame, games_dir: Path, block: int = 200) -> pl.DataFrame:
+    """Every pair joined back to its game: the moves that led to the position, and the ratings.
+
+    A pair is a FEN, and the decoder cannot read a FEN: it reads the move sequence that reached
+    the position, behind the three header tokens. ``game_id`` and ``ply`` say which game and how
+    far into it, so the prompt is the first ``ply`` moves of that game and the two Elo columns
+    fill the header. This is the file every DPO, GRPO, reward-model and on-policy config reads;
+    until it was written here it existed only as a one-off join nobody could rerun.
+
+    A prompt has to fit the decoder's context whole -- three header tokens plus ``ply`` moves,
+    at most ``block`` -- because truncating its front would hand the model a position that never
+    happened. Pairs deeper than that are dropped and counted, and so is a pair whose game is not
+    under ``games_dir``; neither is ever invented.
+    """
+    parquets = sorted(games_dir.glob("year=*/month=*/games.parquet"))
+    if not parquets:
+        raise FileNotFoundError(f"no converted games under {games_dir} (run `rukh data uci`)")
+    games = (
+        pl.scan_parquet([p.as_posix() for p in parquets])
+        .select("game_id", "uci", "white_elo", "black_elo")
+        # The games carry the id as a signed 64-bit hash; the evaluations, and therefore the
+        # pairs, carry it as text. Matching on text loses nothing and refuses nothing.
+        .with_columns(pl.col("game_id").cast(pl.String))
+    )
+    header = 3  # <bos> and the two Elo tokens, exactly what `rukh.infer.game._history` builds
+    joined = (
+        pairs.lazy()
+        .filter(pl.col("ply") + header <= block)
+        .join(games, on="game_id", how="inner")
+        .collect()
+    )
+    prefixes = [
+        " ".join(str(uci).split()[:ply])
+        for uci, ply in zip(joined["uci"], joined["ply"], strict=True)
+    ]
+    return joined.with_columns(pl.Series("prefix", prefixes, dtype=pl.String)).select(
+        PROMPT_COLUMNS
+    )
+
+
 def run(cfg: PairsConfig) -> Manifest:
-    """Build, balance and write ``out_dir/pairs.parquet`` plus the manifest."""
+    """Build, balance and write ``out_dir/pairs.parquet`` and ``dpo-prompts.parquet``."""
     evals = resolve(cfg.positions_eval)
     out_dir = resolve(cfg.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -165,8 +220,20 @@ def run(cfg: PairsConfig) -> Manifest:
     balanced = balance(raw, cfg.max_per_phase, cfg.seed)
     target = out_dir / PAIRS_FILE
     balanced.write_parquet(target.as_posix(), compression="zstd")
+    prompts = build_prompts(balanced, resolve(cfg.games_dir))
+    prompts_target = out_dir / PROMPTS_FILE
+    prompts.write_parquet(prompts_target.as_posix(), compression="zstd")
+    dropped = int(balanced.height - prompts.height)
+    if dropped:
+        LOGGER.info(
+            "%d pairs got no prompt: deeper than the context or with no game under %s",
+            dropped,
+            cfg.games_dir,
+        )
     counts = phase_counts(balanced)
     counts["candidates"] = int(raw.height)
+    counts["prompts"] = int(prompts.height)
+    counts["prompts_dropped"] = dropped
     manifest = Manifest(
         dataset="Lichess/chess-position-evaluations",
         months=[],
@@ -182,7 +249,14 @@ def run(cfg: PairsConfig) -> Manifest:
             "empty_phases": empty,
         },
         counts=counts,
-        files=[FileHash(path=PAIRS_FILE, sha256=sha256_file(target), bytes=target.stat().st_size)],
+        files=[
+            FileHash(path=PAIRS_FILE, sha256=sha256_file(target), bytes=target.stat().st_size),
+            FileHash(
+                path=PROMPTS_FILE,
+                sha256=sha256_file(prompts_target),
+                bytes=prompts_target.stat().st_size,
+            ),
+        ],
     )
     (out_dir / "manifest.json").write_text(manifest.model_dump_json(indent=2) + "\n", "utf-8")
     return manifest
