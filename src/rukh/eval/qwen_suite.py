@@ -243,6 +243,7 @@ def row_of(result: QwenResult) -> WebRow:
     )
     return WebRow(
         stage=result.stage,
+        baseline=True,
         params=result.params,
         legality=result.written.legal_rate or None,
         top1=result.top1,

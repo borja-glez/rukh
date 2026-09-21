@@ -29,9 +29,9 @@ Cómo se mide cada columna:
 | `medium-v4-dpo-onpolicy-greedy` | 99.2 % | 52.3 % | 79.9 % | 59.0 % | 40.3 % | 17.8 % | 1632 (1567-1706) | n/a | 1.7511 | 2026-09-21 |
 | `medium-v4-greedy` | 99.8 % | 54.4 % | 82.2 % | 57.9 % | 38.0 % | 16.6 % | 1535 (1476-1599) | n/a | 1.7695 | 2026-09-21 |
 | `medium-v4-grpo-greedy` | 99.3 % | 53.3 % | 80.3 % | 58.9 % | 39.1 % | 17.8 % | 1577 (1526-1632) | n/a | 1.7874 | 2026-09-21 |
-| `qwen3-pgn-qlora` | 62.5 % | 12.5 % | n/a | 1.8 % | 0.7 % | 0.4 % | < 807 | n/a | n/a | 2026-09-21 |
+| `qwen3-pgn-qlora` (externo) | 62.5 % | 12.5 % | n/a | 1.8 % | 0.7 % | 0.4 % | < 807 | n/a | n/a | 2026-09-21 |
 | `small-greedy` | 99.4 % | 51.1 % | 79.4 % | 34.7 % | 21.1 % | 10.3 % | 1355 (1297-1420) | n/a | 1.7412 | 2026-09-21 |
 | `small-v3-greedy` | 99.1 % | 52.4 % | 80.5 % | 41.0 % | 27.0 % | 12.2 % | 1425 (1367-1484) | n/a | 1.6393 | 2026-09-21 |
 | `tiny-greedy` | 94.5 % | 40.3 % | 67.1 % | 14.1 % | 8.6 % | 3.9 % | 778 (479-904) | n/a | 1.7214 | 2026-09-21 |
 
-13 etapas medidas con la misma suite, 1 de ellas externas (modelos de otros autores, marcados como `(externo)`, medidos con este mismo harness como control). Las filas del encoder viven aparte porque no comparten una sola columna con estas; las que una medición retiró no están (`rukh eval drop`).
+13 etapas medidas con la misma suite, 2 de ellas externas (modelos de otros autores, marcados como `(externo)`, medidos con este mismo harness como control). Las filas del encoder viven aparte porque no comparten una sola columna con estas; las que una medición retiró no están (`rukh eval drop`).

@@ -466,7 +466,7 @@
       "first_move_entropy": null,
       "date": "2026-09-21",
       "run_id": null,
-      "baseline": false
+      "baseline": true
     },
     {
       "stage": "small-greedy",
