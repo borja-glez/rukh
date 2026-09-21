@@ -133,6 +133,8 @@ def pull_cmd(
         typer.echo("error: give a name, --module or --list (see rukh pull --help)", err=True)
         raise typer.Exit(code=2)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    for chatty in ("httpx", "huggingface_hub", "urllib3"):
+        logging.getLogger(chatty).setLevel(logging.WARNING)  # one line per artefact, not per GET
     for artefact in wanted:
         try:
             path = pull(artefact, force=force)
