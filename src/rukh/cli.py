@@ -859,6 +859,62 @@ def eval_drop_cmd(
     typer.echo(f"rows left: {len(kept)}")
 
 
+@eval_app.command("nightly")
+def eval_nightly_cmd(
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            exists=True,
+            dir_okay=False,
+            help="Suite YAML every decoder is measured with (default: configs/eval/greedy.yaml).",
+        ),
+    ] = None,
+    encoder_config: Annotated[
+        Path | None,
+        typer.Option("--encoder-config", exists=True, dir_okay=False, help="Encoder suite YAML."),
+    ] = None,
+    only: Annotated[
+        str | None, typer.Option("--only", help="Comma-separated names or stages to measure.")
+    ] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="List what would be measured and exit.")
+    ] = False,
+    no_pull: Annotated[
+        bool, typer.Option("--no-pull", help="Never download; a missing checkpoint fails.")
+    ] = False,
+    no_cache: Annotated[bool, typer.Option("--no-cache", help="Replay every game.")] = False,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """Measure every published stage under one config and rewrite the whole table.
+
+    The catalogue of `rukh pull` says which stage each model is and how it is measured; what the
+    caches hold is not replayed, so a nightly after a nightly costs minutes. `artifacts/eval/
+    nightly.json` records what came from where, with which sha, and how long it took.
+    """
+    from rukh.eval.nightly import render_plan, run_nightly
+    from rukh.paths import resolve
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    wanted = {part.strip() for part in (only or "").split(",") if part.strip()} or None
+    report = run_nightly(
+        config=config or resolve("configs/eval/greedy.yaml"),
+        encoder_config=encoder_config,
+        only=wanted,
+        dry_run=dry_run,
+        pull_missing=not no_pull,
+        use_cache=not no_cache,
+        device=device,
+    )
+    typer.echo(render_plan(report))
+    if not dry_run:
+        typer.echo(f"results:    {report.results}")
+        typer.echo(f"benchmarks: {report.benchmarks or 'not rewritten'}")
+        typer.echo(f"seconds:    {report.seconds:.0f}")
+    if any(record.status == "failed" for record in report.records):
+        raise typer.Exit(code=1)
+
+
 @eval_app.command("benchmarks")
 def eval_benchmarks_cmd(
     table: Annotated[

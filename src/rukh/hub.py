@@ -47,6 +47,15 @@ class Artefact:
     modules: tuple[str, ...]
     """The modules that start from this artefact when the reader skipped what produced it."""
     note: str
+    stage: str | None = None
+    """Its row in the single results table, when it has one; ``rukh eval nightly`` measures it
+    under that name so the row it rewrites is the row the cards and the course already cite."""
+    measure: Literal["decoder", "encoder", "qwen", "none"] = "none"
+    """How ``nightly`` measures it: the decoder suite (adapters are merged onto their base
+    first), the encoder suite, the general-model suite, or not at all (datasets, the reward
+    model, the pretraining encoder)."""
+    base: str | None = None
+    """For an adapter: the checkpoint it is merged onto before it is measured."""
 
     @property
     def repo_id(self) -> str:
@@ -61,6 +70,8 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/tiny/best.pt",
         ("m2",),
         "the 5 M decoder M2 iterates on (`configs/train/tiny.yaml`)",
+        stage="tiny-greedy",
+        measure="decoder",
     ),
     Artefact(
         "small",
@@ -69,6 +80,8 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/small/best.pt",
         ("m2",),
         "the 39 M course decoder, `small-v3` on the corpus with 24 months of Elite games",
+        stage="small-v3-greedy",
+        measure="decoder",
     ),
     Artefact(
         "medium-v4",
@@ -77,6 +90,8 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/medium-v4/best.pt",
         ("m4", "m5"),
         "the 115 M decoder every M4 fine-tune and every M5 alignment run starts from",
+        stage="medium-v4-greedy",
+        measure="decoder",
     ),
     Artefact(
         "encoder-mmm-v4",
@@ -93,6 +108,8 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/encoder-v4/best.pt",
         ("m3",),
         "the encoder with its three heads, as published and served by the demo",
+        stage="encoder-v4",
+        measure="encoder",
     ),
     Artefact(
         "medium-elo",
@@ -101,6 +118,8 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/medium-elo/step-3800.pt",
         ("m4",),
         "`medium-v4` fine-tuned on the Elo-balanced corpus (the last step, not `best.pt`)",
+        stage="medium-elo",
+        measure="decoder",
     ),
     Artefact(
         "medium-masters",
@@ -109,6 +128,8 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/medium-masters/step-3800.pt",
         ("m4",),
         "`medium-v4` fine-tuned on Elite games (the last step, not `best.pt`)",
+        stage="medium-masters",
+        measure="decoder",
     ),
     Artefact(
         "lora-e4",
@@ -117,6 +138,9 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/lora-e4",
         ("m4",),
         "the 1.6 MB style adapter that opens 1. e4",
+        stage="lora-e4",
+        measure="decoder",
+        base="checkpoints/medium-v4/best.pt",
     ),
     Artefact(
         "lora-d4",
@@ -125,6 +149,9 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/lora-d4",
         ("m4",),
         "the 1.6 MB style adapter that opens 1. d4",
+        stage="lora-d4",
+        measure="decoder",
+        base="checkpoints/medium-v4/best.pt",
     ),
     Artefact(
         "qwen3-pgn-qlora",
@@ -133,6 +160,8 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/qwen3-pgn-qlora",
         ("m4",),
         "the `peft` adapter of Qwen3-0.6B over PGN text, as `trl` wrote it",
+        stage="qwen3-pgn-qlora",
+        measure="qwen",
     ),
     Artefact(
         "rm",
@@ -149,6 +178,8 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/medium-v4-dpo-onpolicy/dpo.pt",
         ("m5",),
         "`medium-v4` after DPO on its own pairs, the aligned decoder the demo serves",
+        stage="medium-v4-dpo-onpolicy-greedy",
+        measure="decoder",
     ),
     Artefact(
         "medium-v4-grpo",
@@ -157,6 +188,8 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/medium-v4-grpo/grpo.pt",
         ("m5",),
         "`medium-v4` after GRPO against the verifiable reward",
+        stage="medium-v4-grpo-greedy",
+        measure="decoder",
     ),
 )
 
