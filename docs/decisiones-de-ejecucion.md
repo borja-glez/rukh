@@ -2467,6 +2467,26 @@ Evidencia obtenida por el controlador, no por subagentes:
   que ocurra como consecuencia de un toque puede mover la página, porque el navegador todavía no
   ha terminado de entregar ese toque.
 
+### D-142 · Una revisión editorial de la fase 1 con tres revisores, y todo lo que dejó
+- **Qué se hizo (2026-09-21, tras cerrar P6):** tres revisores independientes leyeron los siete
+  módulos del curso con los mismos cuatro criterios (coherencia, analogías con ejemplos reales,
+  figuras y animaciones, densidad) y dejaron unos 150 hallazgos en
+  `rukh-lab/docs/revisiones/2026-09-21-fase-1.md`; seis agentes los corrigieron módulo a módulo
+  y tres verificadores comprobaron uno a uno que estaban resueltos.
+- **Lo que enseñó:** cuatro tablas estaban rotas en la web publicada por un `table-wrap` anidado;
+  el triángulo de M5 tenía cuatro cifras para el mismo hecho; el titular de M3 mezclaba dos
+  checkpoints; M2 llamaba «21 tokens por parámetro» a los tokens vistos (los únicos son 14,6);
+  M0 y M2 describían una suite de 100 partidas por nivel cuando la real juega 20 × 8; y toda
+  figura era ilegible en móvil (texto a 5-6 px). Ninguna de esas cosas la habría encontrado la CI.
+- **Qué se decidió:** las figuras y las tablas de Markdown mantienen su tamaño y se desplazan
+  dentro de su caja por debajo de 560 px (regla global, y la caja es focusable); una tabla de
+  Markdown ya no necesita `table-wrap`. Cada módulo lleva ejercicios con solución (diecisiete
+  nuevos), cada parte abre con su número y cierra con un puente, y cada concepto central tiene
+  una analogía fuera del ajedrez. Los números de un módulo son los de su hito y lo dicen; la
+  tabla del proyecto lleva los de M6.
+- **La regla que deja:** una revisión con criterios fijos y revisores que no escribieron el
+  texto encuentra lo que el autor ya no ve; se repite al cerrar cada fase.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

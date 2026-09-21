@@ -18,19 +18,6 @@ Se limpia al cerrar cada hito; lo que entra en un plan sale de aquí.
 
 ## Aplazado desde P4
 
-- **Las tablas de Markdown del curso no tienen contenedor con scroll.** Las tablas que escriben
-  los componentes (`.table-wrap`) sí lo tienen; las que se escriben en MDX heredan `.prose table`
-  y desbordan la página en móvil en cuanto pasan de cuatro columnas —medido en M4: 415 px de
-  `scrollWidth` contra 390 px de ventana, con una tabla de cinco columnas y otra de seis—. Se ha
-  resuelto estrechando esas dos tablas, que es lo correcto para el texto pero no para el problema.
-  **Por qué se aplaza:** la solución general es un plugin `rehype` que envuelva cada `<table>`, y
-  bajo Astro 7.3 los `markdown.rehypePlugins` corren sobre el procesador `unified` de
-  `@astrojs/markdown-remark`, que ya no se instala por defecto desde que Sätteri es el procesador
-  de Markdown; habilitarlo cambia el pipeline de Markdown de las cuatro lecciones publicadas.
-  **Cuándo:** cuando toque revisar el pipeline del curso (P6 o el primer módulo que necesite una
-  tabla ancha de verdad), con una prueba `e2e` de desbordamiento en las cuatro lecciones, no solo
-  en la última.
-
 ## Aplazado desde P5
 
 - **La galería usa `cp_best` del grupo también para la métrica de validación en las corridas
