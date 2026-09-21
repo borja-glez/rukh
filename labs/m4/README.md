@@ -13,6 +13,15 @@ repository root.
 Both are copies of the code the lesson shows, and both print the numbers the lesson quotes. If you
 edit one, edit the other.
 
+## Starting point
+
+Everything in M4 starts from `checkpoints/medium-v4/best.pt` (M2, fourth part) and needs
+`data/uci/`, the 44 months of `data/elite/games.parquet` and the tokenizer.
+`uv run rukh pull --module m4` brings them, plus the five results of the module (`medium-elo`,
+`medium-masters`, `lora-e4`, `lora-d4`, `qwen3-pgn-qlora`) for whoever only wants to measure
+them. The club-level corpus and its flat Elo bins are rebuilt in minutes; the ordered commands,
+with what each took, are `docs/runbooks/afinado-y-adaptadores.md`.
+
 ## `header_histogram.py`
 
 Counts how many times the model has seen each Elo header. The second token of every packed game

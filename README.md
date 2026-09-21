@@ -15,7 +15,8 @@ The name is Persian for the rook.
 
 ```
 src/rukh/            the `rukh` package and its `rukh` CLI
-  cli.py             typer app: info · data fetch · engine check · mlflow ui
+  cli.py             typer app: info · data · train · eval · play · export · publish · pull · engine · mlflow
+  hub.py             `rukh pull`: the published artefacts, written where the configs read them
   env.py             environment report (Python, torch, CUDA, GPU, Stockfish, MLflow, dirs)
   paths.py           project directories; RUKH_HOME overrides the root
   config.py          strict pydantic configs (extra="forbid") loaded from YAML
@@ -52,6 +53,27 @@ uv run pytest -m unit -q               # fast tests; add `or engine` once Stockf
 `rukh info --json`, `rukh engine check --json` and `rukh data fetch --json` print machine-readable
 output. Set `RUKH_HOME` to move `data/`, `mlruns/` and `tools/` elsewhere, and `RUKH_STOCKFISH` to
 point at a specific binary.
+
+## Reproducing the course, module by module
+
+Every module builds on what the previous one left on disk. `docs/reproducir.md` maps each module
+to what it needs, the commands that produce it and what they took on the reference machine. The
+two mechanisms behind it:
+
+```sh
+uv run rukh pull --list                 # every published model and dataset, and which module starts from it
+uv run rukh pull --module m4            # everything M4 needs if you skipped M0-M3 (medium-v4, the games, ...)
+uv run rukh pull medium-v4 rukh-pairs-dpo
+```
+
+- A pulled model lands under its **run name** (`checkpoints/medium-v4/best.pt`), which is how
+  every config and lesson names it. A run you trained yourself lands in a stamped folder
+  (`checkpoints/medium-v4-20260919-174623/`), and the same spelling finds it: a stable name that
+  does not exist resolves to the newest stamped run of that name.
+- The code is always `main`. The milestones are tagged (`git tag -n1 -l 'p*'`: `p0` to `p5`,
+  plus `p3-elo-1200`) so the repository can be read as it was the day each one closed, but the
+  tags are history, not starting points: `p2`, for instance, still carries the Elo ladder that
+  D-070 later corrected.
 
 ### The encoder (M3)
 

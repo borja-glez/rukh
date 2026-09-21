@@ -16,6 +16,19 @@ is its source of truth.
 
 Both JSON outputs are copied into the course with `pnpm sync:data`.
 
+## Starting point
+
+M2 trains on `data/tokens/uci/` (M1's `rukh data tokenize --scheme uci --pack`) and evaluates
+with `data/puzzles/` and `data/uci/`. `uv run rukh pull --module m2` brings the games, the
+tokenizer, the puzzles, the evaluations and the two published decoders (`tiny`, `small`); the
+packed tokens are rebuilt locally in minutes. The fourth part of the module (`medium-v4`, the
+model M4 and M5 start from) needs the 44 months of Elite games: `rukh pull rukh-games-elite`, or
+`rukh data elite --config configs/data/pipeline-elite44.yaml`. Every command, with its measured
+duration, is in `docs/reproducir.md`.
+
+A trained run lands in a stamped folder (`checkpoints/small-20260919-062911/`); the lessons and
+the configs name it without the stamp (`checkpoints/small/best.pt`), and both spellings work.
+
 ## `replay_export.py`
 
 One entry per **checkpoint**, not per MLflow logging step. The script reads the metric history of
