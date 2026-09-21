@@ -18,17 +18,6 @@ Se limpia al cerrar cada hito; lo que entra en un plan sale de aquí.
 
 ## Aplazado desde P4
 
-- **La clave del caché de evaluación es global y debería ser por suite.** `config_sha` mezcla
-  ajustes que solo afectan a los puzles (`puzzles_use_header`) con otros que solo afectan a las
-  partidas (`elo_games`, `rungs`, `elo_move_time`), así que cambiar uno invalida lo otro. Dos
-  consecuencias medidas en este hito: el barrido por condición no puede reutilizar sus partidas de
-  `@1800` para la evaluación canónica (doce minutos de Stockfish repetidos), y subir `elo_games` de
-  20 a 40 tira las veinte partidas ya jugadas aunque la partida `rung:index` sea exactamente la
-  misma —su semilla es `seed + index`, independiente del total—. **Cuándo:** P6, que es donde
-  `rukh eval nightly` va a reconstruir la tabla entera y donde el ahorro se nota. **Coste de
-  hacerlo:** invalida los 17 MB de `cache-greedy.sqlite` que ya tienen las etapas publicadas, así
-  que conviene hacerlo junto a una tirada completa y no a mitad de un hito.
-
 - **Las tablas de Markdown del curso no tienen contenedor con scroll.** Las tablas que escriben
   los componentes (`.table-wrap`) sí lo tienen; las que se escriben en MDX heredan `.prose table`
   y desbordan la página en móvil en cuanto pasan de cuatro columnas —medido en M4: 415 px de
@@ -41,25 +30,6 @@ Se limpia al cerrar cada hito; lo que entra en un plan sale de aquí.
   **Cuándo:** cuando toque revisar el pipeline del curso (P6 o el primer módulo que necesite una
   tabla ancha de verdad), con una prueba `e2e` de desbordamiento en las cuatro lecciones, no solo
   en la última.
-
-- **Dos filas del encoder llevan el nombre de su directorio de corrida en la tabla pública.**
-  `eval-encoder-heads-rank30-20260920-111151` y `eval-encoder-heads-rank80-20260920-111329` salen
-  tal cual en `/proyecto/`, porque `--stage` no se pasó y el defecto es el nombre de la carpeta.
-  Las mediciones son buenas; el nombre es ruido en una página pública, justo lo que D-099 acababa
-  de limpiar por otra razón. **Por qué se aplaza:** renombrar una fila no existe —`rukh eval drop`
-  solo retira— y volver a correrlas con `--stage` cuesta su evaluación entera; además son
-  mediciones de P3 y tirarlas es decisión de quien las hizo. **Cuándo:** con la reconstrucción de
-  la tabla de P6, o antes si se vuelven a evaluar las cabezas por cualquier otro motivo.
-
-- **La escalera de Elo no es reproducible porque el rival va por tiempo.** Dos tiradas idénticas de
-  `medium-elo` a `<w1800>` dieron 1498 y 1558 (D-107): `chess.engine.Limit(time=0.1)` más
-  `UCI_LimitStrength` hacen que la semilla fije nuestro muestreo y no el suyo. El suelo de
-  reproducibilidad queda en unos 40 Elo de una sigma, que es más de lo que separa a las condiciones
-  contiguas de cualquier barrido. **La alternativa:** limitar por **nodos** en vez de por tiempo,
-  que además deja de depender de lo ocupada que esté la máquina. **Por qué se aplaza:** cambia el
-  rival, así que invalida todos los Elo publicados y obliga a recalibrar los ocho peldaños.
-  **Cuándo:** P6, junto con la reconstrucción de la tabla, y midiendo antes cuánto se estrecha de
-  verdad la reproducibilidad — que es el único motivo para pagar la recalibración.
 
 ## Aplazado desde P5
 
@@ -81,3 +51,13 @@ Se limpia al cerrar cada hito; lo que entra en un plan sale de aquí.
   cero aunque el libro de aperturas sea el mismo. Un caché por `(modelo A, modelo B, apertura,
   color)` ahorraría la mitad al repetir una dirección, y es lo que hace falta para subir a 1 600
   partidas sin pagarlas enteras.
+
+## Aplazado desde P6
+
+- **Maia-2 como baseline condicionado por Elo.** `maia2` 0.11 fija `torch>=2.8,<2.9` frente al
+  2.11 del proyecto; el diseño que cabe es un proceso hijo en su propio entorno de `uv`
+  (`--isolated --with maia2 --with "torch==2.8.*"`) que recibe FEN y dos Elo por JSON lines y
+  devuelve la jugada, implementando `Player.choose(board)` sin historial (D-138). Sus pesos vienen
+  de Google Drive con `gdown`: fijar el id del fichero y cachearlo bajo `checkpoints/`. **Cuándo:**
+  cuando la pregunta del condicionado por Elo (M4) vuelva a abrirse, o si la fase 2 necesita un
+  rival humano-como a distintas fuerzas.

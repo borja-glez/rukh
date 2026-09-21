@@ -2358,6 +2358,30 @@ Evidencia obtenida por el controlador, no por subagentes:
   regenera la tabla entera; sin la partición cada cambio de régimen habría vuelto a jugar los
   puzles de doce etapas.
 
+### D-138 · Un baseline público entra en la tabla; Maia-2 se queda fuera
+- **Qué se quería:** la tabla única con «los baselines públicos» del plan. Dos candidatos: el
+  nanoGPT de ajedrez de Adam Karvonen (8 capas, 25,7 M, PGN carácter a carácter, pesos en
+  `adamkarvonen/chess_llms`) y Maia-2.
+- **Karvonen entra**, reimplementado sin depender de su repositorio (unas cien líneas de nanoGPT),
+  preguntado en su formato exacto (`;1.e4 e5 2.` sin espacio tras el número, verificado en su
+  `nanogpt_module.py`) y puesto en el mismo `play_rungs(..., player=...)` que el Qwen de M4: mismos
+  peldaños, misma adjudicación, mismo criterio de puzles. La única diferencia con su propio
+  harness se anota en la lección: él reintenta hasta cinco veces con más temperatura ante una
+  jugada ilegal; aquí se pregunta una vez y la jugada ilegal se cuenta y se sustituye por la
+  primera legal. Nuestra fila es, por tanto, más dura que sus números publicados. Sus pesos no
+  entran en el catálogo de `rukh pull` ni en la colección (no son nuestros): el nightly los
+  descarga a `checkpoints/karvonen-8l/` con el SHA del `meta.pkl` fijado en código.
+- **Maia-2 no entra en P6.** `maia2` 0.11 fija `torch>=2.8,<2.9` y el proyecto va en 2.11 con
+  cu128; cabría en un entorno aparte (`uv run --isolated --with maia2 --with "torch==2.8.*"`) como
+  proceso hijo por JSON lines, y su API por posición (FEN más dos Elo) lo haría el baseline más
+  interesante para la pregunta del condicionado por Elo. Se aplaza por dos fragilidades que no se
+  quieren en el hito de cierre: los pesos se descargan de Google Drive con `gdown`, y cualquier
+  cambio futuro de su pin de torch es invisible para nuestro lockfile. Queda en el backlog con el
+  diseño hecho.
+- **Lo que arrastró:** `qwen_suite.py` no pasaba `nodes=cfg.elo_nodes` a `play_rungs`, así que la
+  fila de Qwen habría jugado por reloj bajo una config por nodos. Corregido antes de que la
+  tabla se reconstruyera.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
