@@ -2358,6 +2358,28 @@ Evidencia obtenida por el controlador, no por subagentes:
   regenera la tabla entera; sin la partición cada cambio de régimen habría vuelto a jugar los
   puzles de doce etapas.
 
+### D-137 · El rival se queda por tiempo: los nodos no compran reproducibilidad
+- **La medición:** `medium-v4`, la misma semilla, la misma escalera de 160 partidas, cuatro veces
+  con la máquina parada y quince minutos de descanso entre tiradas. Por reloj (0,1 s):
+  **1538** (1476-1599) y **1538** (1486-1594). Por nodos (200 000, lo que 0,1 s compraba en esta
+  máquina): **1541** (1485-1596) y **1524** (1457-1584). Separación entre tiradas: 0 Elo por
+  tiempo, 17 por nodos. Las dos están muy por debajo del semiancho del intervalo (±55) y del
+  suelo de 40 Elo de una sigma que D-107 había estimado con dos tiradas.
+- **Lo que enseña:** el presupuesto de nodos hace determinista la **búsqueda**, no al rival:
+  `UCI_LimitStrength` aleatoriza a propósito para acertar el Elo pedido, y las dos tiradas por
+  nodos difieren peldaño a peldaño tanto como las dos por tiempo (el 1538 repetido es el agregado;
+  `uci-1500` dio 0,45 y 0,625). Lo que D-107 vio (1498 frente a 1558) fue una tirada con la
+  máquina cargada o mala suerte a 1,18 σ, no un instrumento que no repite. Con la máquina
+  tranquila, el reloj repite al nivel del ruido de muestreo.
+- **Qué se decidió:** el rival sigue por tiempo. La regla del plan pedía que los nodos estrecharan
+  el suelo «de forma clara, menos de la mitad» para pagar la recalibración de los ocho peldaños y
+  el cambio de escala de todos los Elo publicados; no lo hacen. `elo_nodes` se queda en la suite
+  para quien mida en una máquina compartida (D-068: la carga de CPU vale unos +13 Elo por reloj),
+  y `labs/m6/ladder_check.py` admite los dos límites. La condición que sí entra en el runbook:
+  **nada más en la máquina mientras corre una escalera por tiempo**, y el descanso entre tiradas.
+- **Lo que arrastró:** la nota de cada resultado dice ahora con qué límite jugó el rival, y las
+  cuatro tiradas van a la lección y a la figura `LadderFloor` con la decisión encima.
+
 ### D-138 · Un baseline público entra en la tabla; Maia-2 se queda fuera
 - **Qué se quería:** la tabla única con «los baselines públicos» del plan. Dos candidatos: el
   nanoGPT de ajedrez de Adam Karvonen (8 capas, 25,7 M, PGN carácter a carácter, pesos en

@@ -60,6 +60,12 @@ ELO_CAVEAT = (
     "``Skill Level`` anchors rather than measured ratings, and Stockfish plays at {move_time:g} s "
     "per move, far below any setting ``UCI_Elo`` is calibrated for"
 )
+ELO_CAVEAT_NODES = (
+    "the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal "
+    "``Skill Level`` anchors rather than measured ratings, and Stockfish searches {nodes} nodes "
+    "per move (what 0.1 s bought on the reference machine), far below any setting ``UCI_Elo`` "
+    "is calibrated for; the same position always gets the same reply (D-137)"
+)
 PUZZLE_PROMPT_NOTE = (
     "the puzzle parquet has no ``prefix_uci``, so every puzzle was prompted with its own "
     "solution line after ``<bos>``: a token sequence that is no game and does not start from "
@@ -493,7 +499,10 @@ def _elo_notes(elo: EloResult | None, cfg: EvalConfig, notes: list[str]) -> None
     """Everything the Elo number has to be read with, in words."""
     if elo is None:
         return
-    notes.append(ELO_CAVEAT.format(move_time=cfg.elo_move_time))
+    if cfg.elo_nodes:
+        notes.append(ELO_CAVEAT_NODES.format(nodes=f"{cfg.elo_nodes:,}".replace(",", " ")))
+    else:
+        notes.append(ELO_CAVEAT.format(move_time=cfg.elo_move_time))
     if elo.cut:
         notes.append(
             f"{elo.cut} of {elo.games} games hit the context limit and were adjudicated "

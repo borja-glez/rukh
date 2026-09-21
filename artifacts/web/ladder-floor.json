@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "generated": "2026-09-21T11:29:42+00:00",
+    "model": "checkpoints/medium-v4-20260919-174623/best.pt",
+    "games": 160
+  },
+  "runs": [
+    {
+      "name": "time-a",
+      "limit": "time",
+      "elo": 1538,
+      "lo": 1476,
+      "hi": 1599,
+      "date": "2026-09-21"
+    },
+    {
+      "name": "time-b",
+      "limit": "time",
+      "elo": 1538,
+      "lo": 1486,
+      "hi": 1594,
+      "date": "2026-09-21"
+    },
+    {
+      "name": "nodes-a",
+      "limit": "nodes",
+      "elo": 1541,
+      "lo": 1485,
+      "hi": 1596,
+      "date": "2026-09-21"
+    },
+    {
+      "name": "nodes-b",
+      "limit": "nodes",
+      "elo": 1524,
+      "lo": 1457,
+      "hi": 1584,
+      "date": "2026-09-21"
+    }
+  ],
+  "spread": {
+    "time": 0,
+    "nodes": 17
+  },
+  "decision": "time"
+}

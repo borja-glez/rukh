@@ -146,19 +146,20 @@ publican.
 
 | Paso | Comando | Tarda | Deja |
 |---|---|---|---|
-| 1 | `uv run python labs/m6/ladder_check.py --games 40 --nodes 200000` | ~25 min | los ocho peldaños medidos contra el ancla, por nodos |
+| 1 | `uv run python labs/m6/ladder_check.py --games 40` | ~40 min | los ocho peldaños medidos contra el ancla, motor contra motor (D-070) |
 | 2 | `uv run rukh eval --model checkpoints/medium-v4/best.pt --config configs/eval/ladder-time.yaml --stage ladder-time-a --no-cache` (y `-b`; luego `ladder-nodes.yaml`, `-a` y `-b`) | ~12 min cada una | las cuatro tiradas del suelo del instrumento (D-137) |
-| 3 | `uv run python labs/m6/ladder_floor_export.py --decision nodes` | s | `artifacts/web/ladder-floor.json` |
+| 3 | `uv run python labs/m6/ladder_floor_export.py --decision time` | s | `artifacts/web/ladder-floor.json` |
 | 4 | `uv run rukh eval nightly` | horas | la tabla entera: `artifacts/eval/<etapa>/`, `artifacts/web/results.json`, `docs/benchmarks.md`, `artifacts/eval/nightly.json` |
 | 5 | `uv run rukh eval karvonen` | ~20 min | el baseline público en la tabla (`karvonen-8l`) |
-| 6 | `uv run python labs/m6/parity_cost.py --onnx artifacts/onnx/medium-v4` | ~1 h (ORT en CPU) | fp32, fp16 e int8 del mismo modelo en la misma escalera; `artifacts/web/parity-cost.json` |
+| 6 | `uv run python labs/m6/parity_cost.py --onnx artifacts/onnx/medium-v4 --config configs/eval/ladder-nodes.yaml` | ~1 h (ORT en CPU) | fp32, fp16 e int8 del mismo modelo en la misma escalera; `artifacts/web/parity-cost.json` |
 | 7 | `uv run python labs/m6/puzzles_export.py` | s | `artifacts/web/puzzles.json`, los 150 puzles de la demo |
 | 8 | `uv run rukh publish cards --dry-run` y después sin `--dry-run` | ~3 min | cada `README.md` del Hub regenerado desde la tabla y el curso |
 | 9 | `uv run rukh publish collection` | s | la colección `Rukh` del Hub, igual al catálogo de `rukh pull` |
 
 `rukh eval nightly --dry-run` imprime el plan (qué etapa, qué fichero, qué config) sin medir nada;
 `--only tiny,small` acota; `--no-pull` no descarga lo que falte. El nightly fusiona los adaptadores
-LoRA sobre su base antes de medirlos y retira las filas que ninguna etapa del catálogo reclama.
+LoRA sobre su base antes de medirlos; las filas que ninguna etapa reclama se retiran con
+`rukh eval drop <etapa>`.
 
 ## Qué hay en el Hub y a qué corrida corresponde
 
