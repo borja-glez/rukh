@@ -40,6 +40,7 @@ from rukh import __version__
 from rukh.config import BaseConfig
 from rukh.data.publish import CARDS_DIR
 from rukh.paths import resolve
+from rukh.publish.links import course_links
 from rukh.tokenize.uci_vocab import UciTokenizer
 from rukh.train.checkpoint import TIED_SOURCES
 
@@ -761,6 +762,7 @@ def card_context(
         "files": files,
         "has_onnx": any(name.startswith(f"{ONNX_DIR}/") for name in files),
         "rukh_version": __version__,
+        "course": course_links(repo_id, cfg.course_url, cfg.demo_url),
     }
 
 
@@ -854,6 +856,7 @@ def encoder_card_context(
         "files": files,
         "has_onnx": any(name.startswith(f"{ONNX_DIR}/") for name in files),
         "rukh_version": __version__,
+        "course": course_links(repo_id, cfg.course_url, cfg.demo_url),
     }
 
 
@@ -897,6 +900,7 @@ def pretrained_encoder_card_context(
         "recipe": sorted((run.params if run else {}).items()),
         "files": files,
         "rukh_version": __version__,
+        "course": course_links(repo_id, cfg.course_url, cfg.demo_url),
     }
 
 

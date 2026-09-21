@@ -30,6 +30,7 @@ from pydantic import BaseModel, ConfigDict
 
 from rukh.models.squares import SQUARE_TOKENS
 from rukh.paths import resolve
+from rukh.publish.links import course_links
 from rukh.publish.model import CONFIG_NAME, README_NAME, ModelPublishConfig, _api, render_card
 
 log = logging.getLogger(__name__)
@@ -131,6 +132,7 @@ def publish_reward(
             "stage": name,
             "repository_url": cfg.repository_url,
             "course_url": cfg.course_url,
+            "course": course_links(repo_id, cfg.course_url, cfg.demo_url),
             "datasets": [f"{cfg.owner}/rukh-pairs-dpo"],
             "params": params,
             "n_layer": encoder_config.get("n_layer"),

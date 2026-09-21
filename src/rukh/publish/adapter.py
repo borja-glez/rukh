@@ -32,6 +32,7 @@ from rukh.config import BaseConfig
 from rukh.export.adapter import WEB_ADAPTER_FILE, WEB_ADAPTER_META, write_web_adapter_from_file
 from rukh.models.lora import ADAPTER_CONFIG, ADAPTER_FILE, LoraConfig
 from rukh.paths import resolve
+from rukh.publish.links import course_links
 from rukh.publish.model import README_NAME, ModelPublishConfig, _api, read_eval, render_card
 
 log = logging.getLogger(__name__)
@@ -166,6 +167,7 @@ def publish_adapter(
             "course_url": cfg.course_url,
             "repository_url": cfg.repository_url,
             "datasets": cfg.datasets,
+            "course": course_links(repo_id, cfg.course_url, cfg.demo_url),
         },
         ADAPTER_CARD_TEMPLATE,
     )
@@ -257,6 +259,7 @@ def qwen_card_context(
         "failures": failures,
         "course_url": cfg.course_url,
         "repository_url": cfg.repository_url,
+        "course": course_links(repo_id, cfg.course_url, cfg.demo_url),
     }
 
 

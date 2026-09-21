@@ -56,6 +56,8 @@ class Artefact:
     model, the pretraining encoder)."""
     base: str | None = None
     """For an adapter: the checkpoint it is merged onto before it is measured."""
+    lesson: str | None = None
+    """Path of the course lesson that builds it, for the card's "In the course" section."""
 
     @property
     def repo_id(self) -> str:
@@ -72,6 +74,7 @@ MODELS: tuple[Artefact, ...] = (
         "the 5 M decoder M2 iterates on (`configs/train/tiny.yaml`)",
         stage="tiny-greedy",
         measure="decoder",
+        lesson="/curso/m2/02-entrenar-y-medir/",
     ),
     Artefact(
         "small",
@@ -82,6 +85,7 @@ MODELS: tuple[Artefact, ...] = (
         "the 39 M course decoder, `small-v3` on the corpus with 24 months of Elite games",
         stage="small-v3-greedy",
         measure="decoder",
+        lesson="/curso/m2/02-entrenar-y-medir/",
     ),
     Artefact(
         "medium-v4",
@@ -92,6 +96,7 @@ MODELS: tuple[Artefact, ...] = (
         "the 115 M decoder every M4 fine-tune and every M5 alignment run starts from",
         stage="medium-v4-greedy",
         measure="decoder",
+        lesson="/curso/m2/04-mas-datos-no-mas-red/",
     ),
     Artefact(
         "encoder-mmm-v4",
@@ -100,6 +105,7 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/encoder-mmm-v4/best.pt",
         ("m3",),
         "the masked-move pretraining the published encoder's heads were fine-tuned on",
+        lesson="/curso/m3/03-labs-del-encoder/",
     ),
     Artefact(
         "encoder-v4",
@@ -110,6 +116,7 @@ MODELS: tuple[Artefact, ...] = (
         "the encoder with its three heads, as published and served by the demo",
         stage="encoder-v4",
         measure="encoder",
+        lesson="/curso/m3/03-labs-del-encoder/",
     ),
     Artefact(
         "medium-elo",
@@ -120,6 +127,7 @@ MODELS: tuple[Artefact, ...] = (
         "`medium-v4` fine-tuned on the Elo-balanced corpus (the last step, not `best.pt`)",
         stage="medium-elo",
         measure="decoder",
+        lesson="/curso/m4/03-labs-de-afinado/",
     ),
     Artefact(
         "medium-masters",
@@ -130,6 +138,7 @@ MODELS: tuple[Artefact, ...] = (
         "`medium-v4` fine-tuned on Elite games (the last step, not `best.pt`)",
         stage="medium-masters",
         measure="decoder",
+        lesson="/curso/m4/03-labs-de-afinado/",
     ),
     Artefact(
         "lora-e4",
@@ -141,6 +150,7 @@ MODELS: tuple[Artefact, ...] = (
         stage="lora-e4",
         measure="decoder",
         base="checkpoints/medium-v4/best.pt",
+        lesson="/curso/m4/03-labs-de-afinado/",
     ),
     Artefact(
         "lora-d4",
@@ -152,6 +162,7 @@ MODELS: tuple[Artefact, ...] = (
         stage="lora-d4",
         measure="decoder",
         base="checkpoints/medium-v4/best.pt",
+        lesson="/curso/m4/03-labs-de-afinado/",
     ),
     Artefact(
         "qwen3-pgn-qlora",
@@ -162,6 +173,7 @@ MODELS: tuple[Artefact, ...] = (
         "the `peft` adapter of Qwen3-0.6B over PGN text, as `trl` wrote it",
         stage="qwen3-pgn-qlora",
         measure="qwen",
+        lesson="/curso/m4/03-labs-de-afinado/",
     ),
     Artefact(
         "rm",
@@ -170,6 +182,7 @@ MODELS: tuple[Artefact, ...] = (
         "checkpoints/rm/reward.pt",
         ("m5",),
         "the Bradley-Terry reward model over 69 square tokens",
+        lesson="/curso/m5/03-labs-de-alineamiento/",
     ),
     Artefact(
         "medium-v4-dpo-onpolicy",
@@ -180,6 +193,7 @@ MODELS: tuple[Artefact, ...] = (
         "`medium-v4` after DPO on its own pairs, the aligned decoder the demo serves",
         stage="medium-v4-dpo-onpolicy-greedy",
         measure="decoder",
+        lesson="/curso/m5/03-labs-de-alineamiento/",
     ),
     Artefact(
         "medium-v4-grpo",
@@ -190,6 +204,7 @@ MODELS: tuple[Artefact, ...] = (
         "`medium-v4` after GRPO against the verifiable reward",
         stage="medium-v4-grpo-greedy",
         measure="decoder",
+        lesson="/curso/m5/03-labs-de-alineamiento/",
     ),
 )
 
@@ -208,6 +223,19 @@ DATASET_MODULES: dict[str, tuple[str, ...]] = {
 """
 
 
+DATASET_LESSONS: dict[str, str] = {
+    "rukh-games-1800": "/curso/m1/02-labs-del-pipeline/",
+    "rukh-tokenizer": "/curso/m1/02-labs-del-pipeline/",
+    "rukh-games-elite": "/curso/m2/04-mas-datos-no-mas-red/",
+    "rukh-positions-eval": "/curso/m1/02-labs-del-pipeline/",
+    "rukh-puzzles-split": "/curso/m1/02-labs-del-pipeline/",
+    "rukh-elo-bins": "/curso/m1/02-labs-del-pipeline/",
+    "rukh-pairs-dpo": "/curso/m1/02-labs-del-pipeline/",
+    "rukh-pairs-onpolicy": "/curso/m5/03-labs-de-alineamiento/",
+}
+"""The lesson each dataset is built in."""
+
+
 def _dataset_artefact(spec: DatasetSpec) -> Artefact:
     return Artefact(
         spec.name,
@@ -216,6 +244,7 @@ def _dataset_artefact(spec: DatasetSpec) -> Artefact:
         spec.local_dir,
         DATASET_MODULES.get(spec.name, ()),
         spec.description.split(". ")[0].rstrip("."),
+        lesson=DATASET_LESSONS.get(spec.name),
     )
 
 

@@ -352,6 +352,9 @@ def render_card(spec: DatasetSpec, manifest: Manifest | None, owner: str) -> str
         autoescape=False,
         keep_trailing_newline=True,
     )
+    # Lazy: `rukh.publish.links` reads the catalogue of `rukh.hub`, which imports this module.
+    from rukh.publish.links import course_links
+
     rows = count_rows(spec, manifest)
     context = {
         "repo_id": f"{owner}/{spec.name}",
@@ -373,6 +376,7 @@ def render_card(spec: DatasetSpec, manifest: Manifest | None, owner: str) -> str
         "counts_json": json.dumps(manifest.counts if manifest else {}, indent=2),
         "created_at": manifest.created_at.date().isoformat() if manifest else "unknown",
         "rukh_version": manifest.rukh_version if manifest else "unknown",
+        "course": course_links(f"{owner}/{spec.name}"),
     }
     return env.get_template("dataset.md.jinja").render(**context)
 

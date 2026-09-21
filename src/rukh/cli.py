@@ -1701,6 +1701,48 @@ def publish_model_cmd(
         typer.echo(f"  {path}")
 
 
+@publish_app.command("cards")
+def publish_cards_cmd(
+    only: Annotated[
+        str | None, typer.Option("--only", help="Comma-separated names or repo ids.")
+    ] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Stage every card locally; upload nothing.")
+    ] = False,
+) -> None:
+    """Regenerate every card from the current table and course, and upload only the card.
+
+    Each repository is staged through its own publisher (nothing leaves the machine), then
+    `README.md` alone is uploaded: changing a paragraph must not republish 460 MB of weights.
+    Needs the checkpoints on disk (`rukh pull`) and the evaluations (`rukh eval nightly`).
+    """
+    from rukh.publish.cards import refresh_cards
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    wanted = {part.strip() for part in (only or "").split(",") if part.strip()} or None
+    outcomes = refresh_cards(only=wanted, dry_run=dry_run)
+    for outcome in outcomes:
+        typer.echo(f"{outcome.repo_id:<34} {outcome.status:<9} {outcome.card or outcome.detail}")
+    if any(outcome.status == "failed" for outcome in outcomes):
+        raise typer.Exit(code=1)
+
+
+@publish_app.command("collection")
+def publish_collection_cmd(
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="List the items; touch no network.")
+    ] = False,
+) -> None:
+    """Create or update the `Rukh` collection on the Hub with every catalogued repository."""
+    from rukh.publish.collection import sync_collection
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    result = sync_collection(dry_run=dry_run)
+    typer.echo(f"collection: {result.slug or '(dry run)'}{' · created' if result.created else ''}")
+    for item in result.items:
+        typer.echo(f"  {item}")
+
+
 @publish_app.command("reward")
 def publish_reward_cmd(
     run: Annotated[

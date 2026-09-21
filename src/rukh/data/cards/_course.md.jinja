@@ -1,0 +1,12 @@
+## In the course
+
+{% if course.lesson_url -%}
+- Built in [{{ course.lesson_title }}]({{ course.lesson_url }}), the lesson that runs every command behind this repository.
+{% endif -%}
+- Measured in the [single results table]({{ course.table_url }}){% if course.stage %} as the stage `{{ course.stage }}`{% endif %}: every stage of the course, the same suite, the same day.
+{% if course.demo_url -%}
+- Play it in the browser: [{{ course.demo_url }}]({{ course.demo_url }}).
+{% endif -%}
+{% if course.reproduce -%}
+- Bring it to the paths the configs read: `{{ course.reproduce }}`.
+{% endif %}
