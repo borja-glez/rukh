@@ -11,6 +11,35 @@ Face under [`chorcat`](https://huggingface.co/chorcat) as `rukh-*`.
 
 The name is Persian for the rook.
 
+## Phase 1, module by module
+
+Phase 1 (M0-M6, closed 2026-09-21) builds a chess language model from the raw Lichess database to
+a measured, published, playable family of models. Everything below is reproducible with
+`docs/reproducir.md`; every number lives in the
+[single results table](https://lab.rukh.borjaglez.com/proyecto/) (`docs/benchmarks.md`), measured
+the same day with the same suite by `rukh eval nightly`.
+
+| Module | What it builds | Where it lands |
+|---|---|---|
+| M0 · Taller | the toolchain, Stockfish, MLflow, CI | this repo's `Quickstart` |
+| M1 · Datos | 5.9 M games ≥ 1800 Elo in UCI, the 2 030-token vocabulary, puzzles and Stockfish labels | `chorcat/rukh-games-1800`, `rukh-tokenizer`, `rukh-puzzles-split`, `rukh-positions-eval` |
+| M2 · Decoder | `tiny` (5 M), `small` (39 M) and `medium-v4` (115 M) trained from scratch; ONNX with parity | `chorcat/rukh-tiny`, `rukh-small`, `rukh-medium` |
+| M3 · Encoder | masked-move pretraining and three heads (value, blunder, result) | `chorcat/rukh-encoder-mmm`, `rukh-encoder` |
+| M4 · Afinado | Elo-conditioned and masters fine-tunes, two LoRA adapters, Qwen3 with QLoRA as a baseline | `chorcat/rukh-medium-elo`, `rukh-medium-masters`, `rukh-lora-e4`, `rukh-lora-d4`, `rukh-qwen3-pgn-qlora` |
+| M5 · Alineamiento | a reward model, DPO on and off policy, GRPO against a verifiable reward | `chorcat/rukh-rm`, `rukh-medium-dpo`, `rukh-medium-grpo`, `rukh-pairs-dpo`, `rukh-pairs-onpolicy` |
+| M6 · Evaluar | the table, the floor of the instrument, a public baseline, the cost of int8, cards and the collection | the table, the [`Rukh` collection](https://huggingface.co/collections/chorcat), [rukh.borjaglez.com](https://rukh.borjaglez.com) |
+
+Three things to know before reading the table:
+
+- **Elo is a pair, model and sampling** (D-047): the same checkpoint at temperature 0.05 and at
+  0.6 are two players more than 200 Elo apart, and they are two rows.
+- **The ladder repeats to sampling noise on a quiet machine** (D-137): the same model, same
+  seed, four runs, 1538/1538 on the clock and 1541/1524 on a node budget. The interval of every
+  Elo (about ±55) is wider than any of those gaps; the machine must be doing nothing else while
+  a ladder runs.
+- **Compare within one run of the table, never across days**: to measure a difference, play the
+  difference (`rukh eval match`, M5).
+
 ## What is in here
 
 ```
