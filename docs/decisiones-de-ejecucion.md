@@ -2254,9 +2254,11 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Qué cuesta si está mal:** si alguien quiere de verdad "el repo como estaba", las etiquetas lo
   dan (`git switch -c mio p2`); convertirlas en ramas es un comando.
 - **De paso:** las ramas `p0-scaffold`, `p1-datos`, `p2-decoder`, `p3-clean`, `p5-alignment` y
-  `elo-1200` están fusionadas y son redundantes con las etiquetas; `p3-encoder` es un duplicado
-  de `p3-clean` (difieren en dos binarios que se sacaron de git) y nunca se fusionó; la rama
-  `p4-finetuning` se borró tras el merge. No se borra ninguna sin que Borja lo decida.
+  `elo-1200` estaban fusionadas y eran redundantes con las etiquetas; `p3-encoder` era un
+  duplicado de `p3-clean` (difería en dos binarios que se sacaron de git) y nunca se fusionó; la
+  rama `p4-finetuning` se borró tras el merge. Borja decidió borrarlas el 2026-09-21, en los tres
+  repos, en local y en GitHub, junto con la rama de trabajo `curso-reproducible` ya fusionada.
+  Queda `main` y las etiquetas.
 
 ### D-131 · Los checkpoints se nombran por su corrida, y una carpeta sin fecha resuelve a la corrida con fecha más reciente
 - **Qué pasaba:** doce configs apuntaban a checkpoints por su carpeta con fecha
