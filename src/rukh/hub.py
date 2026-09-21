@@ -50,10 +50,11 @@ class Artefact:
     stage: str | None = None
     """Its row in the single results table, when it has one; ``rukh eval nightly`` measures it
     under that name so the row it rewrites is the row the cards and the course already cite."""
-    measure: Literal["decoder", "encoder", "qwen", "none"] = "none"
+    measure: Literal["decoder", "encoder", "qwen", "karvonen", "none"] = "none"
     """How ``nightly`` measures it: the decoder suite (adapters are merged onto their base
-    first), the encoder suite, the general-model suite, or not at all (datasets, the reward
-    model, the pretraining encoder)."""
+    first), the encoder suite, the general-model suite, the public-baseline suite (an entry
+    ``nightly`` adds itself, since the weights are not the course's to pull or publish), or not
+    at all (datasets, the reward model, the pretraining encoder)."""
     base: str | None = None
     """For an adapter: the checkpoint it is merged onto before it is measured."""
     lesson: str | None = None
@@ -70,7 +71,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-tiny",
         "decoder",
         "checkpoints/tiny/best.pt",
-        ("m2",),
+        ("m2", "m6", "m6"),
         "the 5 M decoder M2 iterates on (`configs/train/tiny.yaml`)",
         stage="tiny-greedy",
         measure="decoder",
@@ -81,7 +82,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-small",
         "decoder",
         "checkpoints/small-v3/best.pt",
-        ("m2",),
+        ("m2", "m6", "m6"),
         "the 39 M course decoder, `small-v3` on the corpus with 24 months of Elite games",
         stage="small-v3-greedy",
         measure="decoder",
@@ -92,7 +93,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-medium",
         "decoder",
         "checkpoints/medium-v4/best.pt",
-        ("m4", "m5"),
+        ("m4", "m5", "m6"),
         "the 115 M decoder every M4 fine-tune and every M5 alignment run starts from",
         stage="medium-v4-greedy",
         measure="decoder",
@@ -103,7 +104,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-encoder-mmm",
         "encoder",
         "checkpoints/encoder-mmm-v4/best.pt",
-        ("m3",),
+        ("m3", "m6", "m6"),
         "the masked-move pretraining the published encoder's heads were fine-tuned on",
         lesson="/curso/m3/03-labs-del-encoder/",
     ),
@@ -112,7 +113,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-encoder",
         "encoder",
         "checkpoints/encoder-heads-v4/step-4000.pt",
-        ("m3",),
+        ("m3", "m6", "m6"),
         "the encoder with its three heads at its last step, as published and served by the demo",
         stage="encoder-v4",
         measure="encoder",
@@ -123,7 +124,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-medium-elo",
         "decoder",
         "checkpoints/medium-elo/step-3800.pt",
-        ("m4",),
+        ("m4", "m6", "m6"),
         "`medium-v4` fine-tuned on the Elo-balanced corpus (the last step, not `best.pt`)",
         stage="medium-elo",
         measure="decoder",
@@ -134,7 +135,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-medium-masters",
         "decoder",
         "checkpoints/medium-masters/step-3800.pt",
-        ("m4",),
+        ("m4", "m6", "m6"),
         "`medium-v4` fine-tuned on Elite games (the last step, not `best.pt`)",
         stage="medium-masters",
         measure="decoder",
@@ -145,7 +146,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-lora-e4",
         "adapter",
         "checkpoints/lora-e4",
-        ("m4",),
+        ("m4", "m6", "m6"),
         "the 1.6 MB style adapter that opens 1. e4",
         stage="lora-e4",
         measure="decoder",
@@ -157,7 +158,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-lora-d4",
         "adapter",
         "checkpoints/lora-d4",
-        ("m4",),
+        ("m4", "m6", "m6"),
         "the 1.6 MB style adapter that opens 1. d4",
         stage="lora-d4",
         measure="decoder",
@@ -169,7 +170,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-qwen3-pgn-qlora",
         "peft",
         "checkpoints/qwen3-pgn-qlora",
-        ("m4",),
+        ("m4", "m6", "m6"),
         "the `peft` adapter of Qwen3-0.6B over PGN text, as `trl` wrote it",
         stage="qwen3-pgn-qlora",
         measure="qwen",
@@ -180,7 +181,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-rm",
         "reward",
         "checkpoints/rm/reward.pt",
-        ("m5",),
+        ("m5", "m6", "m6"),
         "the Bradley-Terry reward model over 69 square tokens",
         lesson="/curso/m5/03-labs-de-alineamiento/",
     ),
@@ -189,7 +190,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-medium-dpo",
         "decoder",
         "checkpoints/medium-v4-dpo-onpolicy/dpo.pt",
-        ("m5",),
+        ("m5", "m6", "m6"),
         "`medium-v4` after DPO on its own pairs, the aligned decoder the demo serves",
         stage="medium-v4-dpo-onpolicy-greedy",
         measure="decoder",
@@ -200,7 +201,7 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-medium-grpo",
         "decoder",
         "checkpoints/medium-v4-grpo/grpo.pt",
-        ("m5",),
+        ("m5", "m6", "m6"),
         "`medium-v4` after GRPO against the verifiable reward",
         stage="medium-v4-grpo-greedy",
         measure="decoder",
@@ -209,11 +210,11 @@ MODELS: tuple[Artefact, ...] = (
 )
 
 DATASET_MODULES: dict[str, tuple[str, ...]] = {
-    "rukh-games-1800": ("m1", "m2", "m3", "m4", "m5"),
-    "rukh-tokenizer": ("m2", "m3", "m4", "m5"),
+    "rukh-games-1800": ("m1", "m2", "m3", "m4", "m5", "m6"),
+    "rukh-tokenizer": ("m2", "m3", "m4", "m5", "m6"),
     "rukh-games-elite": ("m2", "m4"),
-    "rukh-positions-eval": ("m2", "m3", "m5"),
-    "rukh-puzzles-split": ("m2", "m3", "m4", "m5"),
+    "rukh-positions-eval": ("m2", "m3", "m5", "m6"),
+    "rukh-puzzles-split": ("m2", "m3", "m4", "m5", "m6"),
     "rukh-elo-bins": (),
     "rukh-pairs-dpo": ("m5",),
     "rukh-pairs-onpolicy": ("m5",),

@@ -2324,6 +2324,40 @@ Evidencia obtenida por el controlador, no por subagentes:
   enlace a la etiqueta del repo `rukh` de ese día (`RepoTag`), para quien quiera clonarlo en ese
   punto, con el aviso de que es una fotografía y de que para ejecutar se usa `main` y `rukh pull`.
 
+### D-135 · Un modelo se identifica por sus pesos, no por su fichero
+- **Qué pasó:** `rukh publish cards --dry-run` se negó a regenerar la card de `rukh-tiny`: la
+  evaluación `tiny-greedy` registra el SHA-256 del fichero que midió
+  (`checkpoints/tiny-20260919-061533/best.pt`, `4591cf8c…`) y el `checkpoints/tiny/best.pt` que
+  `rukh pull` trae del Hub da `4d5f4cb7…`. Son los mismos pesos: el publicador quita el optimizador
+  y la cabeza atada (`lm_head.weight`, que es `tokens.weight` con otro nombre) y `torch.save` no es
+  estable byte a byte. La guarda de D-074 comparaba ficheros, y un fichero descargado nunca es el
+  que se midió.
+- **Qué se decidió:** cada resultado lleva desde ahora dos identidades: `model_sha` (el fichero, como
+  siempre) y `weights_sha`, el SHA-256 de los tensores de `model_state` en orden de nombre, con
+  nombre, tipo y forma, y sin las cabezas atadas cuando son iguales a su embedding. La guarda
+  acepta un fichero cuyo `weights_sha` es el medido; sigue rechazando un `step-*.pt` con otros
+  pesos. Los `results.json` existentes se rellenaron desde los ficheros de disco (33 etapas, todas
+  con su fichero intacto).
+- **Qué cuesta si está mal:** que una card lleve números de otro modelo, que es lo que D-074 evitó
+  dos veces. Un test guarda un checkpoint con optimizador y su copia sin él, comprueba que los
+  `file_sha` difieren y los `weights_sha` no, y que unos pesos distintos siguen fallando.
+- **Lo que arrastró:** el catálogo apuntaba `encoder-v4` a `best.pt` cuando lo que se midió y se
+  publicó fue `step-4000.pt` (los afinados publican su último paso, no el mejor de validación); el
+  objetivo, la lección de M3 y `docs/reproducir.md` dicen ahora el fichero medido.
+
+### D-136 · La clave de la caché se parte por familia de ítems
+- **Qué había:** una clave única para partidas y puzles (temperatura, `top_k`, semilla, bloque,
+  tiempo por jugada, peldaños, `elo_games`, `puzzles_use_header`). Cambiar el límite del rival
+  invalidaba los 6 000 puzles, que no lo usan, y viceversa.
+- **Qué se decidió:** `EvalConfig.cache_fields(family)` con dos familias: `games` (temperatura,
+  `top_k`, semilla, bloque, `elo_max_plies`, peldaños y **o bien** `elo_nodes` **o bien**
+  `elo_move_time`, según cuál mande) y `puzzles` (lo compartido más `puzzles_use_header` cuando se
+  fuerza la cabecera). Dos `EvalCache` sobre el mismo `sqlite`. Una corrida por reloj conserva
+  sus partidas cuando aparece `elo_nodes` en la config y no se usa.
+- **Por qué ahora:** M6 mide el mismo modelo con dos límites del rival, dos veces cada uno, y
+  regenera la tabla entera; sin la partición cada cambio de régimen habría vuelto a jugar los
+  puzles de doce etapas.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

@@ -58,8 +58,12 @@ def _fake_hub(monkeypatch: pytest.MonkeyPatch, store: Path) -> list[tuple[str, s
 
 
 def test_every_module_after_m0_has_a_starting_kit() -> None:
-    for module in ("m1", "m2", "m3", "m4", "m5"):
+    for module in ("m1", "m2", "m3", "m4", "m5", "m6"):
         assert for_module(module), module
+    # M6 measures everything the course published: every model is part of its kit.
+    assert {a.name for a in for_module("m6")} >= {
+        a.name for a in catalogue() if a.kind != "dataset"
+    }
     assert {a.name for a in for_module("m5")} >= {"medium-v4", "rukh-pairs-dpo"}
     assert {a.name for a in for_module("m3")} >= {"encoder-mmm-v4", "rukh-positions-eval"}
 
