@@ -1317,6 +1317,73 @@ def eval_qwen_cmd(
     typer.echo(f"report:   {report.markdown}")
 
 
+@eval_app.command("karvonen")
+def eval_karvonen_cmd(
+    suite: Annotated[str, typer.Option("--suite", help="Suite name: full or quick.")] = "full",
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config", exists=True, dir_okay=False, readable=True, help="Suite YAML override."
+        ),
+    ] = None,
+    stage: Annotated[str, typer.Option("--stage", help="Row name in the results table.")] = (
+        "karvonen-8l"
+    ),
+    checkpoint: Annotated[
+        Path | None,
+        typer.Option(
+            "--checkpoint",
+            exists=True,
+            dir_okay=False,
+            help="A nanoGPT checkpoint to measure instead of the published 8-layer one.",
+        ),
+    ] = None,
+    no_cache: Annotated[bool, typer.Option("--no-cache", help="Recompute everything.")] = False,
+    device: Annotated[str | None, typer.Option("--device", help="Where to run.")] = None,
+) -> None:
+    """Put Adam Karvonen's public chess nanoGPT through the decoder's own suite.
+
+    The one row of the table nobody here trained: same positions, same puzzles, same Stockfish
+    ladder as every other stage, so a reader can check the harness against a model with
+    published numbers of its own. The 100 MB checkpoint is downloaded from his Hub repository
+    on first use; nothing of it is published back.
+    """
+    from rukh.eval import load_suite
+    from rukh.eval.karvonen_suite import run_karvonen_suite
+    from rukh.eval.report import elo_line
+    from rukh.eval.suite import SUITES
+
+    if suite not in SUITES:
+        typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
+        raise typer.Exit(code=2)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    cfg = load_suite(suite, config)
+    try:
+        result, report = run_karvonen_suite(
+            cfg, stage=stage, use_cache=not no_cache, device=device, checkpoint=checkpoint
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    stats = result.written
+    typer.echo(f"stage:    {result.stage} ({result.params:,} parameters, baseline)")
+    typer.echo(f"source:   {result.source}")
+    typer.echo(f"legal:    {stats.legal_rate:.4f} of {stats.asked} answers")
+    typer.echo(
+        f"failures: {stats.illegal} illegal, {stats.unparseable} not a move, "
+        f"{stats.ambiguous} ambiguous, {stats.empty} empty"
+    )
+    if result.top1 is not None:
+        typer.echo(f"accuracy: top1 {result.top1:.4f}")
+    if result.puzzles is not None:
+        typer.echo(
+            f"puzzles:  {result.puzzles.rate:.4f} solved ({result.puzzles_blind} without a prefix)"
+        )
+    if result.elo is not None:
+        typer.echo(f"elo:      {elo_line(result.elo)} over {result.elo.games} games")
+    typer.echo(f"report:   {report.markdown}")
+
+
 @eval_app.command("sweep")
 def eval_sweep_cmd(
     model: Annotated[

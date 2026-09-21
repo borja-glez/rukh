@@ -60,6 +60,9 @@ class WebRow(BaseModel):
     """The sampler-free half of the diversity measure; comparable across stages as-is."""
     date: str
     run_id: str | None = None
+    baseline: bool = False
+    """A model somebody else trained, measured here as a control on the harness itself. Off for
+    every model of the course, and for every row written before the flag existed."""
 
 
 class EncoderWebRow(BaseModel):
@@ -319,7 +322,7 @@ def render_benchmarks(rows: list[dict[str, Any]]) -> str:
             "| "
             + " | ".join(
                 [
-                    f"`{row.get('stage')}`",
+                    f"`{row.get('stage')}`" + (" (externo)" if row.get("baseline") else ""),
                     _percent(row.get("legality")),
                     _percent(row.get("top1")),
                     _percent(row.get("top3")),
@@ -337,10 +340,17 @@ def render_benchmarks(rows: list[dict[str, Any]]) -> str:
             + " |"
         )
     lines.append("")
+    external = sum(1 for row in playing if row.get("baseline"))
     lines.append(
-        f"{len(playing)} etapas medidas con la misma suite. Las filas del encoder viven aparte "
-        "porque no comparten una sola columna con estas; las que una medición retiró no están "
-        "(`rukh eval drop`)."
+        f"{len(playing)} etapas medidas con la misma suite"
+        + (
+            f", {external} de ellas externas (modelos de otros autores, marcados como "
+            "`(externo)`, medidos con este mismo harness como control)"
+            if external
+            else ""
+        )
+        + ". Las filas del encoder viven aparte porque no comparten una sola columna con "
+        "estas; las que una medición retiró no están (`rukh eval drop`)."
     )
     return "\n".join(lines) + "\n"
 

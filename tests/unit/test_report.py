@@ -161,6 +161,7 @@ def test_the_web_row_holds_the_columns_of_the_single_table() -> None:
         "first_move_entropy": None,
         "date": "2026-09-19",
         "run_id": "run-1",
+        "baseline": False,
     }
 
 

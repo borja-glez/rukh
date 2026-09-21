@@ -24,6 +24,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from rukh import paths
+from rukh.eval.karvonen import CHECKPOINT_FILE, HF_REPO, LOCAL_DIR
 from rukh.hub import Artefact, catalogue, pull
 from rukh.train.checkpoint import resolve_run
 
@@ -32,6 +33,21 @@ log = logging.getLogger(__name__)
 NIGHTLY_FILE = "artifacts/eval/nightly.json"
 BENCHMARKS_FILE = "docs/benchmarks.md"
 MERGED_DIR = "artifacts/eval/merged"
+
+KARVONEN = Artefact(
+    "karvonen-8l",
+    HF_REPO,
+    "decoder",
+    f"{LOCAL_DIR}/{CHECKPOINT_FILE}",
+    (),
+    "Adam Karvonen's 8-layer chess nanoGPT: the public baseline of the table",
+    stage="karvonen-8l",
+    measure="karvonen",
+)
+"""The one row of the table that is not the course's. It lives here and not in ``rukh.hub``
+because the catalogue is what ``rukh pull``, the model cards and the Hub collection walk, and a
+repository that is not ours must never be pulled as ours, carded or collected; ``nightly`` only
+needs to measure it, so it is the only place that lists it."""
 
 
 class NightlyRecord(BaseModel):
@@ -67,7 +83,7 @@ class NightlyReport(BaseModel):
 
 def plan(only: set[str] | None = None) -> list[Artefact]:
     """The catalogue entries a nightly measures, in course order."""
-    wanted = [artefact for artefact in catalogue() if artefact.measure != "none"]
+    wanted = [artefact for artefact in (*catalogue(), KARVONEN) if artefact.measure != "none"]
     if only:
         wanted = [a for a in wanted if a.name in only or (a.stage or "") in only]
     return wanted
@@ -93,6 +109,16 @@ def _run_qwen(adapter_dir: Path, config: Path | None, stage: str, use_cache: boo
 
     cfg = load_suite("full", config)
     return run_qwen_suite(adapter_dir, cfg, stage=stage, use_cache=use_cache, device=device)
+
+
+def _run_karvonen(checkpoint: Path, config: Path | None, stage: str, use_cache: bool, device):
+    from rukh.eval.karvonen_suite import run_karvonen_suite
+    from rukh.eval.suite import load_suite
+
+    cfg = load_suite("full", config)
+    return run_karvonen_suite(
+        cfg, stage=stage, use_cache=use_cache, device=device, checkpoint=checkpoint
+    )
 
 
 def merged_checkpoint(base: Path, adapter_dir: Path, out: Path) -> Path:
@@ -125,6 +151,10 @@ def merged_checkpoint(base: Path, adapter_dir: Path, out: Path) -> Path:
 
 def _checkpoint_of(artefact: Artefact, pull_missing: bool) -> Path:
     """Where the artefact is on disk, pulling it from the Hub when it is not and allowed."""
+    if artefact.measure == "karvonen":
+        from rukh.eval.karvonen import ensure_karvonen
+
+        return ensure_karvonen(download=pull_missing)
     target = resolve_run(paths.resolve(artefact.target))
     if not target.exists() and pull_missing:
         target = pull(artefact)
@@ -184,6 +214,8 @@ def run_nightly(
                 _run_encoder(checkpoint, encoder_config, record.stage, use_cache, device)
             elif artefact.measure == "qwen":
                 _run_qwen(checkpoint, config, record.stage, use_cache, device)
+            elif artefact.measure == "karvonen":
+                _run_karvonen(checkpoint, config, record.stage, use_cache, device)
             record.status = "measured"
         except Exception as exc:  # noqa: BLE001 - one stage failing must not lose the others
             log.exception("nightly: %s failed", artefact.name)
@@ -228,6 +260,7 @@ def render_plan(report: NightlyReport) -> str:
 
 __all__: list[str] = [
     "BENCHMARKS_FILE",
+    "KARVONEN",
     "MERGED_DIR",
     "NIGHTLY_FILE",
     "NightlyRecord",

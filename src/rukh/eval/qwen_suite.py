@@ -137,6 +137,7 @@ def evaluate_qwen(
                 max_plies=cfg.elo_max_plies,
                 cache=cache,
                 header_elo=cfg.header_elo,
+                nodes=cfg.elo_nodes,
                 player=player,
             )
             result.elo = estimate(records, samples=cfg.bootstrap, seed=cfg.seed)
