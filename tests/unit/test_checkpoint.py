@@ -109,6 +109,52 @@ def test_vocab_hash_and_manifest_sha_are_defensive(tmp_path: Path) -> None:
     assert sha is not None and len(sha) == 64
 
 
+def test_a_stable_run_name_resolves_to_the_newest_stamped_run(tmp_path: Path) -> None:
+    """``checkpoints/small/best.pt`` finds ``checkpoints/small-<newest stamp>/best.pt``.
+
+    This is what lets a config or a lesson name a run without its date: the reader who trained
+    it has the stamped folder, the reader who pulled it from the Hub has the stable one, and the
+    same spelling serves both.
+    """
+    from rukh.train.checkpoint import resolve_run
+
+    root = tmp_path / "checkpoints"
+    older = root / "small-20260919-062911"
+    newer = root / "small-20260920-150000"
+    decoy = root / "small-v3-20260921-000000"  # another run whose name merely starts the same
+    for folder in (older, newer, decoy):
+        folder.mkdir(parents=True)
+        (folder / "best.pt").write_bytes(b"x")
+    (root / "small-20260921-000000").mkdir()  # newest stamp, but it holds no best.pt yet
+
+    assert resolve_run(root / "small" / "best.pt") == newer / "best.pt"
+    assert resolve_run(root / "small") == root / "small-20260921-000000"
+    assert resolve_run(root / "small-v3" / "best.pt") == decoy / "best.pt"
+    # A stable folder wins over any stamped one, and an unknown name comes back untouched.
+    (root / "small").mkdir()
+    (root / "small" / "best.pt").write_bytes(b"y")
+    assert resolve_run(root / "small" / "best.pt") == root / "small" / "best.pt"
+    assert resolve_run(root / "medium" / "best.pt") == root / "medium" / "best.pt"
+    assert resolve_run(tmp_path / "nowhere" / "run" / "best.pt") == (
+        tmp_path / "nowhere" / "run" / "best.pt"
+    )
+
+
+def test_load_checkpoint_reads_through_the_stable_name(tmp_path: Path) -> None:
+    model, optimizer = make_pair()
+    run = tmp_path / "checkpoints" / "tiny-20260919-060101"
+    save_checkpoint(
+        run / "best.pt",
+        step=5,
+        model=model,
+        optimizer=optimizer,
+        cfg={},
+        model_cfg=TOY.model_dump(),
+    )
+    payload = load_checkpoint(tmp_path / "checkpoints" / "tiny" / "best.pt")
+    assert payload["step"] == 5
+
+
 def test_a_foreign_file_is_not_a_checkpoint(tmp_path: Path) -> None:
     path = tmp_path / "other.pt"
     torch.save({"weights": torch.zeros(2)}, path)

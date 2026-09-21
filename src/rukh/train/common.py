@@ -29,7 +29,13 @@ from torch.utils.data import DataLoader
 
 from rukh import paths
 from rukh.config import BaseConfig
-from rukh.train.checkpoint import load_checkpoint, load_state, restore, save_checkpoint
+from rukh.train.checkpoint import (
+    load_checkpoint,
+    load_state,
+    resolve_run,
+    restore,
+    save_checkpoint,
+)
 from rukh.train.schedule import lr_at
 
 log = logging.getLogger(__name__)
@@ -208,7 +214,7 @@ def load_init_weights(init_from: str | None, model: nn.Module, where: torch.devi
     """
     if init_from is None:
         return None
-    path = paths.resolve(init_from)
+    path = resolve_run(paths.resolve(init_from))
     if not path.is_file():
         raise FileNotFoundError(f"init_from checkpoint not found: {path}")
     payload = load_checkpoint(path, map_location=where)

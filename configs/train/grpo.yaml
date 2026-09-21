@@ -1,7 +1,7 @@
 # GRPO against a verifiable reward. No preference pairs and no reward model: only the positions
 # are read out of the pairs file, and the labels in it are ignored.
 prompts: data/pairs/dpo-prompts.parquet
-checkpoint: checkpoints/medium-v4-20260919-174623/best.pt
+checkpoint: checkpoints/medium-v4/best.pt
 out_dir: checkpoints
 run_name: medium-v4-grpo
 

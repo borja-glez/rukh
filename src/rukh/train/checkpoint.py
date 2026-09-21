@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import random
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -22,7 +24,49 @@ from torch import nn
 from rukh.models import DecoderConfig, EncoderConfig, MoveDecoder, PositionEncoder
 from rukh.models.heads import HeadWeights, MultiHead
 
+log = logging.getLogger(__name__)
+
 BEST_NAME = "best.pt"
+RUN_STAMP = re.compile(r"^(?P<name>.+)-(?P<stamp>\d{8}-\d{6})$")
+"""What ``unique_run_name`` appends to a run folder: ``medium-v4`` becomes
+``medium-v4-20260919-174623``. The stamp sorts as text, so the newest run of a name is the last."""
+
+
+def resolve_run(path: str | Path) -> Path:
+    """The path as given when it exists; otherwise the same thing inside the newest stamped run.
+
+    Configs and lessons name a checkpoint by its run: ``checkpoints/medium-v4/best.pt``. That is
+    the spelling ``rukh pull`` writes, and it is not the one a reader who trained the run has,
+    because ``unique_run_name`` stamps every folder (``medium-v4-20260919-174623``). Both mean
+    "the run called medium-v4", so when the stable folder is missing this looks for the stamped
+    ones beside it and takes the newest **by name**, never by modification time: copying a
+    folder must not change which run a config points at. A folder spec (``checkpoints/lora-e4``)
+    resolves the same way. Anything with no candidate comes back unchanged, and whoever opens it
+    reports the missing file with the path the user wrote.
+    """
+    path = Path(path)
+    if path.exists():
+        return path
+    is_file = bool(path.suffix)
+    run_dir = path.parent if is_file else path
+    parent, name = run_dir.parent, run_dir.name
+    if not parent.is_dir():
+        return path
+    stamped = sorted(
+        candidate
+        for candidate in parent.iterdir()
+        if candidate.is_dir()
+        and (match := RUN_STAMP.match(candidate.name)) is not None
+        and match.group("name") == name
+        and (not is_file or (candidate / path.name).is_file())
+    )
+    if not stamped:
+        return path
+    found = stamped[-1] / path.name if is_file else stamped[-1]
+    log.info("%s is not there; using the newest run of that name, %s", path, found)
+    return found
+
+
 CURVE_KEY = "label_curve"
 """Where ``rukh.train.heads.label_curve`` writes its points and ``rukh eval encoder`` reads them.
 
@@ -145,8 +189,8 @@ def save_checkpoint(
 
 
 def load_checkpoint(path: Path, map_location: str | torch.device = "cpu") -> dict[str, Any]:
-    """Read a checkpoint written by ``save_checkpoint``."""
-    payload = torch.load(Path(path), map_location=map_location, weights_only=True)
+    """Read a checkpoint written by ``save_checkpoint`` (see ``resolve_run`` for the path)."""
+    payload = torch.load(resolve_run(path), map_location=map_location, weights_only=True)
     if not isinstance(payload, dict) or "model_state" not in payload:
         raise ValueError(f"{path} is not a rukh checkpoint")
     return payload

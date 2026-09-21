@@ -1,8 +1,8 @@
 # DPO on the moves the model itself proposed: on-policy, and the arm under test.
 # Everything below is identical to `dpo-offpolicy.yaml` on purpose -- if the two runs differ, it
-# has to be the pairs and nothing else. The pair counts are matched at run time by the lab script.
+# has to be the pairs and nothing else. `max_pairs` in `dpo-offpolicy.yaml` matches the counts.
 pairs: data/pairs-onpolicy/pairs.parquet
-checkpoint: checkpoints/medium-v4-20260919-174623/best.pt
+checkpoint: checkpoints/medium-v4/best.pt
 out_dir: checkpoints
 run_name: medium-v4-dpo-onpolicy
 

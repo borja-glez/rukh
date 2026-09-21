@@ -42,6 +42,31 @@ encoder_app = typer.Typer(help="Encoder utilities: position embeddings.", no_arg
 app.add_typer(encoder_app, name="encoder")
 
 
+def _run_path(value: Path | None) -> Path | None:
+    """A checkpoint or run folder; a missing stable name resolves to the newest stamped run.
+
+    A path is validated here instead of with ``exists=True`` so that a command written against
+    the stable spelling of a run (``checkpoints/small/best.pt``, what ``rukh pull`` writes) also
+    works for the reader whose own training left ``checkpoints/small-20260919-062911/`` behind.
+    """
+    if value is None:
+        return None
+    from rukh.train.checkpoint import resolve_run
+
+    found = resolve_run(value)
+    if not found.exists():
+        run = value.parent.name if value.suffix else value.name
+        raise typer.BadParameter(f"{value} does not exist, and no stamped run `{run}-*` holds it")
+    return found
+
+
+def _run_exists(spec: str) -> bool:
+    """Whether ``spec`` names a checkpoint on disk, directly or through ``resolve_run``."""
+    from rukh.train.checkpoint import resolve_run
+
+    return resolve_run(Path(spec)).is_file()
+
+
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"rukh {__version__}")
@@ -61,6 +86,60 @@ def main(
     ] = False,
 ) -> None:
     """Rukh: chess language model toolkit."""
+
+
+@app.command("pull")
+def pull_cmd(
+    names: Annotated[
+        list[str] | None,
+        typer.Argument(help="Run names, dataset names or Hub ids (see --list)."),
+    ] = None,
+    module: Annotated[
+        str | None,
+        typer.Option("--module", help="Pull everything a module starts from, e.g. m4."),
+    ] = None,
+    list_all: Annotated[
+        bool, typer.Option("--list", help="Print the catalogue, by module, and exit.")
+    ] = False,
+    force: Annotated[
+        bool, typer.Option("--force", help="Replace what is already on disk.")
+    ] = False,
+) -> None:
+    """Bring published models and datasets to the paths the configs and the lessons read.
+
+    A pulled model lands under its run name (`checkpoints/medium-v4/best.pt`), which is the
+    spelling every config uses and the one a run you trained yourself also answers to.
+    """
+    from rukh.hub import catalogue, for_module, lookup, pull
+
+    if list_all:
+        for artefact in catalogue():
+            modules = ",".join(artefact.modules) or "-"
+            typer.echo(f"{artefact.name:<24} {modules:<15} {artefact.target}")
+            typer.echo(f"{'':<24} {artefact.repo_id:<15} {artefact.note}")
+        return
+    wanted = []
+    if module is not None:
+        wanted.extend(for_module(module))
+        if not wanted:
+            typer.echo(f"error: nothing is catalogued for module {module!r}", err=True)
+            raise typer.Exit(code=2)
+    try:
+        wanted.extend(lookup(name) for name in names or [])
+    except KeyError as exc:
+        typer.echo(f"error: {exc.args[0]}", err=True)
+        raise typer.Exit(code=2) from exc
+    if not wanted:
+        typer.echo("error: give a name, --module or --list (see rukh pull --help)", err=True)
+        raise typer.Exit(code=2)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+    for artefact in wanted:
+        try:
+            path = pull(artefact, force=force)
+        except (FileNotFoundError, OSError) as exc:
+            typer.echo(f"error: {artefact.name}: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"{artefact.name:<24} {artefact.repo_id:<28} -> {path}")
 
 
 @app.command()
@@ -426,9 +505,7 @@ def train_cmd(
     ] = None,
     resume: Annotated[
         Path | None,
-        typer.Option(
-            "--resume", exists=True, dir_okay=False, readable=True, help="Checkpoint to continue."
-        ),
+        typer.Option("--resume", callback=_run_path, help="Checkpoint to continue."),
     ] = None,
     max_steps: Annotated[
         int | None, typer.Option("--max-steps", help="Override max_steps from the config.")
@@ -477,9 +554,7 @@ def train_encoder_cmd(
     ],
     resume: Annotated[
         Path | None,
-        typer.Option(
-            "--resume", exists=True, dir_okay=False, readable=True, help="Checkpoint to continue."
-        ),
+        typer.Option("--resume", callback=_run_path, help="Checkpoint to continue."),
     ] = None,
     max_steps: Annotated[
         int | None, typer.Option("--max-steps", help="Override max_steps from the config.")
@@ -611,9 +686,7 @@ def train_heads_cmd(
 def play_cmd(
     ckpt: Annotated[
         Path,
-        typer.Option(
-            "--ckpt", exists=True, dir_okay=False, readable=True, help="Checkpoint to play with."
-        ),
+        typer.Option("--ckpt", callback=_run_path, help="Checkpoint to play with."),
     ],
     games: Annotated[int, typer.Option("--games", help="Number of games to play.")] = 1,
     opponent: Annotated[
@@ -712,7 +785,7 @@ def eval_cmd(
     if suite not in SUITES:
         typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
         raise typer.Exit(code=2)
-    if not Path(model).is_file() and not is_hub_id(model):
+    if not _run_exists(model) and not is_hub_id(model):
         typer.echo(
             f"error: --model {model!r} is neither an existing checkpoint nor a Hub id "
             "of the form owner/name",
@@ -1131,9 +1204,7 @@ def eval_openings_cmd(
 def eval_qwen_cmd(
     adapter: Annotated[
         Path,
-        typer.Option(
-            "--adapter", exists=True, file_okay=False, help="Directory of the fine-tuned adapter."
-        ),
+        typer.Option("--adapter", callback=_run_path, help="Directory of the fine-tuned adapter."),
     ],
     suite: Annotated[str, typer.Option("--suite", help="Suite name: full or quick.")] = "full",
     config: Annotated[
@@ -1225,7 +1296,7 @@ def eval_sweep_cmd(
     if suite not in SUITES:
         typer.echo(f"error: --suite must be one of {', '.join(SUITES)}", err=True)
         raise typer.Exit(code=2)
-    if not Path(model).is_file() and not is_hub_id(model):
+    if not _run_exists(model) and not is_hub_id(model):
         typer.echo(f"error: --model {model!r} is neither a checkpoint nor a Hub id", err=True)
         raise typer.Exit(code=2)
     try:
@@ -1256,9 +1327,7 @@ def eval_sweep_cmd(
 def eval_encoder_cmd(
     model: Annotated[
         Path,
-        typer.Option(
-            "--model", exists=True, dir_okay=False, readable=True, help="Fine-tuned checkpoint."
-        ),
+        typer.Option("--model", callback=_run_path, help="Fine-tuned checkpoint."),
     ],
     config: Annotated[
         Path | None,
@@ -1353,9 +1422,7 @@ def eval_encoder_cmd(
 def export_cmd(
     ckpt: Annotated[
         Path,
-        typer.Option(
-            "--ckpt", exists=True, dir_okay=False, readable=True, help="Checkpoint to export."
-        ),
+        typer.Option("--ckpt", callback=_run_path, help="Checkpoint to export."),
     ],
     out: Annotated[Path, typer.Option("--out", help="Output directory (or .onnx file).")],
     kind: Annotated[
@@ -1394,9 +1461,7 @@ def export_cmd(
         Path | None,
         typer.Option(
             "--adapter",
-            exists=True,
-            file_okay=False,
-            readable=True,
+            callback=_run_path,
             help="Adapter folder to check the parity of the swapped path against PyTorch.",
         ),
     ] = None,
@@ -1496,9 +1561,7 @@ def encoder_embed_cmd(
     out: Annotated[Path, typer.Option("--out", help="Where to write the .npy array.")],
     ckpt: Annotated[
         Path,
-        typer.Option(
-            "--ckpt", exists=True, dir_okay=False, readable=True, help="Encoder checkpoint."
-        ),
+        typer.Option("--ckpt", callback=_run_path, help="Encoder checkpoint."),
     ],
     batch_size: Annotated[
         int, typer.Option("--batch-size", help="Positions per forward pass.")
@@ -1530,9 +1593,7 @@ def encoder_embed_cmd(
 def publish_model_cmd(
     ckpt: Annotated[
         Path,
-        typer.Option(
-            "--ckpt", exists=True, dir_okay=False, readable=True, help="Checkpoint to publish."
-        ),
+        typer.Option("--ckpt", callback=_run_path, help="Checkpoint to publish."),
     ],
     repo: Annotated[str, typer.Option("--repo", help="Hub repository, e.g. chorcat/rukh-small.")],
     onnx: Annotated[
@@ -1586,7 +1647,9 @@ def publish_model_cmd(
 def publish_reward_cmd(
     run: Annotated[
         Path,
-        typer.Option("--run", exists=True, help="Reward run directory or `reward.pt` checkpoint."),
+        typer.Option(
+            "--run", callback=_run_path, help="Reward run directory or `reward.pt` checkpoint."
+        ),
     ],
     repo: Annotated[str, typer.Option("--repo", help="Hub repository, e.g. chorcat/rukh-rm.")],
     stage: Annotated[str | None, typer.Option("--stage", help="Stage name for the card.")] = None,
@@ -1618,9 +1681,7 @@ def publish_reward_cmd(
 def publish_adapter_cmd(
     run_dir: Annotated[
         Path,
-        typer.Option(
-            "--run", exists=True, file_okay=False, help="Training run folder with the adapter."
-        ),
+        typer.Option("--run", callback=_run_path, help="Training run folder with the adapter."),
     ],
     repo: Annotated[str, typer.Option("--repo", help="Hub repository, e.g. chorcat/rukh-lora-e4.")],
     base: Annotated[
@@ -1687,7 +1748,7 @@ def publish_adapter_cmd(
 def publish_qwen_cmd(
     run_dir: Annotated[
         Path,
-        typer.Option("--run", exists=True, file_okay=False, help="The peft output folder."),
+        typer.Option("--run", callback=_run_path, help="The peft output folder."),
     ],
     repo: Annotated[str, typer.Option("--repo", help="Hub repository for the adapter.")],
     stage: Annotated[

@@ -47,6 +47,8 @@ log = logging.getLogger(__name__)
 
 CARD_TEMPLATE = "model.md.jinja"
 ENCODER_CARD_TEMPLATE = "encoder.md.jinja"
+PRETRAINED_ENCODER_CARD_TEMPLATE = "encoder-mmm.md.jinja"
+"""For a bare ``PositionEncoder``: masked-move pretraining with no heads on it yet."""
 CONFIG_NAME = "config.json"
 README_NAME = "README.md"
 SAFETENSORS_NAME = "model.safetensors"
@@ -855,6 +857,49 @@ def encoder_card_context(
     }
 
 
+def pretrained_encoder_card_context(
+    repo_id: str,
+    stage: str,
+    cfg: ModelPublishConfig,
+    config: dict[str, Any],
+    payload: dict[str, Any],
+    run: RunSummary | None,
+    files: list[str],
+) -> dict[str, Any]:
+    """The card of a masked-move pretraining run: what it measured, and what starts from it.
+
+    A pretraining checkpoint has no blunder F1 and no value correlation to report; rendering it
+    through the heads' card would say "trained from scratch on Stockfish labels" about a model
+    that never saw a label. What it has is the held-out masked-move loss the run selected
+    ``best.pt`` on, which the checkpoint carries, and the top-1 of the same evaluation when the
+    MLflow run is reachable.
+    """
+    metrics = run.metrics if run else {}
+    top1 = next((metrics[key] for key in ("val_top1", "val/top1") if key in metrics), None)
+    best_val = payload.get("best_val")
+    return {
+        "repo_id": repo_id,
+        "stage": stage,
+        "license": cfg.license,
+        "datasets": cfg.datasets,
+        "course_url": cfg.course_url,
+        "repository_url": cfg.repository_url,
+        "params": config.get("params", 0),
+        "config": config,
+        "config_json": json.dumps(config, indent=2, ensure_ascii=False),
+        # The model whose heads were fine-tuned from this one: the course publishes it under the
+        # plain name, and this checkpoint is only on the Hub so that one can be rebuilt.
+        "heads_repo": f"{cfg.owner}/rukh-encoder",
+        "best_val": "n/a" if best_val is None else f"{float(best_val):.4f}",
+        "val_top1": _percent(top1),
+        "step": config.get("step") or "n/a",
+        "run_id": run.run_id if run else None,
+        "recipe": sorted((run.params if run else {}).items()),
+        "files": files,
+        "rukh_version": __version__,
+    }
+
+
 def render_card(context: dict[str, Any], template: str = CARD_TEMPLATE) -> str:
     """Render the English model card."""
     env = Environment(
@@ -901,15 +946,23 @@ def publish_model(
     evaluation = read_eval(name, cfg)
     check_eval_matches(ckpt, name, evaluation)
     measured_parity = read_parity(folder)
-    card = (
-        render_card(
+    from rukh.models import PositionEncoder
+
+    if isinstance(model, PositionEncoder):
+        # Pretraining only: no heads on it, so none of the heads' numbers apply.
+        card = render_card(
+            pretrained_encoder_card_context(repo_id, name, cfg, config, payload, run, files),
+            PRETRAINED_ENCODER_CARD_TEMPLATE,
+        )
+    elif kind == "encoder":
+        card = render_card(
             encoder_card_context(
                 repo_id, name, cfg, config, evaluation, run, files, measured_parity
             ),
             ENCODER_CARD_TEMPLATE,
         )
-        if kind == "encoder"
-        else render_card(
+    else:
+        card = render_card(
             card_context(
                 repo_id,
                 name,
@@ -922,7 +975,6 @@ def publish_model(
                 read_eval(counterpart_stage(name), cfg),
             )
         )
-    )
     card_path = folder / README_NAME
     card_path.write_text(card, encoding="utf-8", newline="\n")
 

@@ -348,10 +348,12 @@ def hub_checkpoint(repo_id: str, out_dir: Path | None = None) -> Path:
 
 def resolve_model(spec: str | Path) -> Path:
     """A checkpoint path from either a local file or a Hub id (downloaded on demand)."""
+    from rukh.train.checkpoint import resolve_run
+
     text = str(spec)
     if is_hub_id(text):
         return hub_checkpoint(text)
-    path = Path(text)
+    path = resolve_run(text)
     if not path.is_file():
         raise FileNotFoundError(f"{path} is neither a checkpoint nor a Hub id (owner/name)")
     return path

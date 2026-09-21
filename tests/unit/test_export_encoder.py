@@ -38,7 +38,7 @@ from rukh.export import (
 from rukh.models import EncoderConfig, PositionEncoder
 from rukh.models.heads import MultiHead
 from rukh.models.squares import SQUARE_TOKENS, fen_to_tokens
-from rukh.publish import VOCAB_PATH, ModelPublishConfig, publish_model
+from rukh.publish import CONFIG_NAME, VOCAB_PATH, ModelPublishConfig, publish_model
 from rukh.train import save_checkpoint
 
 pytestmark = pytest.mark.unit
@@ -468,6 +468,50 @@ def test_the_publish_command_accepts_an_encoder(
     assert invocation.exit_code == 0, invocation.output
     assert "chorcat/rukh-encoder (model, encoder)" in invocation.output
     assert "dry-run" in invocation.output
+
+
+def test_a_bare_pretrained_encoder_gets_the_pretraining_card(
+    tmp_path: Path, rukh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A masked-move checkpoint has no heads, so none of the heads' claims may appear on it.
+
+    It is published so a reader can skip the pretraining lab and still fine-tune the heads from
+    exactly what the course used; the card has to say that, and report the one thing the run
+    measured (the held-out masked-move loss ``best.pt`` was selected on).
+    """
+    import importlib
+
+    from rukh.publish import RunSummary
+
+    model_module = importlib.import_module("rukh.publish.model")
+    run = RunSummary(run_id="mmm-run", params={"max_steps": "16000"}, metrics={"val/top1": 0.814})
+    monkeypatch.setattr(model_module, "read_run", lambda *args, **kwargs: run)
+    torch.manual_seed(0)
+    encoder = PositionEncoder(TOY).eval()
+    path = tmp_path / "encoder-mmm-v4" / "best.pt"
+    save_checkpoint(
+        path,
+        step=16000,
+        model=encoder,
+        optimizer=None,
+        cfg={"tokens_dir": "data/tokens-v4/uci"},
+        model_cfg=TOY.model_dump(),
+        best_val=0.6981,
+    )
+    result = publish_model(
+        path, "chorcat/rukh-encoder-mmm", ModelPublishConfig(), stage="encoder-mmm-v4", dry_run=True
+    )
+    assert result.kind == "encoder"
+    card = Path(result.card_path).read_text(encoding="utf-8")
+    assert "pretrained only" in card
+    assert "| Masked-move loss on held-out games | 0.6981 |" in card
+    assert "| Masked-move top-1 on held-out games | 81.4 % |" in card
+    assert "rukh pull encoder-mmm-v4" in card
+    assert "| `max_steps` | `16000` |" in card
+    assert "Stockfish labels, with no pretraining" not in card
+    assert "Blunder F1" not in card
+    config = json.loads((Path(result.folder) / CONFIG_NAME).read_text(encoding="utf-8"))
+    assert config["architectures"] == ["PositionEncoder"] and config["input"] == "squares"
 
 
 def test_the_encoder_card_states_its_bars_and_the_parity_of_the_three_precisions(

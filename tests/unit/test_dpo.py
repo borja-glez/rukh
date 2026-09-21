@@ -155,3 +155,19 @@ def test_loss_falls_when_the_policy_prefers_the_better_move() -> None:
 def test_config_rejects_a_negative_beta() -> None:
     with pytest.raises(ValueError):
         DpoConfig(beta=0.0)
+
+
+def test_max_pairs_samples_the_whole_file_with_the_seed() -> None:
+    """The off-policy arm is matched to the on-policy count here, not by a script outside git."""
+    from rukh.train.dpo import limit_pairs
+
+    frame = pl.DataFrame({"phase": ["opening"] * 6 + ["endgame"] * 6, "i": list(range(12))})
+    same = limit_pairs(frame, DpoConfig())
+    assert same.height == 12
+    cut = limit_pairs(frame, DpoConfig(max_pairs=4, seed=7))
+    assert cut.height == 4
+    assert cut["i"].to_list() == limit_pairs(frame, DpoConfig(max_pairs=4, seed=7))["i"].to_list()
+    assert cut["i"].to_list() != [0, 1, 2, 3]  # not the head of the file
+    assert limit_pairs(frame, DpoConfig(max_pairs=50)).height == 12
+    with pytest.raises(ValueError):
+        DpoConfig(max_pairs=0)

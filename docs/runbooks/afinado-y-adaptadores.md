@@ -19,12 +19,17 @@ exportaciones esperan a que no haya ninguna evaluación en marcha, y entre traba
 
 | # | Paso | Comando | Tiempo | Salida |
 |---|---|---|---|---|
-| 1 | Tramo bajo de Elo | `uv run rukh data fetch --config configs/data/lichess-low-elo.yaml` | ~2 min | `data/raw-low/...` |
-| 2 | Corpus plano por bandas | `uv run rukh data elo-bins --config configs/data/pipeline-elo.yaml` | ~10 min | `data/elo-bins-v2/`, `manifest.json` |
-| 3 | Tokenizar | `uv run rukh data pack --tokens data/tokens-elo` | ~5 min | `data/tokens-elo/uci/{train,val}` |
-| 4 | Afinado condicionado | `uv run rukh train --config configs/train/medium-elo.yaml` | ~30 min | `checkpoints/medium-elo-*/step-3800.pt` |
-| 5 | Afinado de maestros | `uv run rukh train --config configs/train/medium-masters.yaml` | ~30 min | `checkpoints/medium-masters-*/step-3800.pt` |
-| 6 | Adaptadores de estilo | `uv run rukh train --config configs/train/lora-e4.yaml` (y `lora-d4.yaml`) | ~15 min cada uno | `checkpoints/lora-*/adapter.safetensors` |
+| 0 | El modelo base, si no se entrenó en M2 | `uv run rukh pull medium-v4` | minutos (461 MB) | `checkpoints/medium-v4/best.pt` |
+| 1 | Tramo bajo de Elo (1000-1799) | `uv run rukh data fetch --config configs/data/lichess-low.yaml` | 5-10 min (3 shards por mes) | `data/raw-low/year=*/month=*/games.parquet` |
+| 2 | SAN → UCI del tramo bajo | `uv run rukh data uci --config configs/data/pipeline-low.yaml` | ~5 min | `data/uci-low/`, 2,3 M partidas |
+| 3 | Corpus plano por bandas de 200 | `uv run rukh data elo-bins --config configs/data/pipeline-low.yaml` | ~10 min | `data/elo-bins-v2/games.parquet`, `manifest.json` |
+| 3b | Tokenizar el corpus plano | `uv run rukh data tokenize --config configs/data/pipeline-low.yaml --scheme uci --pack` | ~5 min | `data/tokens-elo/uci/{train,val}` |
+| 3c | Tokenizar la Elite (maestros) | `uv run rukh data tokenize --config configs/data/pipeline-masters.yaml --scheme uci --pack` (necesita `data/elite/games.parquet`: `rukh pull rukh-games-elite` o `rukh data elite --config configs/data/pipeline-elite44.yaml`) | ~15 min | `data/tokens-masters/uci/{train,val}` |
+| 3d | Rebanadas de estilo y su tokenización | `uv run rukh data style --config configs/data/pipeline-style.yaml`, luego `uv run rukh data tokenize --config configs/data/pipeline-style-e4.yaml --scheme uci --pack` (y `-d4`) | ~5 min | `data/style/`, `data/tokens-style-{e4,d4}/uci/` |
+| 3e | Las mismas partidas como texto PGN, para Qwen | `uv run rukh data pgn-text --config configs/data/pipeline-pgn.yaml` | ~10 min | `data/pgn-text/` |
+| 4 | Afinado condicionado | `uv run rukh train --config configs/train/medium-elo.yaml` | ~20 min | `checkpoints/medium-elo-*/step-3800.pt` |
+| 5 | Afinado de maestros | `uv run rukh train --config configs/train/medium-masters.yaml` | ~20 min | `checkpoints/medium-masters-*/step-3800.pt` |
+| 6 | Adaptadores de estilo | `uv run rukh train --config configs/train/lora-e4.yaml` (y `lora-d4.yaml`) | ~7 min cada uno | `checkpoints/lora-*/adapter.safetensors` |
 | 7 | Barrido por condición | `uv run rukh eval sweep --model <ckpt> --elos 1200,1500,1800,2000,2100,2400 --config configs/eval/greedy-sweep.yaml --stage medium-elo` | ~26 min por condición | `artifacts/eval/medium-elo-elo-sweep/` |
 | 8 | Control sobre el modelo base | el mismo comando con `--model <base>` y `--elos 1200,2100` | ~52 min | `artifacts/eval/medium-v4-elo-sweep/` |
 | 9 | Evaluación canónica de cada etapa | `uv run rukh eval --model <ckpt> --config configs/eval/greedy.yaml --stage <nombre>` | ~26 min | `artifacts/eval/<nombre>/`, fila en `artifacts/web/results.json` |
