@@ -16,6 +16,15 @@ the output is identical.
 `artifacts/web/value-bar.json` is copied into the course with `pnpm sync:data`, like the two
 JSON files of M2.
 
+## Starting point
+
+M3 pretrains on `data/tokens/uci/` (M1) and fine-tunes the heads on the labels built from
+`data/evals/positions-eval.parquet` and `data/uci/`. `uv run rukh pull --module m3` brings those
+plus `encoder-mmm-v4` (the 39 M masked-move pretraining, to skip the 40-minute run) and
+`encoder-v4` (the published heads, to go straight to the evaluation and the export). The 15 M
+encoder of labs 1-3 is always trained locally: it takes 15 minutes and the comparison with the
+39 M one is the point. `docs/reproducir.md` has every command with its duration.
+
 ## `bidirectional.py`
 
 Three checks, no checkpoint and no data — it builds its own toy encoder:

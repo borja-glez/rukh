@@ -1,0 +1,89 @@
+---
+license: {{ license }}
+library_name: rukh
+pipeline_tag: feature-extraction
+language:
+  - en
+datasets:
+{%- for dataset in datasets %}
+  - {{ dataset }}
+{%- endfor %}
+tags:
+  - chess
+  - rukh
+  - encoder
+  - masked-move-modeling
+---
+
+# {{ repo_id }}
+
+A bidirectional transformer written from scratch and **pretrained only**: it has no value,
+blunder or result head yet. It read games written in UCI with 15 % of the moves hidden and
+learned to put them back by looking at both sides of the hole, which is masked language
+modeling with moves for words. This is the `{{ stage }}` stage of [Rukh]({{ repository_url }}),
+a course that builds a chess language model end to end: {{ "{:,}".format(params) }} parameters
+over {{ config.get("n_layer", 8) }} layers of width {{ config.get("d_model", 384) }}, on the
+`{{ config.get("input", "moves") }}` input scheme.
+
+It exists on the Hub for one reason: it is where the encoder with heads
+([`{{ heads_repo }}`](https://huggingface.co/{{ heads_repo }})) starts from, and a reader of the
+course who skips the pretraining lab can put it where the fine-tuning configs look for it:
+
+```sh
+uv run rukh pull {{ stage }}      # -> checkpoints/{{ stage }}/best.pt
+uv run rukh train heads --config configs/train/encoder-heads-v4.yaml --mode last-n
+```
+
+Read how it was built: [{{ course_url }}]({{ course_url }})
+
+## Results
+
+The only thing a pretraining run measures is how well it fills the holes it was given.
+
+| Metric | Value |
+|---|---|
+| Masked-move loss on held-out games | {{ best_val }} |
+| Masked-move top-1 on held-out games | {{ val_top1 }} |
+| Training step of this checkpoint | {{ step }} |
+
+These are not the numbers of the model that goes into the demo: the heads are fine-tuned on
+Stockfish labels afterwards, and their F1, correlation and result accuracy live on the card of
+[`{{ heads_repo }}`](https://huggingface.co/{{ heads_repo }}).
+
+## Training recipe
+
+{% if recipe %}
+| Parameter | Value |
+|---|---|
+{%- for name, value in recipe %}
+| `{{ name }}` | `{{ value }}` |
+{%- endfor %}
+{% else %}
+The MLflow run for this checkpoint was not available when the card was generated; the shape of
+the model is in `config.json`.
+{% endif %}
+{% if run_id %}MLflow run: `{{ run_id }}`.{% endif %}
+
+```json
+{{ config_json }}
+```
+
+## Data
+
+Trained on {% for dataset in datasets %}[`{{ dataset }}`](https://huggingface.co/datasets/{{ dataset }}){% if not loop.last %}, {% endif %}{% endfor %},
+derived from the [Lichess open database](https://database.lichess.org) (CC0), on the same
+packed token stream the project's decoder trains on, so the two models saw the same games.
+Validation uses a held-out slice of a month the training split does not read.
+
+## Limitations
+
+- It predicts hidden moves; it does not evaluate positions. Ask it how good a position is and
+  the answer is whatever an untrained linear head returns.
+- Its masked-move accuracy is not a measure of chess strength: a move is easy to fill in when
+  the moves around it leave one legal option.
+- Fine-tuning the whole network on the labels afterwards made it *worse* than fine-tuning the
+  last two blocks; the course records that measurement, and the heads configs default to it.
+
+## License
+
+Weights: Apache-2.0. Data: CC0 (Lichess). Code: MIT, at [{{ repository_url }}]({{ repository_url }}).

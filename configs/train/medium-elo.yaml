@@ -16,7 +16,7 @@
 # bought. The measurement that decides whether that happened is the `<w2400>` row of the sweep
 # against `medium-v4`'s own 1504.
 preset: medium
-init_from: checkpoints/medium-v4-20260919-174623/best.pt
+init_from: checkpoints/medium-v4/best.pt
 tokens_dir: data/tokens-elo/uci
 block: 200
 batch_size: 32

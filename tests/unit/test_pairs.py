@@ -84,21 +84,38 @@ def test_balance_uses_smallest_phase() -> None:
     assert balance(frame.filter(pl.col("phase") != "endgame"), 10, 1).height == 0
 
 
+GAME = "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7 f1e1 b7b5 a4b3 d7d6 c2c3 e8g8"
+
+
 def _evals_parquet(path: Path) -> None:
     board = chess.Board()
     fens, phases, pvs, game_ids, plies = [], [], [], [], []
-    moves = "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7 f1e1 b7b5 a4b3 d7d6 c2c3 e8g8"
-    for ply, move in enumerate(moves.split(), start=1):
+    for ply, move in enumerate(GAME.split(), start=1):
         board.push_uci(move)
         legal = [m.uci() for m in list(board.legal_moves)[:3]]
         sign = 1 if board.turn == chess.WHITE else -1
         fens.append(" ".join(board.fen().split()[:4]))
         phases.append("opening" if ply <= 10 else "middlegame" if ply <= 13 else "endgame")
         pvs.append([_pv(legal[0], sign * 60), _pv(legal[1], sign * 20), _pv(legal[2], -sign * 90)])
-        game_ids.append("game-1")
+        game_ids.append("1")
         plies.append(ply)
     pl.DataFrame(
         {"fen": fens, "phase": phases, "pvs": pvs, "game_id": game_ids, "ply": plies}
+    ).write_parquet(path.as_posix())
+
+
+def _games_parquet(games_dir: Path, game_id: int = 1, uci: str = GAME) -> None:
+    """One converted game, in the month layout and with the integer id `rukh data uci` writes."""
+    path = games_dir / "year=2025" / "month=01" / "games.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(
+        {
+            "game_id": pl.Series([game_id], dtype=pl.Int64),
+            "uci": [uci],
+            "n_plies": pl.Series([len(uci.split())], dtype=pl.Int16),
+            "white_elo": pl.Series([2015], dtype=pl.Int16),
+            "black_elo": pl.Series([2028], dtype=pl.Int16),
+        }
     ).write_parquet(path.as_posix())
 
 
@@ -106,6 +123,7 @@ def test_run_writes_balanced_pairs(rukh_home: Path) -> None:
     evals = rukh_home / "data" / "evals" / "positions-eval.parquet"
     evals.parent.mkdir(parents=True)
     _evals_parquet(evals)
+    _games_parquet(rukh_home / "data" / "uci")
     manifest = run(PairsConfig(max_per_phase=2))
     frame = pl.read_parquet((rukh_home / "data" / "pairs" / "pairs.parquet").as_posix())
     assert frame.columns == [
@@ -128,6 +146,63 @@ def test_run_writes_balanced_pairs(rukh_home: Path) -> None:
         assert chosen in legal and rejected in legal and chosen != rejected
         mover = 1 if board.turn == chess.WHITE else -1
         assert mover * (cp_c - cp_r) >= 100
+
+
+def test_run_writes_the_prompts_the_decoder_reads(rukh_home: Path) -> None:
+    """``dpo-prompts.parquet``: each pair joined to its game, prefix and ratings included.
+
+    The file every DPO, GRPO, reward-model and on-policy config points at. It used to come from
+    a join nobody could rerun; now it is what ``rukh data pairs`` writes next to the pairs.
+    """
+    evals = rukh_home / "data" / "evals" / "positions-eval.parquet"
+    evals.parent.mkdir(parents=True)
+    _evals_parquet(evals)
+    _games_parquet(rukh_home / "data" / "uci")
+    manifest = run(PairsConfig(max_per_phase=2))
+    prompts = pl.read_parquet((rukh_home / "data" / "pairs" / "dpo-prompts.parquet").as_posix())
+    assert prompts.columns == [
+        "game_id",
+        "ply",
+        "chosen",
+        "rejected",
+        "cp_chosen",
+        "cp_rejected",
+        "phase",
+        "white_elo",
+        "black_elo",
+        "prefix",
+    ]
+    assert prompts.height == 6 == manifest.counts["prompts"]
+    assert manifest.counts["prompts_dropped"] == 0
+    assert [f.path for f in manifest.files] == ["pairs.parquet", "dpo-prompts.parquet"]
+    moves = GAME.split()
+    for row in prompts.iter_rows(named=True):
+        assert row["prefix"] == " ".join(moves[: row["ply"]])
+        assert (row["white_elo"], row["black_elo"]) == (2015, 2028)
+
+
+def test_a_prompt_deeper_than_the_context_is_dropped_and_counted(rukh_home: Path) -> None:
+    """Three header tokens plus ``ply`` moves must fit ``block``; the rest are dropped, not cut."""
+    from rukh.data.pairs import build_prompts
+
+    _games_parquet(rukh_home / "data" / "uci")
+    pairs = pl.DataFrame(
+        {
+            "fen": ["-", "-"],
+            "chosen": ["a", "a"],
+            "rejected": ["b", "b"],
+            "cp_chosen": pl.Series([1, 1], dtype=pl.Int32),
+            "cp_rejected": pl.Series([0, 0], dtype=pl.Int32),
+            "phase": ["opening", "endgame"],
+            "game_id": ["1", "1"],
+            "ply": pl.Series([5, 14], dtype=pl.Int32),
+        }
+    )
+    kept = build_prompts(pairs, rukh_home / "data" / "uci", block=16)
+    assert kept["ply"].to_list() == [5]
+    assert kept["prefix"][0] == " ".join(GAME.split()[:5])
+    missing_game = pairs.with_columns(pl.lit("2").alias("game_id"))
+    assert build_prompts(missing_game, rukh_home / "data" / "uci").height == 0
 
 
 def test_chosen_is_the_consolidated_best_move(
@@ -205,5 +280,5 @@ def test_pairs_carry_the_game_they_came_from(tmp_path: Path) -> None:
     frame = build_pairs(evals, min_delta_cp=50)
     assert frame.height > 0
     assert {"game_id", "ply"} <= set(frame.columns)
-    assert frame["game_id"].to_list() == ["game-1"] * frame.height
+    assert frame["game_id"].to_list() == ["1"] * frame.height
     assert all(p >= 1 for p in frame["ply"].to_list())

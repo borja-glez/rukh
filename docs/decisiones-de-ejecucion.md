@@ -2238,6 +2238,87 @@ Evidencia obtenida por el controlador, no por subagentes:
   una carpeta a ningún sitio, mira su tamaño: es la comprobación más barata que existe y la única
   que habría pillado esto.
 
+### D-130 · Los hitos se marcan con etiquetas; el punto de partida de un módulo es `main` más `rukh pull`
+- **Qué se pidió (2026-09-21):** que el curso se pueda reproducir con exactitud módulo a módulo y
+  que haya ramas preparadas por módulo para retomar uno sin haber hecho el anterior.
+- **Qué se decidió:** etiquetas anotadas en el commit que cerró cada hito (`p0`, `p1`, `p2`,
+  `p3`, `p3-elo-1200`, `p4`, `p5`) y **ninguna rama por módulo**. El punto de partida de un módulo
+  es `main` y `rukh pull --module mN`, que trae del Hub lo que el módulo necesita
+  (`docs/reproducir.md`).
+- **Por qué no ramas:** una rama congelada al cerrar un hito lleva el código de ese día, y el
+  código de ese día estaba mal en cosas que se corrigieron después. El caso concreto: `p2` lleva
+  la escalera de Elo con cuatro peldaños etiquetados ~500 puntos por debajo de lo medido (D-070);
+  quien siguiera M2 desde esa rama obtendría 1007 Elo para `small` y leería en la lección que son
+  1359. Lo que un módulo necesita del anterior no es su código sino sus **artefactos** (datos,
+  checkpoints), y esos viven en el Hub, no en git.
+- **Qué cuesta si está mal:** si alguien quiere de verdad "el repo como estaba", las etiquetas lo
+  dan (`git switch -c mio p2`); convertirlas en ramas es un comando.
+- **De paso:** las ramas `p0-scaffold`, `p1-datos`, `p2-decoder`, `p3-clean`, `p5-alignment` y
+  `elo-1200` están fusionadas y son redundantes con las etiquetas; `p3-encoder` es un duplicado
+  de `p3-clean` (difieren en dos binarios que se sacaron de git) y nunca se fusionó; la rama
+  `p4-finetuning` se borró tras el merge. No se borra ninguna sin que Borja lo decida.
+
+### D-131 · Los checkpoints se nombran por su corrida, y una carpeta sin fecha resuelve a la corrida con fecha más reciente
+- **Qué pasaba:** doce configs apuntaban a checkpoints por su carpeta con fecha
+  (`checkpoints/medium-v4-20260919-174623/best.pt`, `encoder-mmm-20260919-093554//best.pt`).
+  Solo funcionaban en la máquina que entrenó esa corrida ese día. Las lecciones, por su parte,
+  escribían `checkpoints/small/best.pt`, una ruta que el bucle **nunca** produce porque
+  `unique_run_name` añade la fecha.
+- **Qué se decidió:** las configs y las lecciones nombran la corrida sin fecha
+  (`checkpoints/medium-v4/best.pt`), que es lo que escribe `rukh pull`. Cuando esa carpeta no
+  existe, `resolve_run` busca las carpetas `medium-v4-AAAAMMDD-HHMMSS` de al lado y toma la más
+  reciente **por nombre**, no por fecha de modificación: copiar una carpeta no puede cambiar a qué
+  corrida apunta una config. Vale para ficheros y para carpetas de adaptadores, y para toda opción
+  `--ckpt`, `--model`, `--resume`, `--adapter` y `--run` del CLI.
+- **Por qué no quitar `unique_run_name`:** la serie `step-*.pt` de una segunda corrida pisaría la
+  primera, y el `TrainingReplay` del curso lee esa serie.
+- **Qué cuesta si está mal:** dos corridas del mismo nombre y el lector que quiere la antigua.
+  El log dice cuál se ha resuelto; la config puede escribir la carpeta con fecha si hace falta.
+
+### D-132 · Dos ficheros de M5 no los escribía ningún comando
+- **Qué pasó:** `data/pairs/dpo-prompts.parquet` (lo que leen el reward model, los dos DPO, GRPO y
+  la generación on-policy) y `data/pairs-offpolicy-matched/pairs.parquet` (el brazo de control de
+  DPO) salieron de dos joins de una sesión, no de código. Ni estaban en el Hub ni había forma de
+  regenerarlos. La revisión de reproducibilidad los encontró contando qué escribe cada comando.
+- **Qué se hizo:** `rukh data pairs` escribe ahora `dpo-prompts.parquet` junto a `pairs.parquet`
+  (join con `data/uci` por `game_id` y `ply`; prefijo = las primeras `ply` jugadas), lo lista en el
+  manifiesto y se publica en `rukh-pairs-dpo`. El emparejado de conteos es una opción de la config
+  de DPO (`max_pairs: 6386`, muestra con semilla del fichero entero, nunca su cabeza, D-114).
+- **La diferencia con lo que entrenó P5:** el fichero regenerado reproduce las 13 838 filas del
+  original (prefijos y Elo idénticos, comprobado fila a fila) y añade **4** en el borde del
+  contexto: el join de la sesión cortaba a 194 plies y la regla escrita es la del decoder,
+  `3 + ply <= 200`. La muestra de 6 386 del brazo off-policy sale por tanto de 13 842 filas y no
+  de 13 838, así que no es la misma muestra bit a bit. Ninguna cifra publicada se vuelve a medir
+  por esto: los modelos del Hub son los entrenados con los ficheros originales, y la diferencia
+  está dentro del ruido que D-113 midió entre dos corridas idénticas.
+- **La regla que deja:** si una config lee un fichero, un comando del repo tiene que escribirlo.
+  Un fichero que solo existe en disco es una dependencia sin código.
+
+### D-133 · El encoder preentrenado sube al Hub como `rukh-encoder-mmm`, con su propia card
+- **Por qué:** `rukh-encoder` publica las cabezas afinadas; el preentrenamiento MMM del que parten
+  (`encoder-mmm-v4`, 39 M, 40 minutos) no estaba publicado, así que un lector que se saltara ese
+  lab no podía ejecutar `encoder-heads-v4.yaml`. Todo lo entrenado que un módulo necesita para
+  empezar tiene que estar en el Hub, o `rukh pull` no puede traerlo.
+- **La card:** el publicador reconoce un `PositionEncoder` sin cabezas y usa una plantilla propia.
+  Con la del encoder afinado, la card decía «entrenado desde cero con etiquetas de Stockfish, sin
+  preentrenamiento» de un modelo que es exactamente lo contrario, y mostraba una tabla de F1 en
+  `n/a`. La nueva publica lo único que un preentrenamiento mide: la pérdida de jugadas tapadas con
+  la que se eligió `best.pt` (0,6981) y su top-1 (81,4 %), frente al 75,2 % del encoder de 15 M.
+
+### D-134 · Las lecciones se parten en páginas de una a dos horas
+- **Qué había:** una página por módulo: M2 con 20 012 palabras, M3 con 18 663, M4 con 16 845,
+  M5 con 11 782 y M1 con 11 360 (M0, 4 219). A doscientas palabras por minuto, M2 son cien minutos
+  de lectura seguida antes de contar los labs.
+- **Qué se decidió:** partir cada módulo en dos a cuatro lecciones que siguen la estructura que ya
+  tenían las secciones: teoría · cómo se mide y lo que salió · labs. La primera parte conserva el
+  slug antiguo, así que ningún enlace externo se rompe. La cheatsheet del módulo se muestra solo en
+  su última lección. M2 gana una cuarta parte («más datos, no más red») porque el modelo del que
+  parten M4 y M5, `medium-v4`, no se construía en ninguna lección: su historia vivía en
+  `docs/plans/2026-09-19-elo-1200.md` y en D-062 a D-078.
+- **Qué cuesta si está mal:** las lecciones pierden el hilo entre partes. Cada parte abre diciendo
+  de dónde viene y cierra diciendo a dónde va, y la navegación anterior/siguiente ya recorría el
+  curso en orden de módulo y lección.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:

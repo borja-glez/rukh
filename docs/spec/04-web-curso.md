@@ -84,6 +84,12 @@ el curso enlaza a la demo con parámetros (`?stage=dpo&elo=1500`).
 ## Redacción de lecciones
 
 Lecciones en español, tono directo, sin referencias a los cursos de origen; "teoría justa" ≤ 40 % del
-texto; cada lección abre con "qué vas a construir" y cierra con "qué has aprendido, cómo se mide y
+texto; cada módulo abre con "qué vas a construir" y cierra con "qué has aprendido, cómo se mide y
 cheatsheet". Runbook `docs/runbooks/lessons.md` con la plantilla y la lista de componentes. Las
 lecciones se escriben en el mismo hito que su lab (no se dejan para el final).
+
+> **Nota (2026-09-21, D-134):** un módulo son varias lecciones de una a dos horas, partidas por sus
+> secciones (teoría · cómo se mide y lo que salió · labs), nunca una sola página de veinte mil
+> palabras. La primera parte conserva el slug del módulo; la cheatsheet se muestra solo en la
+> última; cada parte abre diciendo de dónde viene y a dónde va, y la parte de labs abre con un
+> «punto de partida» que dice qué hay que tener en disco y el `rukh pull` que lo trae.

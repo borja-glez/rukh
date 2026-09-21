@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -37,6 +37,9 @@ class DpoConfig(BaseConfig):
     """Where the pairs and the starting weights are, and the two knobs that matter."""
 
     pairs: str = "data/pairs/dpo-prompts.parquet"
+    max_pairs: int | None = Field(default=None, ge=1)
+    """Subsample the pairs to this many, with ``seed``, before the split. Two arms compared on
+    two pair sources must see the same amount of data, or the comparison measures the amount."""
     checkpoint: str = ""
     out_dir: str = "checkpoints"
     run_name: str = "dpo"
@@ -188,6 +191,19 @@ def evaluate(
     return totals[0] / seen, totals[1] / seen, totals[2] / seen
 
 
+def limit_pairs(frame: Any, cfg: DpoConfig) -> Any:
+    """At most ``cfg.max_pairs`` rows, drawn with ``cfg.seed`` from the whole file.
+
+    A sample and never the head: the pairs are balanced by phase in blocks, so the first rows
+    of the file are two thirds openings against a third in the whole (D-114). With no limit the
+    frame comes back untouched.
+    """
+    if cfg.max_pairs is None or frame.height <= cfg.max_pairs:
+        return frame
+    LOGGER.info("dpo: %d pares muestreados de %d", cfg.max_pairs, frame.height)
+    return frame.sample(n=cfg.max_pairs, seed=cfg.seed, shuffle=True)
+
+
 def train(cfg: DpoConfig) -> Path:
     """Align a decoder on the preference pairs and return the checkpoint it wrote."""
     import copy
@@ -208,7 +224,7 @@ def train(cfg: DpoConfig) -> Path:
     for parameter in reference.parameters():
         parameter.requires_grad_(False)
 
-    frame = pl.read_parquet(paths.resolve(cfg.pairs).as_posix())
+    frame = limit_pairs(pl.read_parquet(paths.resolve(cfg.pairs).as_posix()), cfg)
     rows = encode_pairs(frame, tok, cfg.block)
     if not rows:
         raise ValueError(f"{cfg.pairs} produced no usable pairs")

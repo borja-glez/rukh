@@ -5,7 +5,7 @@
 #
 # Caveat worth knowing before reading the numbers: the supervised table is deduplicated by
 # `fen4`, so the prefix is *a* line reaching the position, not necessarily the labelled game's.
-encoder_ckpt: checkpoints/encoder-mmm-20260919-093554//best.pt
+encoder_ckpt: checkpoints/encoder-mmm/best.pt
 input: moves
 pooling: mean
 mode: last-n

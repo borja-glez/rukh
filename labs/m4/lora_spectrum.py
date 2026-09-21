@@ -9,7 +9,7 @@ seven hundred and sixty-eight of them, all non-zero -- the picture is the whole 
 
 Run from the repository root:
 
-    uv run python labs/m4/lora_spectrum.py --adapter checkpoints/lora-e4-20260920-160133
+    uv run python labs/m4/lora_spectrum.py --adapter checkpoints/lora-e4
 """
 
 import argparse
@@ -26,8 +26,8 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--ckpt", default="checkpoints/medium-v4-20260919-174623/best.pt", type=Path)
-parser.add_argument("--adapter", default="checkpoints/lora-e4-20260920-160133", type=Path)
+parser.add_argument("--ckpt", default="checkpoints/medium-v4/best.pt", type=Path)
+parser.add_argument("--adapter", default="checkpoints/lora-e4", type=Path)
 parser.add_argument("--layer", default=0, type=int, help="Block to read the matrices from.")
 parser.add_argument("--keep", default=24, type=int, help="Singular values to write out.")
 parser.add_argument("--out", default="artifacts/web/lora-spectrum.json", type=Path)
