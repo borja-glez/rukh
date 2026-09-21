@@ -1947,6 +1947,7 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **La regla que deja:** una correlación sobre una población con dos regímenes distintos no describe
   ninguno de los dos. Antes de interpretar el signo, mira si hay un grupo que lo esté poniendo.
 
+- **Nota (2026-09-21, D-119):** los números definitivos del triángulo son los de D-127 y la lección de M5: DPO fuera de política +65 (50-81) con 1 600 partidas, dentro de política +57 (36-79), on contra off +37 (15-59), residuo 45 Elo con error típico 18 (2,6 σ); la cuota de mates de los pares fuera de política es el 29 %, medida sobre el parquet.
 ### D-120 · El triángulo no cierra: la fuerza no es un solo número por modelo
 - **Lo que se midió:** tres modelos —la base, DPO fuera de política y DPO dentro de política— y las
   tres aristas del triángulo, cada una con 400 partidas en cada dirección y las dos agrupadas.
@@ -1991,6 +1992,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   número: si te importa cuál de dos gana, enfréntalos. Restar dos enfrentamientos con un tercero es
   el mismo error que restar dos escaleras (D-110), un piso más arriba.
 
+- **Nota (2026-09-21, D-120):** los números definitivos del triángulo son los de D-127 y la lección de M5: DPO fuera de política +65 (50-81) con 1 600 partidas, dentro de política +57 (36-79), on contra off +37 (15-59), residuo 45 Elo con error típico 18 (2,6 σ); la cuota de mates de los pares fuera de política es el 29 %, medida sobre el parquet.
 ### D-121 · El peaje del alineamiento: DPO dobla la tasa de jugadas ilegales
 - **Qué se midió:** la proporción de jugadas ilegales que propone cada modelo, sobre sus propias
   jugadas, en las cuatro corridas de enfrentamiento. No es una métrica que se estuviera buscando:

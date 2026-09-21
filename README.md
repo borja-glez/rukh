@@ -32,7 +32,7 @@ the same day with the same suite by `rukh eval nightly`.
 Three things to know before reading the table:
 
 - **Elo is a pair, model and sampling** (D-047): the same checkpoint at temperature 0.05 and at
-  0.6 are two players more than 200 Elo apart, and they are two rows.
+  0.6 are two players about 180 Elo apart (1359 against 1181), and they are two rows.
 - **The ladder repeats to sampling noise on a quiet machine** (D-137): the same model, same
   seed, four runs, 1538/1538 on the clock and 1541/1524 on a node budget. The interval of every
   Elo (about ±55) is wider than any of those gaps; the machine must be doing nothing else while

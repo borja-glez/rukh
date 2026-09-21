@@ -1,5 +1,5 @@
 # The sampling the acceptance bar is read at: near-deterministic (D-047). Temperature is worth
-# more than 200 Elo on the same weights, so every comparison between stages has to fix it, and
+# about 180 Elo on the same weights (1359 against 1181, D-047), so every comparison between stages has to fix it, and
 # this file is that fixture -- it reproduces exactly what `small-greedy` and `medium-greedy` were
 # measured with, so a new stage lands in the same table.
 #
