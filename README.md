@@ -27,7 +27,7 @@ the same day with the same suite by `rukh eval nightly`.
 | M3 · Encoder | masked-move pretraining and three heads (value, blunder, result) | `chorcat/rukh-encoder-mmm`, `rukh-encoder` |
 | M4 · Afinado | Elo-conditioned and masters fine-tunes, two LoRA adapters, Qwen3 with QLoRA as a baseline | `chorcat/rukh-medium-elo`, `rukh-medium-masters`, `rukh-lora-e4`, `rukh-lora-d4`, `rukh-qwen3-pgn-qlora` |
 | M5 · Alineamiento | a reward model, DPO on and off policy, GRPO against a verifiable reward | `chorcat/rukh-rm`, `rukh-medium-dpo`, `rukh-medium-grpo`, `rukh-pairs-dpo`, `rukh-pairs-onpolicy` |
-| M6 · Evaluar | the table, the floor of the instrument, a public baseline, the cost of int8, cards and the collection | the table, the [`Rukh` collection on the Hub](https://huggingface.co/chorcat), [rukh.borjaglez.com](https://rukh.borjaglez.com) |
+| M6 · Evaluar | the table, the floor of the instrument, a public baseline, the cost of int8, cards and the collection | the table, the [`Rukh` collection](https://huggingface.co/collections/chorcat/rukh-6ab14873918eabbc3ee287b5), [rukh.borjaglez.com](https://rukh.borjaglez.com) |
 
 Three things to know before reading the table:
 
