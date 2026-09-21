@@ -36,6 +36,9 @@ Rutas: `/` (landing: qué es, mapa de módulos con progreso local, enlace a la d
 en inglés para recruiters: arquitectura, tabla de resultados, model cards, enlaces) · `/og/[...].png`
 · `404`. i18n: `es` por defecto sin prefijo; `/en/` solo landing y proyecto.
 
+> **Nota (2026-09-21):** el sitio queda **solo en español** por decisión de Borja; `/en/` se retiró y
+> `/proyecto/` se tradujo. La traducción es trabajo futuro, y `Locale` se ensancha entonces.
+
 ## Componentes de lección
 
 Layout de lección con nav de módulo, prosa a 72ch, TOC por IntersectionObserver, prev/next, "marcar
