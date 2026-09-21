@@ -1,11 +1,11 @@
 # Evaluation of `lora-e4`
 
 - Suite: `full`
-- Checkpoint: `checkpoints/lora-e4-20260920-160133/step-1500.pt`
-- Weights SHA-256: `da7025c4de105d00b8c6fe70f3f64b02781bcde993be138efee26cca8e74eaa6`
+- Checkpoint: `E:/work/ai/chess-lm/rukh/artifacts/eval/merged/lora-e4.pt`
+- Weights SHA-256: `be7ee02f65ff12cca30313c2570c02b217d984e7a7a8c6ef40776cff520f3298`
 - Parameters: 115,120,128
 - Device: `cuda`
-- Date: 2026-09-20
+- Date: 2026-09-21
 - MLflow run: not tracked
 
 ## Headline
@@ -17,7 +17,7 @@
 | Top-1 next move | 54.7 % |
 | Top-3 next move | 83.3 % |
 | Puzzles solved | 37.8 % |
-| Estimated Elo | n/a |
+| Estimated Elo | 1538 (95 % CI 1488-1604) |
 | Mean centipawn loss | n/a |
 | Opening diversity | 0.999 |
 
@@ -71,7 +71,23 @@ Prompt: game-prefix.
 | 1500-2000 | 2000 | 764 | 38.2 % |
 | 2000+ | 2000 | 343 | 17.2 % |
 
+## Games against Stockfish
+
+| Rung | Opponent Elo | Games | W | D | L | Score | Cut | Adjudicated |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| uci-1320 | 1320 | 20 | 15 | 1 | 4 | 0.775 | 0 | 0 |
+| skill-0 | 1381 | 20 | 11 | 2 | 7 | 0.600 | 2 | 2 |
+| skill-1 | 1467 | 20 | 15 | 2 | 3 | 0.800 | 0 | 0 |
+| uci-1500 | 1500 | 20 | 10 | 2 | 8 | 0.550 | 0 | 0 |
+| skill-2 | 1589 | 20 | 7 | 2 | 11 | 0.400 | 1 | 1 |
+| skill-3 | 1678 | 20 | 3 | 1 | 16 | 0.175 | 0 | 0 |
+| uci-1800 | 1800 | 20 | 3 | 2 | 15 | 0.200 | 2 | 2 |
+| uci-2000 | 2000 | 20 | 0 | 5 | 15 | 0.125 | 0 | 0 |
+
+5 of 160 games hit the context limit; 5 of those were adjudicated on the final position (shallow engine analysis, or the material count when no engine was available) rather than scored as draws.
+
 ## Notes
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
-- Elo skipped: no games were played
+- the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
+- 5 of 160 games hit the context limit and were adjudicated (5 of them) instead of being scored as draws

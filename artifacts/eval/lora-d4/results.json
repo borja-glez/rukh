@@ -1,11 +1,11 @@
 {
   "stage": "lora-d4",
   "suite": "full",
-  "checkpoint": "checkpoints/lora-d4-20260920-160902/step-1500.pt",
-  "model_sha": "e3876f4119b656fd585c5ffddf5c3878dbb8b161a767f694121cf31ce79da154",
-  "weights_sha": "4a6c1e63f058a8d19d1f1f4ffe7266e2089711fd145307de5bd74854ef215802",
+  "checkpoint": "E:/work/ai/chess-lm/rukh/artifacts/eval/merged/lora-d4.pt",
+  "model_sha": "8ab948aa1e65f51fc6e6b96ab4eff45a21f921622551ac78ea148a322f7bac38",
+  "weights_sha": "c5d1b7c49d349a730e4ce7f0149564d552ca03200c78463c3c7708f01809209a",
   "params": 115120128,
-  "date": "2026-09-20",
+  "date": "2026-09-21",
   "device": "cuda",
   "run_id": null,
   "legality_argmax": {
@@ -87,7 +87,108 @@
     ],
     "prompt_style": "game-prefix"
   },
-  "elo": null,
+  "elo": {
+    "elo": 1534.8681214260762,
+    "ci_low": 1480.6096077767972,
+    "ci_high": 1581.6841350513034,
+    "games": 160,
+    "score": 0.45,
+    "rungs": [
+      {
+        "name": "uci-1320",
+        "opponent_elo": 1320,
+        "games": 20,
+        "wins": 17,
+        "draws": 1,
+        "losses": 2,
+        "score": 0.875,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "skill-0",
+        "opponent_elo": 1381,
+        "games": 20,
+        "wins": 14,
+        "draws": 1,
+        "losses": 5,
+        "score": 0.725,
+        "cut": 1,
+        "adjudicated": 1
+      },
+      {
+        "name": "skill-1",
+        "opponent_elo": 1467,
+        "games": 20,
+        "wins": 12,
+        "draws": 1,
+        "losses": 7,
+        "score": 0.625,
+        "cut": 1,
+        "adjudicated": 1
+      },
+      {
+        "name": "uci-1500",
+        "opponent_elo": 1500,
+        "games": 20,
+        "wins": 13,
+        "draws": 2,
+        "losses": 5,
+        "score": 0.7,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "skill-2",
+        "opponent_elo": 1589,
+        "games": 20,
+        "wins": 6,
+        "draws": 1,
+        "losses": 13,
+        "score": 0.325,
+        "cut": 1,
+        "adjudicated": 1
+      },
+      {
+        "name": "skill-3",
+        "opponent_elo": 1678,
+        "games": 20,
+        "wins": 2,
+        "draws": 2,
+        "losses": 16,
+        "score": 0.15,
+        "cut": 1,
+        "adjudicated": 1
+      },
+      {
+        "name": "uci-1800",
+        "opponent_elo": 1800,
+        "games": 20,
+        "wins": 1,
+        "draws": 3,
+        "losses": 16,
+        "score": 0.125,
+        "cut": 0,
+        "adjudicated": 0
+      },
+      {
+        "name": "uci-2000",
+        "opponent_elo": 2000,
+        "games": 20,
+        "wins": 1,
+        "draws": 1,
+        "losses": 18,
+        "score": 0.075,
+        "cut": 1,
+        "adjudicated": 1
+      }
+    ],
+    "cut": 5,
+    "adjudicated": 5,
+    "separated": false,
+    "elo_lower": null,
+    "elo_upper": null
+  },
   "delta_cp": null,
   "diversity": 1.0,
   "diversity_detail": {
@@ -97,7 +198,7 @@
     "entropy_bits": 7.643856189774724,
     "max_entropy_bits": 7.643856189774724,
     "normalised": 1.0,
-    "first_move_entropy_bits": 0.016019740477340737,
+    "first_move_entropy_bits": 0.01601970267788482,
     "temperature": 1.0,
     "top_k": 20,
     "top_lines": [
@@ -125,7 +226,8 @@
   },
   "notes": [
     "legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.",
-    "Elo skipped: no games were played"
+    "the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for",
+    "5 of 160 games hit the context limit and were adjudicated (5 of them) instead of being scored as draws"
   ],
   "config": {
     "stage": "lora-d4",
@@ -138,7 +240,7 @@
     "puzzles_per_band": 2000,
     "force_header": false,
     "header_elo": 1800,
-    "elo_games": 0,
+    "elo_games": 20,
     "elo_rungs": [
       {
         "name": "uci-1320",
@@ -190,6 +292,7 @@
       }
     ],
     "elo_move_time": 0.1,
+    "elo_nodes": null,
     "elo_max_plies": null,
     "bootstrap": 500,
     "diversity_games": 200,

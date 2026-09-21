@@ -1,11 +1,11 @@
 # Evaluation of `medium-v4-dpo-onpolicy-greedy`
 
 - Suite: `full`
-- Checkpoint: `checkpoints/medium-v4-dpo-onpolicy/dpo.pt`
+- Checkpoint: `E:/work/ai/chess-lm/rukh/checkpoints/medium-v4-dpo-onpolicy/dpo.pt`
 - Weights SHA-256: `67eeee8a3712c7a6bb1e01eb1f879323ef15574e6ebc0a099e4dd8fd0e4bde33`
 - Parameters: 115,120,128
 - Device: `cuda`
-- Date: 2026-09-20
+- Date: 2026-09-21
 - MLflow run: not tracked
 
 ## Headline
@@ -17,7 +17,7 @@
 | Top-1 next move | 52.3 % |
 | Top-3 next move | 79.9 % |
 | Puzzles solved | 39.1 % |
-| Estimated Elo | 1560 (95 % CI 1500-1617) |
+| Estimated Elo | 1632 (95 % CI 1567-1706) |
 | Mean centipawn loss | n/a |
 | Opening diversity | 0.992 |
 
@@ -75,19 +75,19 @@ Prompt: game-prefix.
 
 | Rung | Opponent Elo | Games | W | D | L | Score | Cut | Adjudicated |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| uci-1320 | 1320 | 20 | 17 | 1 | 2 | 0.875 | 1 | 1 |
-| skill-0 | 1381 | 20 | 12 | 0 | 8 | 0.600 | 1 | 1 |
-| skill-1 | 1467 | 20 | 14 | 1 | 5 | 0.725 | 0 | 0 |
-| uci-1500 | 1500 | 20 | 8 | 6 | 6 | 0.550 | 0 | 0 |
-| skill-2 | 1589 | 20 | 8 | 2 | 10 | 0.450 | 0 | 0 |
-| skill-3 | 1678 | 20 | 3 | 4 | 13 | 0.250 | 1 | 1 |
-| uci-1800 | 1800 | 20 | 3 | 1 | 16 | 0.175 | 2 | 2 |
-| uci-2000 | 2000 | 20 | 3 | 2 | 15 | 0.200 | 0 | 0 |
+| uci-1320 | 1320 | 20 | 14 | 3 | 3 | 0.775 | 2 | 2 |
+| skill-0 | 1381 | 20 | 17 | 2 | 1 | 0.900 | 0 | 0 |
+| skill-1 | 1467 | 20 | 13 | 0 | 7 | 0.650 | 0 | 0 |
+| uci-1500 | 1500 | 20 | 11 | 0 | 9 | 0.550 | 1 | 1 |
+| skill-2 | 1589 | 20 | 8 | 1 | 11 | 0.425 | 0 | 0 |
+| skill-3 | 1678 | 20 | 11 | 1 | 8 | 0.575 | 0 | 0 |
+| uci-1800 | 1800 | 20 | 8 | 1 | 11 | 0.425 | 0 | 0 |
+| uci-2000 | 2000 | 20 | 2 | 2 | 16 | 0.150 | 1 | 1 |
 
-5 of 160 games hit the context limit; 5 of those were adjudicated on the final position (shallow engine analysis, or the material count when no engine was available) rather than scored as draws.
+4 of 160 games hit the context limit; 4 of those were adjudicated on the final position (shallow engine analysis, or the material count when no engine was available) rather than scored as draws.
 
 ## Notes
 
 - legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
-- 5 of 160 games hit the context limit and were adjudicated (5 of them) instead of being scored as draws
+- 4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws

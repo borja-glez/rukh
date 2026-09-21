@@ -1,0 +1,142 @@
+{
+  "date": "2026-09-21",
+  "config": "E:/work/ai/chess-lm/rukh/configs/eval/greedy.yaml",
+  "encoder_config": null,
+  "records": [
+    {
+      "name": "tiny",
+      "stage": "tiny-greedy",
+      "measure": "decoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/tiny/best.pt",
+      "model_sha": "4d5f4cb7d54a47ed5db8dfae18f0dd619d9162f759b2cd9e201def244a1af65b",
+      "weights_sha": "19818177be22cff8908dc6bd98c5a76dde57c1f853279fa743f7bb6165fd4d27",
+      "seconds": 698.1,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "small",
+      "stage": "small-v3-greedy",
+      "measure": "decoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/small-v3-20260919-160710/best.pt",
+      "model_sha": "3104796b3e7fa43383d8c43924f06d32db7b9e6cd2352d2ee6c8b62cfaf36247",
+      "weights_sha": "4127d7d5ce498d09be0bc9df4d5f9501937910b8951308dbacca1280a1b23950",
+      "seconds": 825.3,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "medium-v4",
+      "stage": "medium-v4-greedy",
+      "measure": "decoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/medium-v4-20260919-174623/best.pt",
+      "model_sha": "98e05fcdfa2d1619ba33294e2d7f775c677b898e947b570ec2633de0e824b85e",
+      "weights_sha": "a10e2be5783b1fba47f4d1c6a987468cc0da32edb6585ad0d7877720e28ee403",
+      "seconds": 866.4,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "encoder-v4",
+      "stage": "encoder-v4",
+      "measure": "encoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/encoder-heads-v4-20260920-115703/step-4000.pt",
+      "model_sha": "f60f1e1d7b06c0478d591914eff1218068cf1a25771f7b2a43d7382169d5e4e2",
+      "weights_sha": "0e481e1d6fe1734c16920b57f9811eec890244d5a292066cf1feb3ab7cd64e96",
+      "seconds": 7.1,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "medium-elo",
+      "stage": "medium-elo",
+      "measure": "decoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/medium-elo-20260920-143756/step-3800.pt",
+      "model_sha": "bcb67028547ca0037634d3fdd97862f9251abe2fe74da0cdcc7586668b755cf6",
+      "weights_sha": "da3a321e993250a0f40d535b79cd420868c63174602e066c62e13f19a9e0b1ec",
+      "seconds": 864.8,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "medium-masters",
+      "stage": "medium-masters",
+      "measure": "decoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/medium-masters-20260920-154035/step-3800.pt",
+      "model_sha": "41adcf286008ef471301bcef5f1131b64ce705afbf3857f4b5501202bd4bf684",
+      "weights_sha": "17bbf344b215afe6ea8e6fc8ee62175863b239580c7c71cb3018ac85049927b9",
+      "seconds": 872.7,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "lora-e4",
+      "stage": "lora-e4",
+      "measure": "decoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/artifacts/eval/merged/lora-e4.pt",
+      "model_sha": "be7ee02f65ff12cca30313c2570c02b217d984e7a7a8c6ef40776cff520f3298",
+      "weights_sha": "57447214f6e0c86c89b0d60391b96ccc216934563aea78ffee6f67890decf734",
+      "seconds": 849.5,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "lora-d4",
+      "stage": "lora-d4",
+      "measure": "decoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/artifacts/eval/merged/lora-d4.pt",
+      "model_sha": "8ab948aa1e65f51fc6e6b96ab4eff45a21f921622551ac78ea148a322f7bac38",
+      "weights_sha": "c5d1b7c49d349a730e4ce7f0149564d552ca03200c78463c3c7708f01809209a",
+      "seconds": 913.6,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "qwen3-pgn-qlora",
+      "stage": "qwen3-pgn-qlora",
+      "measure": "qwen",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/qwen3-pgn-qlora",
+      "model_sha": null,
+      "weights_sha": null,
+      "seconds": 2506.2,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "medium-v4-dpo-onpolicy",
+      "stage": "medium-v4-dpo-onpolicy-greedy",
+      "measure": "decoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/medium-v4-dpo-onpolicy/dpo.pt",
+      "model_sha": "67eeee8a3712c7a6bb1e01eb1f879323ef15574e6ebc0a099e4dd8fd0e4bde33",
+      "weights_sha": "4836fd8c91d1f0dbef574ad149b770ba2d5d5825a8b14c7020c1fdc758396261",
+      "seconds": 858.4,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "medium-v4-grpo",
+      "stage": "medium-v4-grpo-greedy",
+      "measure": "decoder",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/medium-v4-grpo/grpo.pt",
+      "model_sha": "ade81558d491e041bc9fa784de6a213dd42c7d73920d1ecd12a200076df51c8c",
+      "weights_sha": "87f2c18fc082caf45438d43484e08ab8156fc6c049cba175ed06656023360aed",
+      "seconds": 843.4,
+      "status": "measured",
+      "detail": null
+    },
+    {
+      "name": "karvonen-8l",
+      "stage": "karvonen-8l",
+      "measure": "karvonen",
+      "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/karvonen-8l/lichess_8layers_ckpt_no_optimizer.pt",
+      "model_sha": "84076e42e006c8edeabcb593e0b67469bdea17e1beabe78a459c2dd1f22c0668",
+      "weights_sha": null,
+      "seconds": 0.1,
+      "status": "failed",
+      "detail": "ValueError: E:/work/ai/chess-lm/rukh/checkpoints/karvonen-8l/lichess_8layers_ckpt_no_optimizer.pt holds no model_state to hash"
+    }
+  ],
+  "results": "E:/work/ai/chess-lm/rukh/artifacts/web/results.json",
+  "benchmarks": "E:/work/ai/chess-lm/rukh/docs/benchmarks.md",
+  "seconds": 10105.7
+}

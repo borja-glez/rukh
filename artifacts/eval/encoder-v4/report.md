@@ -1,12 +1,12 @@
 # Evaluation of `encoder-v4`
 
 - Suite: `encoder`
-- Checkpoint: `checkpoints/encoder-heads-v4-20260920-115703/step-4000.pt`
+- Checkpoint: `E:/work/ai/chess-lm/rukh/checkpoints/encoder-heads-v4-20260920-115703/step-4000.pt`
 - Weights SHA-256: `f60f1e1d7b06c0478d591914eff1218068cf1a25771f7b2a43d7382169d5e4e2`
 - Parameters: 38,973,957
 - Device: `cuda`
-- Date: 2026-09-20
-- MLflow run: eac6b596edb54b5aa4a262236acf6186
+- Date: 2026-09-21
+- MLflow run: 829c82a71fb44edba2c6fc3c87ca130b
 
 ## Headline
 

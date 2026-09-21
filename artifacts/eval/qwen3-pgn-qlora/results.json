@@ -1,9 +1,9 @@
 {
   "stage": "qwen3-pgn-qlora",
   "base_model": "Qwen/Qwen3-0.6B",
-  "adapter_dir": "checkpoints/qwen3-pgn-qlora",
+  "adapter_dir": "E:/work/ai/chess-lm/rukh/checkpoints/qwen3-pgn-qlora",
   "params": 596049920,
-  "date": "2026-09-20",
+  "date": "2026-09-21",
   "device": "cuda:0",
   "positions": 1000,
   "written": {
@@ -207,6 +207,7 @@
       }
     ],
     "elo_move_time": 0.1,
+    "elo_nodes": null,
     "elo_max_plies": null,
     "bootstrap": 500,
     "diversity_games": 200,

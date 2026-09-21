@@ -1,11 +1,11 @@
 # Evaluation of `medium-elo`
 
 - Suite: `full`
-- Checkpoint: `checkpoints/medium-elo-20260920-143756/step-3800.pt`
+- Checkpoint: `E:/work/ai/chess-lm/rukh/checkpoints/medium-elo-20260920-143756/step-3800.pt`
 - Weights SHA-256: `bcb67028547ca0037634d3fdd97862f9251abe2fe74da0cdcc7586668b755cf6`
 - Parameters: 115,120,128
 - Device: `cuda`
-- Date: 2026-09-20
+- Date: 2026-09-21
 - MLflow run: not tracked
 
 ## Headline
@@ -17,7 +17,7 @@
 | Top-1 next move | 54.9 % |
 | Top-3 next move | 82.5 % |
 | Puzzles solved | 37.8 % |
-| Estimated Elo | 1558 (95 % CI 1500-1609) |
+| Estimated Elo | 1592 (95 % CI 1532-1650) |
 | Mean centipawn loss | n/a |
 | Opening diversity | 1.000 |
 
@@ -75,14 +75,14 @@ Prompt: game-prefix.
 
 | Rung | Opponent Elo | Games | W | D | L | Score | Cut | Adjudicated |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| uci-1320 | 1320 | 20 | 14 | 2 | 4 | 0.750 | 0 | 0 |
-| skill-0 | 1381 | 20 | 13 | 2 | 5 | 0.700 | 0 | 0 |
-| skill-1 | 1467 | 20 | 13 | 2 | 5 | 0.700 | 0 | 0 |
-| uci-1500 | 1500 | 20 | 10 | 2 | 8 | 0.550 | 1 | 1 |
-| skill-2 | 1589 | 20 | 10 | 2 | 8 | 0.550 | 0 | 0 |
-| skill-3 | 1678 | 20 | 4 | 2 | 14 | 0.250 | 1 | 1 |
-| uci-1800 | 1800 | 20 | 4 | 0 | 16 | 0.200 | 0 | 0 |
-| uci-2000 | 2000 | 20 | 1 | 2 | 17 | 0.100 | 0 | 0 |
+| uci-1320 | 1320 | 20 | 14 | 3 | 3 | 0.775 | 0 | 0 |
+| skill-0 | 1381 | 20 | 17 | 2 | 1 | 0.900 | 0 | 0 |
+| skill-1 | 1467 | 20 | 10 | 2 | 8 | 0.550 | 1 | 1 |
+| uci-1500 | 1500 | 20 | 9 | 2 | 9 | 0.500 | 0 | 0 |
+| skill-2 | 1589 | 20 | 10 | 4 | 6 | 0.600 | 0 | 0 |
+| skill-3 | 1678 | 20 | 4 | 3 | 13 | 0.275 | 1 | 1 |
+| uci-1800 | 1800 | 20 | 6 | 1 | 13 | 0.325 | 0 | 0 |
+| uci-2000 | 2000 | 20 | 2 | 3 | 15 | 0.175 | 0 | 0 |
 
 2 of 160 games hit the context limit; 2 of those were adjudicated on the final position (shallow engine analysis, or the material count when no engine was available) rather than scored as draws.
 

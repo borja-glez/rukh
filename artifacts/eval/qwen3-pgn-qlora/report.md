@@ -1,10 +1,10 @@
 # Evaluation of `qwen3-pgn-qlora`
 
 - Base model: `Qwen/Qwen3-0.6B`
-- Adapter: `checkpoints/qwen3-pgn-qlora`
+- Adapter: `E:/work/ai/chess-lm/rukh/checkpoints/qwen3-pgn-qlora`
 - Parameters: 596,049,920
 - Device: `cuda:0`
-- Date: 2026-09-20
+- Date: 2026-09-21
 
 ## Headline
 

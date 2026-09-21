@@ -70,7 +70,10 @@ def weights_sha(path: Path) -> str:
         payload = torch.load(Path(path), map_location="cpu", weights_only=True)
     except Exception:  # noqa: BLE001 - reward checkpoints carry objects the safe loader refuses
         payload = torch.load(Path(path), map_location="cpu", weights_only=False)
-    state = payload.get("model_state") if isinstance(payload, dict) else None
+    state = None
+    if isinstance(payload, dict):
+        # ``model_state`` is ours; ``model`` is nanoGPT's (the Karvonen baseline).
+        state = payload.get("model_state") or payload.get("model")
     if not isinstance(state, dict) or not state:
         raise ValueError(f"{Path(path).as_posix()} holds no model_state to hash")
     names = sorted(state)

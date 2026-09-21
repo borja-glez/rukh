@@ -1,11 +1,11 @@
 {
   "stage": "tiny-greedy",
   "suite": "full",
-  "checkpoint": "checkpoints/tiny-20260919-061533/best.pt",
-  "model_sha": "4591cf8cca0b91b38fc3c4969c7bbf18aa5d3b4b79b36558727b981c24df281a",
+  "checkpoint": "E:/work/ai/chess-lm/rukh/checkpoints/tiny/best.pt",
+  "model_sha": "4d5f4cb7d54a47ed5db8dfae18f0dd619d9162f759b2cd9e201def244a1af65b",
   "weights_sha": "19818177be22cff8908dc6bd98c5a76dde57c1f853279fa743f7bb6165fd4d27",
   "params": 5309952,
-  "date": "2026-09-20",
+  "date": "2026-09-21",
   "device": "cuda",
   "run_id": null,
   "legality_argmax": {
@@ -88,22 +88,22 @@
     "prompt_style": "game-prefix"
   },
   "elo": {
-    "elo": 920.8585139508731,
-    "ci_low": 713.1355109399838,
-    "ci_high": 1039.8010446287851,
+    "elo": 777.9962050343062,
+    "ci_low": 479.138360599228,
+    "ci_high": 904.0607944271442,
     "games": 160,
-    "score": 0.034375,
+    "score": 0.015625,
     "rungs": [
       {
         "name": "uci-1320",
         "opponent_elo": 1320,
         "games": 20,
-        "wins": 2,
-        "draws": 1,
-        "losses": 17,
-        "score": 0.125,
-        "cut": 1,
-        "adjudicated": 1
+        "wins": 1,
+        "draws": 0,
+        "losses": 19,
+        "score": 0.05,
+        "cut": 0,
+        "adjudicated": 0
       },
       {
         "name": "skill-0",
@@ -120,21 +120,21 @@
         "name": "skill-1",
         "opponent_elo": 1467,
         "games": 20,
-        "wins": 1,
-        "draws": 0,
+        "wins": 0,
+        "draws": 1,
         "losses": 19,
-        "score": 0.05,
-        "cut": 0,
-        "adjudicated": 0
+        "score": 0.025,
+        "cut": 1,
+        "adjudicated": 1
       },
       {
         "name": "uci-1500",
         "opponent_elo": 1500,
         "games": 20,
-        "wins": 1,
-        "draws": 0,
+        "wins": 0,
+        "draws": 1,
         "losses": 19,
-        "score": 0.05,
+        "score": 0.025,
         "cut": 0,
         "adjudicated": 0
       },
@@ -157,8 +157,8 @@
         "draws": 0,
         "losses": 20,
         "score": 0.0,
-        "cut": 1,
-        "adjudicated": 1
+        "cut": 0,
+        "adjudicated": 0
       },
       {
         "name": "uci-1800",
@@ -176,15 +176,15 @@
         "opponent_elo": 2000,
         "games": 20,
         "wins": 0,
-        "draws": 1,
-        "losses": 19,
-        "score": 0.025,
-        "cut": 1,
-        "adjudicated": 1
+        "draws": 0,
+        "losses": 20,
+        "score": 0.0,
+        "cut": 0,
+        "adjudicated": 0
       }
     ],
-    "cut": 3,
-    "adjudicated": 3,
+    "cut": 1,
+    "adjudicated": 1,
     "separated": false,
     "elo_lower": null,
     "elo_upper": null
@@ -227,7 +227,7 @@
   "notes": [
     "legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.",
     "the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for",
-    "3 of 160 games hit the context limit and were adjudicated (3 of them) instead of being scored as draws"
+    "1 of 160 games hit the context limit and were adjudicated (1 of them) instead of being scored as draws"
   ],
   "config": {
     "stage": "tiny-greedy",
@@ -292,6 +292,7 @@
       }
     ],
     "elo_move_time": 0.1,
+    "elo_nodes": null,
     "elo_max_plies": null,
     "bootstrap": 500,
     "diversity_games": 200,
