@@ -2451,6 +2451,20 @@ Evidencia obtenida por el controlador, no por subagentes:
   cuenta de bot; `onnxruntime-gpu` haría el lab del int8 diez veces más rápido y no cambiaría el
   resultado, y no se toca el entorno en el hito de cierre.
 
+### D-141 · Una página no se mueve porque se haya jugado una jugada
+- **Qué pasó:** la CI de `rukh-web` falló en el proyecto «tablet» al cerrar P6, en los tests del
+  encoder que jugaban por toque: tras tocar `e4`, el modo pasaba a «Arena» y la partida no seguía.
+  No pasaba en escritorio ni en móvil, y no lo destapaba ningún test de la arena.
+- **La causa:** `MoveList` hacía `scrollIntoView` del ply actual, y `scrollIntoView` desplaza
+  todos los ancestros con scroll, incluido el documento: en una columna, jugar una jugada movía la
+  página 372 píxeles **durante** el toque. El `click` que el navegador sintetiza tras `touchend`
+  caía entonces sobre lo que se había deslizado bajo el dedo, que desde P6 es el selector de
+  modos bajo el tablero. Antes de P6 caía sobre nada, y por eso nadie lo vio.
+- **Qué se decidió:** la lista de jugadas se desplaza solo a sí misma (por rectángulos, dentro de
+  su contenedor) y ninguna isla llama a `scrollIntoView`. La regla: en una pantalla táctil, nada
+  que ocurra como consecuencia de un toque puede mover la página, porque el navegador todavía no
+  ha terminado de entregar ese toque.
+
 ## Publicación en Hugging Face (2026-09-19)
 
 Once repos en `chorcat`, todos con card en inglés:
