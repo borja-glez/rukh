@@ -78,6 +78,14 @@ def test_the_catalogue_covers_every_published_dataset_once() -> None:
         lookup("nope")
 
 
+def test_no_entry_lists_a_module_twice() -> None:
+    """`for_module` uses `in`, so a repeat is invisible until someone counts modules per model."""
+    for artefact in catalogue():
+        assert len(artefact.modules) == len(set(artefact.modules)), artefact.name
+    for name, modules in DATASET_MODULES.items():
+        assert len(modules) == len(set(modules)), name
+
+
 def test_model_targets_are_run_names_the_configs_use() -> None:
     """A pulled model must sit exactly where the shipped configs look for it."""
     from rukh.paths import package_root

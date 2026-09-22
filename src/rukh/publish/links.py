@@ -15,12 +15,12 @@ from rukh.hub import catalogue
 TABLE_PATH = "/proyecto/"
 
 LESSON_TITLES: dict[str, str] = {
-    "/curso/m1/02-labs-del-pipeline/": "M1 · Del PGN al tensor: los labs",
-    "/curso/m2/02-entrenar-y-medir/": "M2 · El decoder: entrenarlo y medirlo",
-    "/curso/m2/04-mas-datos-no-mas-red/": "M2 · Más datos, no más red: de small a medium-v4",
-    "/curso/m3/03-labs-del-encoder/": "M3 · El encoder: los labs",
-    "/curso/m4/03-labs-de-afinado/": "M4 · Fine-tuning: los labs",
-    "/curso/m5/03-labs-de-alineamiento/": "M5 · Alineamiento: los labs",
+    "/curso/m1/10-labs-del-pipeline/": "M1 · Los labs del pipeline",
+    "/curso/m2/03-la-receta-de-entrenamiento/": "M2 · La receta de entrenamiento",
+    "/curso/m2/11-mas-datos-no-mas-red/": "M2 · Más datos, no más red: de small a medium-v4",
+    "/curso/m3/11-labs-del-encoder/": "M3 · El encoder: los labs",
+    "/curso/m4/10-labs-de-afinado/": "M4 · Los labs del afinado",
+    "/curso/m5/09-labs-de-alineamiento/": "M5 · Alineamiento: los labs",
 }
 
 

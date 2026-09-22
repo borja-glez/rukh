@@ -52,6 +52,9 @@ class RewardPublishResult(BaseModel):
     files: list[str]
     uploaded: bool
     accuracy: float
+    card_path: str
+    """The staged card. Every other publisher returns one, and `publish.cards` rebuilt this path
+    by hand for the reward branch alone because this one did not."""
 
 
 def _load(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -69,13 +72,14 @@ def _load(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     return payload, json.loads(result_path.read_text(encoding="utf-8"))
 
 
-def _seed_spread(result: dict[str, Any]) -> str:
+def _seed_spread() -> str:
     """The sentence the card uses to say how little the headline deserves to be trusted.
 
-    Hard-coded from the runs M5 actually did rather than computed, because the card is about *this*
-    checkpoint while the spread is a property of the configuration. Two numbers matter and the
-    second is the one nobody expects: four seeds spread over two and a half points, **and two runs
-    of the same seed spread over 1.3** -- same split, same hyperparameters, different GPU kernels.
+    Hard-coded from the runs M5 actually did rather than computed -- which is why it takes no
+    argument -- because the card is about *this* checkpoint while the spread is a property of the
+    configuration. Two numbers matter and the second is the one nobody expects: four seeds spread
+    over two and a half points, **and two runs of the same seed spread over 1.3** -- same split,
+    same hyperparameters, different GPU kernels.
     """
     return (
         "72.91 %, 74.21 %, 74.71 %, 74.76 % and 75.19 %. The first two are the **same seed**, "
@@ -152,11 +156,12 @@ def publish_reward(
             "lr": training.get("lr"),
             "seed": training.get("seed"),
             "from_scratch": result.get("from_scratch", True),
-            "seed_spread": _seed_spread(result),
+            "seed_spread": _seed_spread(),
         },
         REWARD_CARD_TEMPLATE,
     )
-    (folder / README_NAME).write_text(card, encoding="utf-8", newline="\n")
+    card_path = folder / README_NAME
+    card_path.write_text(card, encoding="utf-8", newline="\n")
 
     files = [SAFETENSORS_NAME, CONFIG_NAME, README_NAME]
     uploaded = False
@@ -165,7 +170,7 @@ def publish_reward(
         api.create_repo(repo_id, repo_type=REPO_TYPE, exist_ok=True)
         api.upload_folder(repo_id=repo_id, folder_path=str(folder), repo_type=REPO_TYPE)
         uploaded = True
-        log.info("subido %s", repo_id)
+        log.info("uploaded %s", repo_id)
 
     return RewardPublishResult(
         repo_id=repo_id,
@@ -173,4 +178,5 @@ def publish_reward(
         files=files,
         uploaded=uploaded,
         accuracy=float(result["accuracy"]),
+        card_path=str(card_path),
     )

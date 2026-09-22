@@ -64,7 +64,8 @@ class HeadWeights(BaseConfig):
     value_rank: float = 0.0
     """Weight of the pairwise ranking term inside the value loss. 0 keeps plain MSE.
 
-    ``GOAL.md`` scores the value head with **Spearman**, which only looks at the order of the
+    ``docs/acceptance.md`` scores the value head with **Spearman**, which only looks at the order of
+    the
     predictions, while ``F.mse_loss`` only looks at how close each one is to its target. Those
     are not the same objective, and the gap shows: the ``squares`` scheme reaches a better
     Pearson (0.688 against 0.648) and a worse Spearman (0.422 against 0.520) than ``moves``. It
@@ -123,6 +124,17 @@ class MultiHead(nn.Module):
         self.value = ValueHead(d_model)
         self.blunder = BlunderHead(d_model)
         self.result = ResultHead(d_model)
+
+    def num_params(self, non_embedding: bool = True) -> int:
+        """Encoder **and** heads, under the encoder's own ``non_embedding`` rule.
+
+        Every other model in the package answers this, and a publisher that has to ask with
+        ``hasattr`` before counting cannot tell "no such method" from "no parameters".
+        """
+        heads = sum(p.numel() for p in self.parameters()) - sum(
+            p.numel() for p in self.encoder.parameters()
+        )
+        return self.encoder.num_params(non_embedding) + heads
 
     def pooled(self, idx: Tensor, attention_mask: Tensor | None = None) -> Tensor:
         """The position's representation, ``(B, d_model)``."""

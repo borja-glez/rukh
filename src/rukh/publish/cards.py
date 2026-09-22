@@ -84,7 +84,7 @@ def stage_card(artefact: Artefact, cfg: ModelPublishConfig) -> Path:
         from rukh.publish.reward import publish_reward
 
         result = publish_reward(target, artefact.repo_id, cfg, dry_run=True)
-        return Path(result.folder) / README_NAME
+        return Path(result.card_path)
     from rukh.publish.model import publish_model
 
     onnx = ONNX_DIRS.get(artefact.name)
@@ -107,11 +107,7 @@ def refresh_cards(
     client = None
     outcomes: list[CardRefresh] = []
     for artefact in wanted:
-        repo_type = (
-            "dataset"
-            if artefact.kind == "dataset" and artefact.name != "rukh-tokenizer"
-            else "model"
-        )
+        repo_type = artefact.hub_repo_type
         outcome = CardRefresh(
             name=artefact.name, repo_id=artefact.repo_id, repo_type=repo_type, status="staged"
         )
