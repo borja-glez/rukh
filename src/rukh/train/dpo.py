@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
 import torch
@@ -57,6 +57,15 @@ class DpoConfig(BaseConfig):
     device: str | None = None
 
 
+class PreferencePair(NamedTuple):
+    """One encoded pair, carrying the game it came from so the split can go by game."""
+
+    game_id: str
+    ids: list[int]
+    chosen: int
+    rejected: int
+
+
 class PreferenceBatch:
     """Padded prompts plus the index of the position that predicts the move."""
 
@@ -77,16 +86,20 @@ class PreferenceBatch:
         return int(self.tokens.shape[0])
 
 
-def encode_pairs(frame: object, tok: UciTokenizer, block: int) -> list[tuple[list[int], int, int]]:
-    """``(prompt ids, chosen id, rejected id)`` for every usable row.
+def encode_pairs(frame: object, tok: UciTokenizer, block: int) -> list[PreferencePair]:
+    """One :class:`PreferencePair` per usable row.
 
     A row is dropped when either move is outside the fixed vocabulary (a promotion spelling the
     enumeration does not carry) or when the prompt would not fit in ``block``: silently
     truncating a prefix would hand the model a position that never happened.
+
+    ``game_id`` travels with the pair and is never read by the loss: it exists so that
+    :func:`split_pairs` can hold out whole games (D-070).
     """
-    rows: list[tuple[list[int], int, int]] = []
-    for prefix, chosen, rejected, white, black in zip(
-        frame["prefix"],
+    rows: list[PreferencePair] = []
+    for game_id, prefix, chosen, rejected, white, black in zip(
+        frame["game_id"],
+        frame["prefix"],  # type: ignore[index]
         frame["chosen"],
         frame["rejected"],  # type: ignore[index]
         frame["white_elo"],
@@ -108,12 +121,12 @@ def encode_pairs(frame: object, tok: UciTokenizer, block: int) -> list[tuple[lis
         ids += [int(m) for m in moves]  # type: ignore[arg-type]
         if len(ids) > block:
             continue
-        rows.append((ids, chosen_id, rejected_id))
+        rows.append(PreferencePair(str(game_id), ids, chosen_id, rejected_id))
     return rows
 
 
 def batches(
-    rows: list[tuple[list[int], int, int]], size: int, pad_id: int, shuffle: bool, seed: int
+    rows: list[PreferencePair], size: int, pad_id: int, shuffle: bool, seed: int
 ) -> Iterator[PreferenceBatch]:
     """Pad each batch to its own longest prompt and remember where each prompt ends."""
     order = np.arange(len(rows))
@@ -123,17 +136,17 @@ def batches(
         chunk = [rows[int(i)] for i in order[start : start + size]]
         if not chunk:
             continue
-        width = max(len(ids) for ids, _, _ in chunk)
+        width = max(len(row.ids) for row in chunk)
         tokens = torch.full((len(chunk), width), pad_id, dtype=torch.long)
         last = torch.empty(len(chunk), dtype=torch.long)
-        for i, (ids, _, _) in enumerate(chunk):
-            tokens[i, : len(ids)] = torch.tensor(ids, dtype=torch.long)
-            last[i] = len(ids) - 1
+        for i, row in enumerate(chunk):
+            tokens[i, : len(row.ids)] = torch.tensor(row.ids, dtype=torch.long)
+            last[i] = len(row.ids) - 1
         yield PreferenceBatch(
             tokens,
             last,
-            torch.tensor([c for _, c, _ in chunk], dtype=torch.long),
-            torch.tensor([r for _, _, r in chunk], dtype=torch.long),
+            torch.tensor([row.chosen for row in chunk], dtype=torch.long),
+            torch.tensor([row.rejected for row in chunk], dtype=torch.long),
         )
 
 
@@ -165,7 +178,7 @@ def dpo_loss(
 def evaluate(
     policy: MoveDecoder,
     reference: MoveDecoder,
-    rows: list[tuple[list[int], int, int]],
+    rows: list[PreferencePair],
     cfg: DpoConfig,
     device: torch.device,
     pad_id: int,
@@ -191,6 +204,25 @@ def evaluate(
     return totals[0] / seen, totals[1] / seen, totals[2] / seen
 
 
+def split_pairs(
+    rows: list[PreferencePair], val_fraction: float, seed: int
+) -> tuple[list[PreferencePair], list[PreferencePair]]:
+    """Hold out whole **games**, never single pairs.
+
+    One game contributes several pairs a few plies apart, and they share a prefix almost to the
+    end: a pair of the same game on the other side of the split is a position the policy has
+    already trained on, so the accuracy printed for validation would be measuring memorisation.
+    The reward model splits the same way and for the same reason (``train.reward.split_examples``).
+    """
+    from rukh.data.labels import game_split
+
+    train: list[PreferencePair] = []
+    val: list[PreferencePair] = []
+    for row in rows:
+        (val if game_split(row.game_id, val_fraction, seed) == "val" else train).append(row)
+    return train, val
+
+
 def limit_pairs(frame: Any, cfg: DpoConfig) -> Any:
     """At most ``cfg.max_pairs`` rows, drawn with ``cfg.seed`` from the whole file.
 
@@ -200,7 +232,7 @@ def limit_pairs(frame: Any, cfg: DpoConfig) -> Any:
     """
     if cfg.max_pairs is None or frame.height <= cfg.max_pairs:
         return frame
-    LOGGER.info("dpo: %d pares muestreados de %d", cfg.max_pairs, frame.height)
+    LOGGER.info("dpo: %d pairs sampled out of %d", cfg.max_pairs, frame.height)
     return frame.sample(n=cfg.max_pairs, seed=cfg.seed, shuffle=True)
 
 
@@ -228,19 +260,15 @@ def train(cfg: DpoConfig) -> Path:
     rows = encode_pairs(frame, tok, cfg.block)
     if not rows:
         raise ValueError(f"{cfg.pairs} produced no usable pairs")
-    cut = int(len(rows) * (1 - cfg.val_fraction))
-    rng = np.random.default_rng(cfg.seed)
-    order = rng.permutation(len(rows))
-    train_rows = [rows[int(i)] for i in order[:cut]]
-    val_rows = [rows[int(i)] for i in order[cut:]]
-    LOGGER.info("dpo: %d pares de entrenamiento, %d de validación", len(train_rows), len(val_rows))
+    train_rows, val_rows = split_pairs(rows, cfg.val_fraction, cfg.seed)
+    LOGGER.info("dpo: %d training pairs, %d validation", len(train_rows), len(val_rows))
 
     optimizer = torch.optim.AdamW(policy.parameters(), lr=cfg.lr)
     out_dir = paths.resolve(cfg.out_dir) / cfg.run_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     before = evaluate(policy, reference, val_rows, cfg, device, tok.pad_id)
-    LOGGER.info("antes: loss %.4f · margen %.4f · aciertos %.4f", *before)
+    LOGGER.info("before: loss %.4f | margin %.4f | accuracy %.4f", *before)
     step = 0
     for epoch in range(cfg.epochs):
         for batch in batches(
@@ -261,14 +289,14 @@ def train(cfg: DpoConfig) -> Path:
             step += 1
             if step % 50 == 0:
                 LOGGER.info(
-                    "paso %d · loss %.4f · margen %.4f · aciertos %.4f",
+                    "step %d | loss %.4f | margin %.4f | accuracy %.4f",
                     step,
                     float(loss),
                     float(margin),
                     float(accuracy),
                 )
     after = evaluate(policy, reference, val_rows, cfg, device, tok.pad_id)
-    LOGGER.info("después: loss %.4f · margen %.4f · aciertos %.4f", *after)
+    LOGGER.info("after: loss %.4f | margin %.4f | accuracy %.4f", *after)
 
     final = out_dir / "dpo.pt"
     save_checkpoint(
