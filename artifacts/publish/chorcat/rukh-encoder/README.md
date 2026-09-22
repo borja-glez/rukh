@@ -140,26 +140,31 @@ similar positions (`rukh encoder embed --positions <parquet> --out <npy>`).
 - `onnx/parity.json`
 
 The ONNX graph returns **two** outputs, `value` and `blunder`, because that is all the demo's
-evaluation bar and blunder alert need; `blunder` comes out as a probability, so the page
-compares it against 0.5. `model-fp16.onnx` is for WebGPU and `model-int8.onnx` for the WASM
-fallback. The metadata carries `rukh_kind=encoder` and `rukh_heads`.
+evaluation bar and blunder alert need; `blunder` comes out as a probability. That probability is
+**not calibrated**: a blunder is a few per cent of the labelled rows, so the head answers low and
+never reaches 0.5. Its operating point was tuned on a held-out half and travels in the metadata as
+`rukh_blunder_threshold`, which is what a reader should compare against -- 0.5 is a threshold this
+head cannot cross, and a page using it shows an alert that never fires. `model-fp16.onnx` is for
+WebGPU and `model-int8.onnx` for the WASM fallback. The metadata also carries `rukh_kind=encoder`
+and `rukh_heads`.
 
 ### How faithful the ONNX files are
 
 Every exported file was run against the PyTorch checkpoint on 1000
-held-out labelled positions, comparing the blunder decision at p >= 0.5. `onnx/parity.json` in this
+held-out labelled positions, comparing the blunder decision at p >= 0.0961714. `onnx/parity.json` in this
 repository is that measurement, as the exporter wrote it.
 
 | File | Same blunder decision as PyTorch | Worst `value` drift |
 |---|---|---|
 | `model.onnx` (fp32) | 100.0 % | 4.44e-06 |
 | `model-fp16.onnx` (fp16) | 100.0 % | 0.00164 |
-| `model-int8.onnx` (int8) | 100.0 % | 0.117 |
+| `model-int8.onnx` (int8) | 98.7 % | 0.117 |
 
 The bar the project set itself is 99.9 %.
-Every precision, int8 included, makes the same call on every position checked: quantizing this
-model costs nothing that the demo's blunder alert can see. That is worth stating next to the
-decoder's number, where it is not true.
+
+`model-int8.onnx` does not reach it: it flips the blunder decision on 1.3 % of
+positions, roughly one in 77. That is the file the WASM fallback loads, so a phone on the
+int8 build gets a measurably different alert from the one in the results table above.
 
 ## Training recipe
 

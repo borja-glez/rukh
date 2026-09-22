@@ -143,9 +143,13 @@ similar positions (`rukh encoder embed --positions <parquet> --out <npy>`).
 {% endfor %}
 {%- if has_onnx %}
 The ONNX graph returns **two** outputs, `value` and `blunder`, because that is all the demo's
-evaluation bar and blunder alert need; `blunder` comes out as a probability, so the page
-compares it against 0.5. `model-fp16.onnx` is for WebGPU and `model-int8.onnx` for the WASM
-fallback. The metadata carries `rukh_kind=encoder` and `rukh_heads`.
+evaluation bar and blunder alert need; `blunder` comes out as a probability. That probability is
+**not calibrated**: a blunder is a few per cent of the labelled rows, so the head answers low and
+never reaches 0.5. Its operating point was tuned on a held-out half and travels in the metadata as
+`rukh_blunder_threshold`, which is what a reader should compare against -- 0.5 is a threshold this
+head cannot cross, and a page using it shows an alert that never fires. `model-fp16.onnx` is for
+WebGPU and `model-int8.onnx` for the WASM fallback. The metadata also carries `rukh_kind=encoder`
+and `rukh_heads`.
 {% if parity %}
 ### How faithful the ONNX files are
 
