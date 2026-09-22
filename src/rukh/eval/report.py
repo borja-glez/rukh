@@ -91,7 +91,7 @@ class EncoderWebRow(BaseModel):
     blunder_f1_heuristic: float | None = None
     """F1 of the material baseline on the very same rows. It is a rule: nothing was tuned."""
     blunder_f1_margin: float | None = None
-    """The difference above, in F1 points; ``GOAL.md`` asks for five."""
+    """The difference above, in F1 points; ``docs/acceptance.md`` asks for five."""
     blunder_precision: float | None = None
     blunder_recall: float | None = None
     blunder_roc_auc: float | None = None
@@ -443,7 +443,8 @@ def render_markdown(result: SuiteResult) -> str:
                 "Two rates, because they answer different questions. **argmax** is the share of "
                 "validation positions whose single most likely token is a legal move, with no "
                 "temperature, no top-k and no mask: it is a property of the weights and it is "
-                "the definition behind the \u2265 99 % bar of `GOAL.md`. **sampled** draws the "
+                "the definition behind the \u2265 99 % bar of `docs/acceptance.md`. "
+                "**sampled** draws the "
                 "token exactly as the demo does" + drawn.strip() + ", so it is what a player "
                 "would meet with the mask switched off, and it is always the lower of the two.",
                 "",

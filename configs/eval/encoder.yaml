@@ -11,7 +11,7 @@ batch_size: 256
 # maximises F1 on the `tune` half of the labelled rows (split by game_id, like everything
 # else here) and is measured on the `score` half, together with ROC AUC and average precision.
 threshold: 0.5 # probability above which the blunder logit counts as a blunder
-# The baseline of GOAL.md: material (1/3/3/5/9) plus mobility, one ply of captures ahead.
+# The baseline of docs/acceptance.md: material (1/3/3/5/9) plus mobility, one ply of captures ahead.
 mobility_weight: 0.05
 blunder_material: 1.0
 labels:

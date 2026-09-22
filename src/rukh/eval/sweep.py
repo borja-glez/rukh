@@ -1,6 +1,7 @@
 """Measure one model once per Elo header: does asking it to play weaker actually work?
 
-``GOAL.md`` asks P4 for a monotonic Elo by condition -- 1500 < 2000 < 2400, with intervals -- and
+``docs/acceptance.md`` asks P4 for a monotonic Elo by condition -- 1500 < 2000 < 2400, with
+intervals -- and
 nothing in the harness could answer that, because ``header_elo`` was one number in a config and a
 suite run produced one row. This runs the very same suite once per condition, changing that
 number and **nothing else**: same opponents, same positions, same puzzles, same seed, same
@@ -238,7 +239,8 @@ def _render(result: SweepResult) -> str:
             f"- Span between the weakest and the strongest condition: {span}.",
             "",
             "The two are not the same claim. Point estimates rise by chance often enough that a "
-            "monotonic row of numbers is not evidence on its own; the acceptance bar of `GOAL.md` "
+            "monotonic row of numbers is not evidence on its own; the acceptance bar of "
+            "`docs/acceptance.md` "
             "is read on the intervals.",
             "",
         ]

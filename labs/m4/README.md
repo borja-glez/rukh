@@ -1,6 +1,6 @@
 # M4 labs
 
-Scripts referenced by the M4 lesson (`rukh-lab`, `curso/m4/01-fine-tuning`). Run them from the
+Scripts referenced by the M4 lesson (`rukh-lab`, `curso/m4/10-labs-de-afinado`). Run them from the
 repository root.
 
 | Script | Needs | Lesson lab |
@@ -70,7 +70,7 @@ The ladder scores a proportion, so its standard error is `sqrt(p (1 - p) / n)` a
 intervals stop touching when the gap between the scores beats `1.96 (se1 + se2)` — about
 `n > 3.84 / (delta p)^2` games per condition for proportions near a half.
 
-On the sweep this milestone ran, with `--only 1500,2000,2400` (the conditions `GOAL.md` names):
+On the sweep this milestone ran, with `--only 1500,2000,2400` (the conditions `docs/acceptance.md` names):
 
 ```
   <w1500> -> <w2000>  0.466->0.453  -0.013   no              24,420

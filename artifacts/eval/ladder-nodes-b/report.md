@@ -38,7 +38,7 @@
 
 ## Notes
 
-- legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
+- legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of docs/acceptance.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the puzzle parquet has no ``prefix_uci``, so every puzzle was prompted with its own solution line after ``<bos>``: a token sequence that is no game and does not start from the initial position. The rate is a floor, not a measurement, and is not comparable with a run scored from the real game prefix (rebuild the parquet with ``rukh data puzzles``)
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish searches 200 000 nodes per move (what 0.1 s bought on the reference machine), far below any setting ``UCI_Elo`` is calibrated for; the same position always gets the same reply (D-137)
 - 5 of 160 games hit the context limit and were adjudicated (5 of them) instead of being scored as draws

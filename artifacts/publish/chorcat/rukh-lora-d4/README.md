@@ -87,7 +87,7 @@ the only reason a low-rank correction is worth keeping low-rank once it leaves t
 
 ## In the course
 
-- Built in [M4 · Fine-tuning: los labs](https://lab.rukh.borjaglez.com/curso/m4/03-labs-de-afinado/), the lesson that runs every command behind this repository.
+- Built in [M4 · Los labs del afinado](https://lab.rukh.borjaglez.com/curso/m4/10-labs-de-afinado/), the lesson that runs every command behind this repository.
 - Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/) as the stage `lora-d4`: every stage of the course, the same suite, the same day.
 - Bring it to the paths the configs read: `uv run rukh pull lora-d4`.
 

@@ -9,7 +9,8 @@ It is measured twice, because the two numbers answer different questions:
 
 ``argmax``
     the single most likely token, with no temperature and no top-k. This is the headline rate
-    and the one the "at least 99 % legal" bar of ``GOAL.md`` refers to: it is a property of the
+    and the one the "at least 99 % legal" bar of ``docs/acceptance.md`` refers to: it is a property
+    of the
     weights, not of a sampler setting.
 ``sampled``
     a token drawn exactly as the demo draws it (the suite's temperature and top-k). It is

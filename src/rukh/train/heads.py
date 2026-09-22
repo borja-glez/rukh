@@ -521,7 +521,7 @@ def label_curve(
     labels, which is the checkpoint anybody would then evaluate or publish), so
     ``rukh eval encoder`` can render the "labels needed" table without being told where the
     other runs are. Without that write the curve would exist only in MLflow and in this return
-    value, and the table — a ``GOAL.md`` deliverable — could never be filled.
+    value, and the table — a ``docs/acceptance.md`` deliverable — could never be filled.
     """
     wanted = sorted(set(fractions if fractions is not None else cfg.curve))
     results: list[HeadsResult] = []

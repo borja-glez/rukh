@@ -59,7 +59,7 @@ The demo masks illegal moves before sampling, so it never plays one.
 
 ### Acceptance bars
 
-The project set these two bars for the decoder in `GOAL.md` before any of this was trained. This
+The project set these two bars for the decoder in `docs/acceptance.md` before any of this was trained. This
 is where the release stands against them, and it is the same table whether the answer is
 flattering or not.
 
@@ -91,7 +91,7 @@ unchanged.
 
 How to read these numbers:
 
-- legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
+- legality_argmax is the share of validation positions where the single most likely token is a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of docs/acceptance.md. legality_sampled draws the token the way the demo does (temperature 0.05, top-k 1) and is always the lower of the two.
 - the Elo interval covers sampling noise only: the four ``skill-*`` rungs are nominal ``Skill Level`` anchors rather than measured ratings, and Stockfish plays at 0.1 s per move, far below any setting ``UCI_Elo`` is calibrated for
 - 4 of 160 games hit the context limit and were adjudicated (4 of them) instead of being scored as draws
 
@@ -210,7 +210,7 @@ converted from SAN to legal UCI. Validation uses a month the model never saw.
 
 ## In the course
 
-- Built in [M5 · Alineamiento: los labs](https://lab.rukh.borjaglez.com/curso/m5/03-labs-de-alineamiento/), the lesson that runs every command behind this repository.
+- Built in [M5 · Alineamiento: los labs](https://lab.rukh.borjaglez.com/curso/m5/09-labs-de-alineamiento/), the lesson that runs every command behind this repository.
 - Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/) as the stage `medium-v4-dpo-onpolicy-greedy`: every stage of the course, the same suite, the same day.
 - Play it in the browser: [https://rukh.borjaglez.com/?stage=medium-dpo-fp16](https://rukh.borjaglez.com/?stage=medium-dpo-fp16).
 - Bring it to the paths the configs read: `uv run rukh pull medium-v4-dpo-onpolicy`.

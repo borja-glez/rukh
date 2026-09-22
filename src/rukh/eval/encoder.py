@@ -4,7 +4,8 @@
 measured by what it knows about a position it has never seen. The held-out split is the one
 ``rukh.data.labels`` draws **by game** (two positions of the same game are not independent), and
 every number here is computed on the very same rows for the model and for
-``rukh.eval.heuristic``, because ``GOAL.md`` asks for a margin between the two and a margin
+``rukh.eval.heuristic``, because ``docs/acceptance.md`` asks for a margin between the two and a
+margin
 measured on two different sets is not a margin.
 
 Four questions, four numbers:
@@ -31,7 +32,8 @@ Four questions, four numbers:
     score the head was trained on — never raw ``cp``, where a forced mate is ``±9 99x`` and a
     handful of rows would decide Pearson for the whole set. Spearman is the headline (it asks
     only whether the ranking is right, which is what "the model knows which position is better"
-    means) and the ``GOAL.md`` bar of 0.80 is checked against it; Pearson is printed next to it
+    means) and the ``docs/acceptance.md`` bar of 0.80 is checked against it; Pearson is printed next
+    to it
     because the two disagree exactly when the order is right and the scale is not. Spearman is
     Pearson over average ranks, written out here rather than imported: ``scipy`` is not a
     dependency.
@@ -84,13 +86,13 @@ HEURISTIC_KEY = "material-mobility-v1"
 CURVE_KEY = "label_curve"
 """The payload key ``rukh.train.checkpoint.CURVE_KEY`` writes; a test pins the two together."""
 GOAL_MARGIN = 5.0
-"""F1 points the encoder has to add to the baseline (``GOAL.md``)."""
+"""F1 points the encoder has to add to the baseline (``docs/acceptance.md``)."""
 TUNE_HALF = "tune"
 """Half of the labelled rows the operating point is chosen on, and never scored on."""
 SCORE_HALF = "score"
 """Half of the labelled rows every reported blunder number is measured on."""
 GOAL_VALUE_CORRELATION = 0.80
-"""The second acceptance criterion of ``GOAL.md``: value against Stockfish, at least 0.8.
+"""The second acceptance criterion of ``docs/acceptance.md``: value against Stockfish, at least 0.8.
 
 Measured as **Spearman against the bounded score**, and both halves of that sentence matter.
 The target is ``tanh(score / 400)``, so the head cannot reproduce centipawns and was never
@@ -260,9 +262,9 @@ class EncoderResult(BaseModel):
     heuristic_blunder: ClassificationResult | None = None
     """The baseline on the very same ``score`` half. It is a yes/no rule: nothing was tuned."""
     f1_margin: float | None = None
-    """Encoder F1 minus baseline F1, in points; ``GOAL.md`` asks for at least five."""
+    """Encoder F1 minus baseline F1, in points; ``docs/acceptance.md`` asks for at least five."""
     meets_goal: bool | None = None
-    """The **blunder** criterion alone; ``GOAL.md`` has two and this is the first."""
+    """The **blunder** criterion alone; ``docs/acceptance.md`` has two and this is the first."""
     encoder_value: CorrelationResult | None = None
     heuristic_value: CorrelationResult | None = None
     value_correlation_meets_goal: bool | None = None
@@ -691,7 +693,8 @@ def measure_blunder(
 
     The labelled rows are cut in two **by game**: ``tune`` chooses the threshold that maximises
     F1, ``score`` is where the F1, the precision and the recall that go into the report and into
-    the ``GOAL.md`` comparison are measured. The baseline is measured on the same ``score`` rows;
+    the ``docs/acceptance.md`` comparison are measured. The baseline is measured on the same
+    ``score`` rows;
     it has no threshold to tune, so the comparison hands the model a sweep the rule cannot have,
     and the report says so rather than leaving the reader to notice.
 
@@ -836,14 +839,16 @@ def evaluate_encoder(
     measure(items, predictions, baseline, cfg, result)
     if result.f1_margin is not None:
         notes.append(
-            f"the encoder is {result.f1_margin:+.1f} F1 points from the baseline; GOAL.md asks "
+            f"the encoder is {result.f1_margin:+.1f} F1 points from the baseline; "
+            "docs/acceptance.md asks "
             f"for at least {GOAL_MARGIN:+.0f}"
         )
     if result.encoder_value is not None:
         notes.append(
             f"the value head is correlated against `{result.encoder_value.target}`, the bounded "
             "score it is trained on, and not against raw `cp`, where a forced mate is worth "
-            "±9 99x and a few rows would decide Pearson for the whole set; the GOAL.md bar of "
+            "±9 99x and a few rows would decide Pearson for the whole set; the "
+            "docs/acceptance.md bar of "
             f"{GOAL_VALUE_CORRELATION:.2f} is read on Spearman"
         )
     notes.append(
@@ -855,7 +860,7 @@ def evaluate_encoder(
         "the two blunder detectors do not see the same thing: the baseline is given the "
         "predecessor position and the move that was played, while the encoder is given only the "
         "resulting position and has to infer that something was thrown away. That is the "
-        "comparison GOAL.md asks for, but it is not a level playing field"
+        "comparison docs/acceptance.md asks for, but it is not a level playing field"
     )
     notes.extend(blunder_notes(result))
     result.notes = notes
