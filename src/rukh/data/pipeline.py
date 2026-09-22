@@ -32,6 +32,7 @@ class TokenizeConfig(BaseConfig):
     train_months: list[str] = Field(default_factory=lambda: ["2025-01"])
     val_month: str = "2025-02"
     val_games: int = Field(default=0, ge=0)
+    """Games of ``val_month`` held out; the rest of it trains. 0 = the whole month validates."""
     extra_train_parquets: list[str] = Field(default_factory=list)
     """UCI parquets appended to the training split, outside the ``year=/month=`` layout."""
     val_remainder_trains: bool = True
@@ -40,7 +41,6 @@ class TokenizeConfig(BaseConfig):
     Off for a corpus whose shape is the point: the Elo-balanced sample of M4 has the same number
     of games per rating band on purpose, and 2.85 M games of rated-1800+ play poured on top would
     undo it."""
-    """Games of ``val_month`` held out; the rest of it trains. 0 = the whole month validates."""
     stats_games: str = "data/uci/year=2025/month=01/games.parquet"
     bpe_vocab_size: int = Field(default=4096, ge=100)
     bpe_train_games: int = Field(default=200_000, ge=1)

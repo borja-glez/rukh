@@ -107,8 +107,11 @@ class BpeGameEncoder:
         self.pad_id = UciTokenizer.pad_id
         self.bos_id = UciTokenizer.bos_id
         self.eos_id = UciTokenizer.eos_id
+        # One tokenizer for the whole check: building it inside the loop enumerated all 2,030
+        # tokens once per special, eight times over, to read eight of them.
+        uci_vocab = UciTokenizer().vocab
         for token in UciTokenizer.specials:
-            if bpe.token_to_id(token) != UciTokenizer().vocab[token]:
+            if bpe.token_to_id(token) != uci_vocab[token]:
                 raise ValueError(f"BPE special token {token} does not share the UCI id")
 
     def vocab_size(self) -> int:

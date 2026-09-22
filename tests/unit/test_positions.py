@@ -81,6 +81,9 @@ def test_run_dedupes_with_counts(rukh_home: Path, repo_root: Path) -> None:
     assert after_e4["ply"][0] == 1 and after_e4["last_move"][0] == "e2e4"
     assert set(frame["phase"].unique().to_list()) == {"opening", "middlegame", "endgame"}
     assert manifest.files[0].path == "positions.parquet"
+    # The undeduplicated parts are gone: several GB for a real month, and the manifest that
+    # describes this directory does not mention them.
+    assert not (rukh_home / "data" / "positions" / "parts").exists()
 
 
 def test_run_with_two_workers(rukh_home: Path, repo_root: Path) -> None:
