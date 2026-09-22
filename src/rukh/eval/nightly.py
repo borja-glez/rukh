@@ -32,6 +32,8 @@ log = logging.getLogger(__name__)
 
 NIGHTLY_FILE = "artifacts/eval/nightly.json"
 BENCHMARKS_FILE = "docs/benchmarks.md"
+DEFAULT_SUITE = "configs/eval/greedy.yaml"
+"""The sampling every published row was measured at; `full` is the wide P2 suite, not this."""
 MERGED_DIR = "artifacts/eval/merged"
 
 KARVONEN = Artefact(
@@ -149,6 +151,19 @@ def merged_checkpoint(base: Path, adapter_dir: Path, out: Path) -> Path:
     )
 
 
+def _artefact_at(target: str) -> Artefact:
+    """The catalogue entry whose ``target`` is ``target``: which model to pull as an adapter's base.
+
+    Looked up and never hard-coded. Every adapter in the catalogue today sits on `medium-v4`, so
+    naming it directly worked and would keep working right up to the first adapter that does not
+    -- which would then be merged onto the wrong weights and measured without failing.
+    """
+    for artefact in catalogue():
+        if artefact.target == target:
+            return artefact
+    raise FileNotFoundError(f"no catalogue entry produces {target}, so it cannot be pulled")
+
+
 def _checkpoint_of(artefact: Artefact, pull_missing: bool) -> Path:
     """Where the artefact is on disk, pulling it from the Hub when it is not and allowed."""
     if artefact.measure == "karvonen":
@@ -165,9 +180,7 @@ def _checkpoint_of(artefact: Artefact, pull_missing: bool) -> Path:
     if artefact.base is not None:
         base = resolve_run(paths.resolve(artefact.base))
         if not base.exists() and pull_missing:
-            from rukh.hub import lookup
-
-            base = pull(lookup("medium-v4"))
+            base = pull(_artefact_at(artefact.base))
         if not base.exists():
             raise FileNotFoundError(f"{artefact.name}: base {base} is not on disk")
         return merged_checkpoint(base, target, paths.resolve(MERGED_DIR) / f"{artefact.name}.pt")
@@ -190,6 +203,10 @@ def run_nightly(
     from rukh.eval.cache import file_sha, weights_sha
     from rukh.eval.report import write_benchmarks
 
+    # The one config the whole table is read at (D-047). It has to be resolved here rather than
+    # left to `load_suite`, whose fallback is the wide `full` suite: two stages measured at
+    # different sampling do not belong in the same table, and the nightly rewrites that table.
+    config = config or paths.resolve(DEFAULT_SUITE)
     started = time.perf_counter()
     records: list[NightlyRecord] = []
     for artefact in plan(only):
@@ -233,7 +250,7 @@ def run_nightly(
             benchmarks_path = None
     report = NightlyReport(
         date=datetime.now(UTC).date().isoformat(),
-        config=(config or Path("configs/eval/full.yaml")).as_posix(),
+        config=config.as_posix(),
         encoder_config=encoder_config.as_posix() if encoder_config else None,
         records=records,
         results=results_path.as_posix(),
@@ -260,6 +277,7 @@ def render_plan(report: NightlyReport) -> str:
 
 __all__: list[str] = [
     "BENCHMARKS_FILE",
+    "DEFAULT_SUITE",
     "KARVONEN",
     "MERGED_DIR",
     "NIGHTLY_FILE",

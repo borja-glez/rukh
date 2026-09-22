@@ -46,7 +46,8 @@ log = logging.getLogger(__name__)
 
 SUITES = ("full", "quick")
 GOAL_LEGALITY = 0.99
-"""The first acceptance criterion of ``GOAL.md`` for the decoder: legal moves without the mask.
+"""The first acceptance criterion of ``docs/acceptance.md`` for the decoder: legal moves without the
+mask.
 
 Read on ``legality_argmax``, never on ``legality_sampled``: the bar is a property of the weights,
 and the sampled rate is a property of the weights *and* of the temperature they were drawn at.
@@ -74,7 +75,8 @@ PUZZLE_PROMPT_NOTE = (
 )
 LEGALITY_DEFINITIONS = (
     "legality_argmax is the share of validation positions where the single most likely token is "
-    "a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of GOAL.md. "
+    "a legal move (no temperature, no top-k, no mask): this is the >= 99 % bar of "
+    "docs/acceptance.md. "
     "legality_sampled draws the token the way the demo does (temperature {temperature:g}"
     "{top_k}) and is always the lower of the two."
 )
@@ -413,14 +415,17 @@ def evaluate(
     log.info("evaluating %s on %s", ckpt, where)
     tok = UciTokenizer()
     notes: list[str] = [_legality_note(cfg)]
-    weights_sha = file_sha(ckpt)
+    # The hash of the *file*, which is what the cache is keyed on. The hash of the **tensors** is
+    # `tensor_sha` and goes in `weights_sha` below: two saves of one model differ as files and not
+    # as weights, so the two are not interchangeable and must not share a name (D-135).
+    model_sha = file_sha(ckpt)
     cache_path = paths.resolve(cfg.cache_db) if use_cache else None
     games_cache = EvalCache(
-        cache_path, weights_sha, enabled=use_cache, config_sha=config_sha(cfg.cache_fields("games"))
+        cache_path, model_sha, enabled=use_cache, config_sha=config_sha(cfg.cache_fields("games"))
     )
     puzzles_cache = EvalCache(
         cache_path,
-        weights_sha,
+        model_sha,
         enabled=use_cache,
         config_sha=config_sha(cfg.cache_fields("puzzles")),
     )
@@ -431,7 +436,7 @@ def evaluate(
             stage=cfg.stage or ckpt.parent.name,
             suite=suite,
             checkpoint=ckpt.as_posix(),
-            model_sha=weights_sha,
+            model_sha=model_sha,
             weights_sha=tensor_sha(ckpt),
             params=model.num_params(non_embedding=False),
             date=datetime.now(UTC).date().isoformat(),

@@ -219,3 +219,13 @@ def test_an_opponent_without_observe_is_left_alone():
     player = _Counting()
     result = play_game_with(player, RandomOpponent(seed=3), max_plies=8)
     assert result.plies > 0
+
+
+def test_the_report_of_a_match_with_no_settings_says_so_instead_of_crashing() -> None:
+    """Two artefacts predate the settings block; reading one must not be an AttributeError."""
+    from rukh.eval.match import MatchResult, render_markdown
+
+    result = MatchResult(a="old", b="older", games=2, score=0.5, wins=1, draws=0, losses=1, elo=0.0)
+    assert result.settings is None
+    text = render_markdown(result, [])
+    assert "not recorded" in text

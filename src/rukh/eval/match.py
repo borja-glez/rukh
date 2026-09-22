@@ -119,10 +119,13 @@ class MatchResult(BaseModel):
     """Whether the interval excludes zero, which is the claim the criterion is read on."""
     a_illegal: int = 0
     b_illegal: int = 0
-    settings: MatchSettings = None  # type: ignore[assignment]
+    settings: MatchSettings | None = None
     """How the match was played. A measurement that does not carry its settings cannot be compared
     to another one, and D-118 is the entry that says so with numbers: every reward in the gallery
-    changed when the engine depth did, and nothing in the log would have said why."""
+    changed when the engine depth did, and nothing in the log would have said why.
+
+    ``None`` only for the two match artefacts written before this field existed, which is why the
+    report says "not recorded" rather than assuming the settings it runs with today."""
 
     @property
     def decisive(self) -> int:
@@ -337,7 +340,9 @@ def render_markdown(result: MatchResult, played: Sequence[MatchGame]) -> str:
     black = [game for game in played if not game.a_white]
     settings = result.settings
     rescue = (
-        "masked from the first draw"
+        "not recorded"
+        if settings is None
+        else "masked from the first draw"
         if settings.masked
         else "proposed unmasked, rescued with a masked draw"
     )
@@ -384,13 +389,18 @@ def render_markdown(result: MatchResult, played: Sequence[MatchGame]) -> str:
         "",
         "| Setting | Value |",
         "|---|---|",
-        f"| Opening book | {settings.opening_plies} plies, seed {settings.opening_seed} |",
-        f"| Elo header | `<w{settings.header_elo}>` for both |",
-        f"| Sampling | temperature {settings.temperature}, top-k {settings.top_k} |",
-        f"| Illegal moves | {rescue} |",
-        f"| Bootstrap | {settings.bootstrap_samples} resamples |",
-        "",
     ]
+    if settings is None:
+        lines.append("| Everything | not recorded: this match predates the settings block |")
+    else:
+        lines += [
+            f"| Opening book | {settings.opening_plies} plies, seed {settings.opening_seed} |",
+            f"| Elo header | `<w{settings.header_elo}>` for both |",
+            f"| Sampling | temperature {settings.temperature}, top-k {settings.top_k} |",
+            f"| Illegal moves | {rescue} |",
+            f"| Bootstrap | {settings.bootstrap_samples} resamples |",
+        ]
+    lines.append("")
     return "\n".join(lines) + "\n"
 
 
