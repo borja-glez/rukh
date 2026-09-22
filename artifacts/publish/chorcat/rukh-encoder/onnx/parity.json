@@ -1,7 +1,7 @@
 {
   "version": 1,
   "kind": "encoder",
-  "measures": "the blunder decision at p >= 0.5",
+  "measures": "the blunder decision at p >= 0.0961714",
   "positions": 1000,
   "source": "validation-labels",
   "exporter": "dynamo",
@@ -22,7 +22,7 @@
     },
     "int8": {
       "file": "model-int8.onnx",
-      "agreement": 1.0,
+      "agreement": 0.987,
       "max_abs_value_delta": 0.11746431887149811,
       "max_abs_blunder_delta": 0.022291138768196106
     }

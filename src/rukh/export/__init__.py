@@ -50,6 +50,7 @@ from rukh.export.onnx import (
     write_metadata,
 )
 from rukh.export.parity import (
+    BLUNDER_THRESHOLD,
     DEFAULT_GAMES,
     EncoderParityResult,
     ParityResult,
@@ -88,9 +89,13 @@ PARITY_VERSION = 1
 
 PARITY_MEASURES = {
     "decoder": "the argmax move",
-    "encoder": "the blunder decision at p >= 0.5",
+    "encoder": "the blunder decision at p >= {threshold:g}",
 }
-"""What ``agreement`` counts for each kind of model, spelled out for whoever reads the file."""
+"""What ``agreement`` counts for each kind of model, spelled out for whoever reads the file.
+
+The encoder's is a template because the threshold is a property of the run: read at the factory
+0.5, which the published head never reaches, the blunder agreement compares "no blunder" with "no
+blunder" and is 1.0 for any file at all -- including one that is wrong."""
 
 
 class ExportBundle(BaseModel):
@@ -119,7 +124,11 @@ class ExportBundle(BaseModel):
     """``parity.json``, written next to the ONNX files when parity was measured."""
 
 
-def parity_payload(bundle: ExportBundle, files: dict[str, str]) -> dict[str, Any]:
+def parity_payload(
+    bundle: ExportBundle,
+    files: dict[str, str],
+    blunder_threshold: float = BLUNDER_THRESHOLD,
+) -> dict[str, Any]:
     """The parity of one export as ``parity.json`` records it.
 
     One entry per precision, each naming the file it was measured on, so that a card can quote
@@ -145,7 +154,7 @@ def parity_payload(bundle: ExportBundle, files: dict[str, str]) -> dict[str, Any
     payload: dict[str, Any] = {
         "version": PARITY_VERSION,
         "kind": kind,
-        "measures": PARITY_MEASURES[kind],
+        "measures": PARITY_MEASURES[kind].format(threshold=blunder_threshold),
         "positions": first.positions,
         "source": bundle.parity_source,
         "exporter": bundle.onnx.exporter,
@@ -173,7 +182,12 @@ def parity_payload(bundle: ExportBundle, files: dict[str, str]) -> dict[str, Any
     return payload
 
 
-def write_parity(bundle: ExportBundle, files: dict[str, str], out: Path) -> str | None:
+def write_parity(
+    bundle: ExportBundle,
+    files: dict[str, str],
+    out: Path,
+    blunder_threshold: float = BLUNDER_THRESHOLD,
+) -> str | None:
     """Write ``parity.json`` beside the ONNX files; ``None`` when nothing was measured.
 
     Nothing measured means nothing written: an absent file says "not checked", which is the one
@@ -183,7 +197,10 @@ def write_parity(bundle: ExportBundle, files: dict[str, str], out: Path) -> str 
         return None
     path = target_path(out).parent / PARITY_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(parity_payload(bundle, files), indent=2, ensure_ascii=False) + "\n"
+    payload = (
+        json.dumps(parity_payload(bundle, files, blunder_threshold), indent=2, ensure_ascii=False)
+        + "\n"
+    )
     path.write_text(payload, encoding="utf-8", newline="\n")
     return path.as_posix()
 
@@ -354,11 +371,12 @@ def _export_encoder(
         bundle.parity_source = source
         bundle.parity_warning = warning
         if items:
+            threshold = BLUNDER_THRESHOLD if blunder_threshold is None else blunder_threshold
             bundle.heads_parity = {
-                name: encoder_parity(model, Path(path), items, n=positions)
+                name: encoder_parity(model, Path(path), items, n=positions, threshold=threshold)
                 for name, path in checks.items()
             }
-            bundle.parity_path = write_parity(bundle, checks, out)
+            bundle.parity_path = write_parity(bundle, checks, out, threshold)
     return bundle
 
 

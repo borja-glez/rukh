@@ -2502,5 +2502,33 @@ Once repos en `chorcat`, todos con card en inglés:
 
 Cada modelo lleva pesos en `safetensors`, los tres ONNX y `onnx/parity.json` con la medición de
 fidelidad. Paridad de la jugada elegida: `small` fp16 99,80 % e int8 95,40 %; `tiny` 99,80 % y
-96,10 %; `medium` **100 %** y 96,50 %; el encoder, 100 % en las tres precisiones sobre la decisión
-de error.
+96,10 %; `medium` **100 %** y 96,50 %. La del encoder decía 100 % en las tres precisiones y no
+era cierta: estaba leída en un umbral que su cabeza no alcanza (D-143).
+
+### D-143 · La paridad del encoder estaba medida en un umbral que su cabeza nunca cruza
+- **Qué pasó:** `parity.json` del encoder declaraba `"measures": "the blunder decision at
+  p >= 0.5"` y **100 % en las tres precisiones**. La cabeza de error no está calibrada —un error
+  es el 3,7 % de las filas etiquetadas— y no pasa de 0,31, así que a 0,5 los tres ficheros
+  contestan «no hay error» en las mil posiciones y coinciden con el checkpoint por no decir nada.
+  Un 100 % que cualquier fichero habría sacado, incluido uno roto.
+- **Medido de nuevo en el punto de operación real** (`threshold_tuned` = 0,0961714, el que la card
+  publica como `p >= 0.09617`), sobre las mismas mil posiciones de validación:
+
+  | fichero | decisión de error igual que PyTorch | antes decía |
+  |---|---|---|
+  | `model.onnx` (fp32) | 100 % | 100 % |
+  | `model-fp16.onnx` | 100 % | 100 % |
+  | `model-int8.onnx` | **98,7 %** | 100 % |
+
+- **Trece posiciones de mil** en las que el int8 decide distinto del checkpoint. El listón que el
+  proyecto se puso para la exportación es 99,9 %, así que el int8 del encoder **no lo cumple**, y
+  es el fichero que la demo sirve en móvil y cuando el navegador no trae WebGPU
+  (`registry.ts::pickEncoderStage`). No es un fallo nuevo: es el primero que se mide.
+- **Qué se hizo:** el umbral ajustado viaja ahora en los metadatos del `.onnx`
+  (`rukh_blunder_threshold`, `rukh export --blunder-threshold`), la paridad se mide en él y la
+  card lo publica con el número honesto. Los pesos no se tocaron: los tensores de los ficheros
+  republicados son idénticos bit a bit a los anteriores.
+- **Qué queda por decidir (Borja):** si el 98,7 % es aceptable para el int8 del encoder o si la
+  demo debe dejar de ofrecerlo en móvil. Es una decisión de producto y no se ha tomado aquí.
+- **La regla que deja:** una comprobación de fidelidad leída en un umbral que el modelo no alcanza
+  no comprueba nada, y sale 100 %. El umbral es parte de la medición, no un valor por defecto.
