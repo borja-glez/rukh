@@ -1,6 +1,6 @@
 """Mean-pooled position embeddings: the encoder's secondary output, for phase 2.
 
-``docs/spec/02`` §"Componente 2" asks for one vector per position so that similar positions can
+The design spec 02 §"Componente 2" asks for one vector per position so that similar positions can
 be retrieved later (the A1 agent of phase 2). The vector is ``PositionEncoder.pool(idx, "mean")``
 over the ``squares`` tokens of a FEN: the average of the real tokens, which is why padding never
 enters it.

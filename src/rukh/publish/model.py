@@ -60,7 +60,7 @@ ONNX_FILES = ("model-fp16.onnx", "model-int8.onnx", "model.onnx")
 PARITY_NAME = "parity.json"
 """What ``rukh export`` leaves beside the ONNX files; it is copied and quoted, not recomputed."""
 PARITY_BAR = 0.999
-"""The parity ``docs/spec/02`` asks of an exported file: the same decision on 99.9 % of them."""
+"""The parity the design spec 02 asks of an exported file: the same decision on 99.9 % of them."""
 PARITY_DELTAS = ("max_abs_logit_delta", "max_abs_value_delta")
 """The worst-drift key of each kind of parity, in the order the card looks for one."""
 PRECISIONS = ("fp32", "fp16", "int8")

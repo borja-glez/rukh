@@ -1,6 +1,6 @@
 """The decoder's training loop: next-token prediction on a packed stream of move tokens.
 
-The recipe follows ``docs/spec/02`` (component 1): AdamW (0.9/0.95, weight decay 0.1 applied
+The recipe follows the design spec 02 (component 1): AdamW (0.9/0.95, weight decay 0.1 applied
 only to matrices), learning rate 6e-4 with 1 000 warmup steps and a cosine decay, an effective
 batch of ``batch_size * grad_accum`` sequences, bf16 autocast on CUDA, gradient clipping at 1.0
 and optional ``torch.compile``. Everything the run needs to be reproducible (config, seed, git

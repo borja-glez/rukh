@@ -1,7 +1,7 @@
 # Benchmarks · tabla única de resultados
 
 Una fila por etapa del modelo; las columnas son las métricas del harness de evaluación
-(`docs/spec/02-modelos-y-entrenamiento.md`, "Componente 5"). La tabla la regenera
+(the design spec 02, "Componente 5"). La tabla la regenera
 `rukh eval nightly` (P6) a partir de los informes JSON de `rukh eval --model <id> --suite full`;
 hasta entonces se rellena a mano al cerrar cada hito.
 

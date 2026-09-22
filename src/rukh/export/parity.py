@@ -1,6 +1,6 @@
 """Parity between PyTorch and ONNX Runtime: the same move, and how far the logits drifted.
 
-The acceptance criterion of ``docs/spec/02`` is the *move*, not the logits: the demo picks an
+The acceptance criterion of the design spec 02 is the *move*, not the logits: the demo picks an
 ``argmax`` (or samples from a truncated distribution), so a file that disagrees with PyTorch on
 0.1 % of positions is fine and one that agrees on the numbers but not on the move is not. Both
 are reported: ``agreement`` is the share of positions where the chosen token matches, and
@@ -12,7 +12,7 @@ The encoder is checked the same way on its own kind of item: the **validation po
 number that matters there is whether the exported file makes the same *blunder decision* as the
 checkpoint. Its report carries that agreement and the worst drift of the ``value`` output.
 
-The positions are the thousand **validation** prefixes of ``docs/spec/02`` §6, the same ones the
+The positions are the thousand **validation** prefixes of the design spec 02 §6, the same ones the
 legality and accuracy metrics use: a random legal walk visits positions no human would reach, so
 agreeing on them says little about the file the demo will load. ``random_prefixes`` stays for the
 case where no validation parquet is around (and for the tests), and which of the two was used is

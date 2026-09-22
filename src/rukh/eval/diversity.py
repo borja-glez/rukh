@@ -1,6 +1,6 @@
 """Opening diversity: how many different games the model is willing to play.
 
-``docs/spec/02`` lists it in the evaluation table -- "entropy of the openings played in 200 games
+The design spec 02 lists it in the evaluation table -- "entropy of the openings played in 200 games
 of its own" -- and it has been ``n/a`` in every report so far. M4 needs it, because the claim the
 masters fine-tune makes is precisely a trade: *the Elo goes up and the diversity goes down*. A
 number that only measures the first half of that sentence cannot check it.

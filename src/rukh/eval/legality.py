@@ -3,7 +3,7 @@
 A position is a prefix of a validation game: the moves up to a random ply, encoded exactly as
 training encodes them (``<bos> <wXXXX> <bXXXX> moves...``). The model is asked for one move with
 ``mask_illegal=False``, so the raw token comes out as the network produced it, and the share of
-tokens that happen to be legal moves in that position is the legality rate of ``docs/spec/02``.
+tokens that happen to be legal moves in that position is the legality rate of the design spec 02.
 
 It is measured twice, because the two numbers answer different questions:
 

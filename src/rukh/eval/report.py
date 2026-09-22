@@ -1,7 +1,7 @@
 """Reporting: ``report.md`` and ``results.json`` per model, one shared row for the web.
 
 Every stage of the course (base, tiny, small, masters, Elo-conditioned, LoRA, DPO, GRPO, the
-external baselines) ends up as one row of the single table of ``docs/spec/02`` §"Componente 5".
+external baselines) ends up as one row of the single table of the design spec 02 §"Componente 5".
 ``artifacts/web/results.json`` is that table: the course site and the demo read it, so writing a
 row is an upsert keyed by ``stage`` rather than an append, and a metric that has not been
 measured yet (``delta_cp``, ``diversity``) is written as ``null`` instead of being invented.

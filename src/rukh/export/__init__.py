@@ -112,7 +112,7 @@ class ExportBundle(BaseModel):
     heads_parity: dict[str, EncoderParityResult] = {}
     """The encoder's parity per file kind: the blunder decision and the drift of ``value``."""
     parity_source: str | None = None
-    """``validation`` (the positions of ``docs/spec/02`` §6), ``random-walk``, or, for the
+    """``validation`` (the positions of the design spec 02 §6), ``random-walk``, or, for the
     encoder, ``validation-labels``."""
     parity_warning: str | None = None
     parity_path: str | None = None

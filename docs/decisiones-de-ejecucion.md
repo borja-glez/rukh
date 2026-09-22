@@ -1,7 +1,7 @@
 # Decisiones y desviaciones de ejecución
 
 Registro vivo, en orden cronológico. Cada entrada: qué se decidió, por qué, qué cuesta si está mal.
-Las decisiones de diseño previas viven en `docs/spec/08-riesgos-y-decisiones.md`; aquí solo lo que
+Las decisiones de diseño previas viven en el spec de diseño 08; aquí solo lo que
 se decide o se desvía durante la ejecución.
 
 ## P0 · Scaffold (2026-09-18)
@@ -11,12 +11,12 @@ se decide o se desvía durante la ejecución.
   (`feat:`, `fix:`, `docs:`, `ci:`, `chore:`, `test:`, `refactor:`), sin coautoría ni referencias a
   herramientas o sesiones.
 - **Por qué:** orden explícita de Borja al lanzar `/goal` el 2026-09-18; prevalece sobre GOAL.md,
-  CLAUDE.md y `docs/spec/07` (que decían "en español, imperativo"). Los docs llevan nota fechada.
+  CLAUDE.md y el spec de diseño 07 (que decían "en español, imperativo"). Los docs llevan nota fechada.
 - **Si está mal:** coste nulo de revertir (solo afecta a mensajes futuros).
 
 ### D-002 · TypeScript fijado a `^6`
 - **Qué:** `typescript@^6` en las dos webs aunque npm ya publica 7.0.2.
-- **Por qué:** `docs/spec/04` lo exige ("TypeScript 6, nunca 7"); el portfolio de referencia usa 6.
+- **Por qué:** el spec de diseño 04 lo exige ("TypeScript 6, nunca 7"); el portfolio de referencia usa 6.
 - **Si está mal:** subir la versión es un cambio de una línea y `astro check`.
 
 ### D-003 · Stockfish 19 `windows-x86-64-universal` descargado por script
@@ -32,7 +32,7 @@ se decide o se desvía durante la ejecución.
   tablero cuadrado ≤ 640 px, panel a la derecha/debajo, objetivos ≥ 44 px) y guardan capturas que la
   CI sube como artefacto. No se hace `toHaveScreenshot`.
 - **Por qué:** las baselines de píxeles difieren entre Windows (local) y el runner Linux; mantener
-  dos juegos de baselines en P0 es coste sin valor. `docs/spec/05` decía "capturas comparadas".
+  dos juegos de baselines en P0 es coste sin valor. El spec de diseño 05 decía "capturas comparadas".
 - **Si está mal:** añadir `toHaveScreenshot` con baselines generadas en el contenedor de Playwright.
 
 ### D-005 · OG por lección aplazado
@@ -49,11 +49,11 @@ se decide o se desvía durante la ejecución.
 
 ### D-007 · Python 3.12 fijado con `uv` (el del sistema es 3.13)
 - **Qué:** `.python-version` = 3.12 y `requires-python = ">=3.12,<3.13"`.
-- **Por qué:** `docs/spec/02` fija 3.12 y las ruedas de torch cu128 verificadas son cp312.
+- **Por qué:** el spec de diseño 02 fija 3.12 y las ruedas de torch cu128 verificadas son cp312.
 - **Si está mal:** cambiar el rango y regenerar `uv.lock`.
 
 ### D-008 · El plan de P0 quedó en el commit inicial de `main`
-- **Qué:** `docs/plans/2026-09-18-p0-scaffold.md` entró en `chore: initial commit` de `rukh` en vez
+- **Qué:** el plan de P0 entró en `chore: initial commit` de `rukh` en vez
   de en la rama. Se deja así; no se reescribe historia.
 - **Si está mal:** ninguno; es documentación.
 
@@ -68,14 +68,14 @@ se decide o se desvía durante la ejecución.
 - **Qué:** con `dry_run=False`, `run` hace `COPY` con DuckDB por mes a
   `<out_dir>/year=YYYY/month=MM/games.parquet`, cuenta filas, calcula sha256 y escribe
   `manifest.json`. `limit` se aplica por mes. Probado con un parquet local; no se ha ejecutado
-  contra `hf://` en P0 (queda en `docs/backlog.md` para P1).
+  contra `hf://` en P0 (queda en el backlog para P1).
 - **Por qué:** el plan pedía la interfaz `run(cfg, dry_run)` y la regla de no dejar marcadores;
-  la implementación es pequeña y coincide con el paso 1 del pipeline de `docs/spec/01`.
+  la implementación es pequeña y coincide con el paso 1 del pipeline de el spec de diseño 01.
 - **Si está mal:** P1 la sustituye o la ajusta con datos reales.
 
 ### D-011 · `TRY_CAST` en el filtro de control de tiempo
 - **Qué:** el filtro de `min_base_seconds` usa `TRY_CAST(split_part(TimeControl, '+', 1) AS INTEGER)`
-  en vez del `CAST` que dicen literalmente `docs/spec/01` y el plan de P0. Las filas cuyo base no es
+  en vez del `CAST` que dicen literalmente el spec de diseño 01 y el plan de P0. Las filas cuyo base no es
   un entero (partidas por correspondencia, que Lichess exporta con `TimeControl = '-'`) se descartan
   en silencio en lugar de abortar la consulta entera.
 - **Por qué:** detectado en la ola de correcciones de P0: con `CAST`, un solo mes con partidas por
@@ -92,7 +92,7 @@ se decide o se desvía durante la ejecución.
   POSIX (`year=2025/month=01/games.parquet`); `FetchPlan.out_dir` lleva la ruta absoluta una sola
   vez y el `--dry-run` la imprime en su propia línea. (3) El manifest registra `min_plies_deferred`
   en lugar de `min_plies`, porque este paso no filtra por plies: se hace en P1 tras convertir
-  `movetext` a UCI (ver `docs/backlog.md`).
+  `movetext` a UCI (ver el backlog interno).
 - **Por qué:** ola de correcciones de P0. El manifest es el registro de procedencia y no debe
   contener rutas de máquina ni afirmar filtros que no se aplicaron. El test unitario de `run`
   escribe el parquet de origen bajo `year=2025/month=01/` para ejercitar el layout real.
@@ -181,7 +181,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   como mucho 3 M partidas (los primeros ~12 ficheros parquet del mes, es decir los primeros días)
   y los dos meses suman 6 M. El manifiesto lo registra como recorte temporal.
 - **Por qué:** sondeo del 2026-09-18 sobre el primer fichero de 2025-01: de 1 394 617 partidas,
-  **251 618 (18 %)** pasan los filtros de `docs/spec/01` (ambos Elo ≥ 1800, base ≥ 180 s,
+  **251 618 (18 %)** pasan los filtros de el spec de diseño 01 (ambos Elo ≥ 1800, base ≥ 180 s,
   terminaciones normales). Extrapolado a los 72 ficheros del mes son ≈ 18 M partidas/mes, muy por
   encima de los 3-6 M que pide el spec para los dos meses; sin tope, `fetch` tardaría horas y
   llenaría el disco sin mejorar el entrenamiento de M2.
@@ -195,7 +195,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   el que mueve.
 - **Por qué:** el dataset ya trae multi-PV con profundidad alta; generar los pares con el motor
   costaría horas de GPU/CPU por unos datos que ya existen y que además son reproducibles por
-  cualquiera. `docs/spec/01` no exigía Stockfish para este paso.
+  cualquiera. El spec de diseño 01 no exigía Stockfish para este paso.
 - **Si está mal:** los pares se pueden regenerar con el motor (`rukh.engine`) reutilizando las
   mismas posiciones; el esquema de columnas no cambiaría.
 
@@ -206,12 +206,12 @@ Evidencia obtenida por el controlador, no por subagentes:
   partida más allá de la posición 200 **no se ven** durante el entrenamiento.
 - **Por qué:** un flujo continuo evita rellenar cada partida hasta el bloque (menos padding, menos
   memoria) y alinear a `<bos>` garantiza que el modelo siempre ve el prefijo de control
-  (`<bos>`, Elo de ambos, jugadas) en el mismo sitio. `docs/spec/01` admite truncar a 200 tokens.
+  (`<bos>`, Elo de ambos, jugadas) en el mismo sitio. El spec de diseño 01 admite truncar a 200 tokens.
 - **Si está mal:** `start_at_game=False` ya recorre el flujo en bloques consecutivos (ve todas las
   partidas completas, a cambio de ventanas que empiezan a mitad de partida); no hay que reempaquetar.
 
 ### D-020 · El lab de M1 aplaza la máscara causal a M2
-- **Qué:** la lección M1 del curso se queda en datos y tokenización (labs 1-5 de `docs/spec/03`) y
+- **Qué:** la lección M1 del curso se queda en datos y tokenización (labs 1-5 de el spec de diseño 03) y
   no incluye el lab 4 tal como está escrito allí: la máscara causal se explica y se implementa en
   M2, junto con la atención.
 - **Por qué:** la máscara solo se entiende con el bloque de atención delante; en M1 sería un
@@ -225,7 +225,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   tokenizadores TS lo replican.
 - **Por qué:** el pre-tokenizador obligatorio es `WhitespaceSplit`, así que con espacios ninguna
   fusión puede cruzar de una jugada a la siguiente y el lab 5 ("mira qué aperturas enteras aprende
-  el BPE", `docs/spec/03`) se queda sin objeto. Sin espacios, cada partida es una palabra y las
+  el BPE", el spec de diseño 03) se queda sin objeto. Sin espacios, cada partida es una palabra y las
   fusiones largas son secuencias de apertura reales.
 - **Si está mal:** cambiar `bpe_text()` en `src/rukh/tokenize/bpe.py`, regenerar `bpe.json` y la
   fixture, y sincronizar las dos webs; los tests de paridad detectan cualquier olvido.
@@ -602,7 +602,7 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Por qué:** el recorte son 5,9 M partidas frente a las 16 M con las que Karvonen llegó a ~1300
   Elo con 50M parámetros. La pérdida de validación seguía bajando (1,52) al terminar, así que no
   está saturado.
-- **Decisión:** `docs/spec/08` autoriza "más pasos, más meses o `medium`". Se lanza `medium`
+- **Decisión:** el spec de diseño 08 autoriza "más pasos, más meses o `medium`". Se lanza `medium`
   (115 120 128 parámetros, misma receta y mismo presupuesto de tokens, ~2 h) para saber si el
   cuello es capacidad o datos. Las dos cifras se publican tal cual.
 - **Si está mal:** la alternativa es descargar más meses (unas 4 h por mes con la configuración
@@ -730,7 +730,7 @@ Evidencia obtenida por el controlador, no por subagentes:
 
   Los dos **cumplen** el listón de error (≥ heurística + 5 puntos). **Ninguno** llega al 0,80 de
   correlación de valor que pide GOAL: el mejor Spearman es 0,42.
-- **Qué dice la comparación de representaciones** (la pregunta de `docs/spec/02`, Componente 2):
+- **Qué dice la comparación de representaciones** (la pregunta de el spec de diseño 02, Componente 2):
   la línea de jugadas detecta mejor los errores (el preentrenamiento ayuda a saber qué acaba de
   pasar), y el tablero correlaciona mucho mejor el valor en Pearson (0,69 frente a 0,44): ver las
   piezas es mejor para "cuánto vale esto", ver la línea es mejor para "qué se acaba de tirar".
@@ -1024,7 +1024,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   | `small` v3 @2600 | 1058 | 1397 | 1340-1450 |
 
 - **El listón de 1200 nunca se falló**: incluso `small` v1, ya publicado en Hugging Face con
-  «Elo bar not met», estaba en 1359. Las model cards y `docs/plans/*` dicen lo contrario y hay que
+  «Elo bar not met», estaba en 1359. Las model cards y los planes de hito dicen lo contrario y hay que
   corregirlas.
 - **Lo relativo no cambia:** la corrección sube a los cuatro modelos por igual, así que todas las
   comparaciones de D-065, D-066 y D-069 siguen en pie; el trabajo de datos de hoy vale +66 Elo
@@ -2318,7 +2318,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   slug antiguo, así que ningún enlace externo se rompe. La cheatsheet del módulo se muestra solo en
   su última lección. M2 gana una cuarta parte («más datos, no más red») porque el modelo del que
   parten M4 y M5, `medium-v4`, no se construía en ninguna lección: su historia vivía en
-  `docs/plans/2026-09-19-elo-1200.md` y en D-062 a D-078.
+  el plan de la corrección de Elo (2026-09-19) y en D-062 a D-078.
 - **Qué cuesta si está mal:** las lecciones pierden el hilo entre partes. Cada parte abre diciendo
   de dónde viene y cierra diciendo a dónde va, y la navegación anterior/siguiente ya recorría el
   curso en orden de módulo y lección.

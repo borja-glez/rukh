@@ -3,7 +3,7 @@
 The mask is the honest part of the demo: with ``mask_illegal`` the logits of every token that
 is not a legal move become ``-inf``, so an illegal move is impossible; without it the raw token
 is returned as it came out of the network and reported with ``legal=False``, which is how the
-legality rate (the "understanding" metric of ``docs/spec/02``) is measured.
+legality rate (the "understanding" metric of the design spec 02) is measured.
 """
 
 from __future__ import annotations

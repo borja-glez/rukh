@@ -6,7 +6,7 @@ model itself but a wrapper whose forward returns the last step only: ``(B, V)`` 
 from slicing a megabyte of logits per move.
 
 ``torch.onnx.export`` is tried with the dynamo exporter first (the default since torch 2.9 and
-what ``docs/spec/02`` asks for) and falls back to the legacy TorchScript tracer with a warning
+what the design spec 02 asks for) and falls back to the legacy TorchScript tracer with a warning
 when dynamo is unavailable or fails; which path produced the file is recorded in the metadata,
 because the two exporters do not emit the same graph and a parity check is only meaningful when
 it is known which one ran.

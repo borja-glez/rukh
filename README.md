@@ -58,8 +58,8 @@ tests/unit/          fast CPU tests (`pytest -m unit`); `engine` tests need Stoc
 labs/                thin notebooks behind each lesson; export JSON to artifacts/web/
 artifacts/web/       small JSON the course site renders (versioned)
 gold/                golden files for evaluation
-docs/spec/           the binding design docs (Spanish); docs/decisiones-de-ejecucion.md is the
-                     decision ledger; adr/, runbooks/, model-cards/, benchmarks.md, backlog.md
+docs/                decisiones-de-ejecucion.md is the decision ledger; reproducir.md rebuilds
+                     each module; runbooks/, adr/, model-cards/, posts/, benchmarks.md
 data/ mlruns/ tools/ local datasets, MLflow store and binaries (gitignored)
 ```
 

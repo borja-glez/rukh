@@ -1,7 +1,7 @@
 # Model cards
 
 Copia versionada de las model cards (y dataset cards) que se publican en Hugging Face bajo
-`chorcat/rukh-*`. Las cards se escriben **en inglés** (ver `docs/spec/08`, fila "Idioma") y se
+`chorcat/rukh-*`. Las cards se escriben **en inglés** (ver el spec de diseño 08, fila "Idioma") y se
 generan desde MLflow con `rukh publish <run>` (P2 en adelante): métricas de la tabla única
 (`docs/benchmarks.md`), datos y manifiesto, receta de entrenamiento, limitaciones y enlace a la
 demo con `?stage=<id>`. Licencia de los pesos: Apache-2.0.

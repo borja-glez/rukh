@@ -1,4 +1,4 @@
-# Encoder suite (docs/spec/02, component 2): blunder detection against the material baseline,
+# Encoder suite (the design spec 02, component 2): blunder detection against the material baseline,
 # the correlation of the value head with Stockfish's `cp`, and the accuracy of the result head.
 # Everything is measured on the held-out split of `rukh.data.labels`, which is drawn by game.
 stage: null # defaults to the checkpoint's run directory

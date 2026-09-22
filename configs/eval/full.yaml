@@ -1,4 +1,4 @@
-# Full evaluation suite (docs/spec/02, component 5): the numbers that go in the results table.
+# Full evaluation suite (the design spec 02, component 5): the numbers that go in the results table.
 # Hours of Stockfish games; the SQLite cache makes a re-run cheap.
 games: data/uci/year=2025/month=02/games.parquet
 puzzles: data/puzzles/puzzles.parquet

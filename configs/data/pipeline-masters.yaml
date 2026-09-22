@@ -1,7 +1,7 @@
 # Token pack of the Elite Database alone, for the masters fine-tune of M4.
 #
 # The elite games are already part of `tokens-v4`, mixed in with the 1800+ corpus; this pack has
-# nothing else in it. That is the whole experiment: `docs/spec/02` predicts that a last fine-tune
+# nothing else in it. That is the whole experiment: The design spec 02 predicts that a last fine-tune
 # on masters raises the Elo and lowers the diversity, and neither half of that sentence can be
 # read off a corpus where masters are one ingredient among several.
 #

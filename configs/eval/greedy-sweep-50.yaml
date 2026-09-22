@@ -17,7 +17,7 @@
 # Its own cache, and not out of tidiness: `elo_games` is part of the cache key, so this run
 # cannot read back the games already played even though game `rung:index` is literally the same
 # game (its seed is `seed + index`, independent of the total). That is a real waste and it is
-# written down in `docs/backlog.md`; fixing it belongs to P6, not to the middle of a milestone.
+# written down in the backlog; fixing it belongs to P6, not to the middle of a milestone.
 
 # The suite the Elo sweep of M4 runs once per condition.
 #

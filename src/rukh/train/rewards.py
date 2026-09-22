@@ -61,7 +61,7 @@ keeps the other terms in their documented ranges."""
 class RewardWeights(BaseConfig):
     """How much each verifiable rule is worth, and the constants that cap them.
 
-    The defaults are the ones `docs/spec/02` names, written down so a run can be reproduced from
+    The defaults are the ones the design spec 02 names, written down so a run can be reproduced from
     its config alone. They are **not** tuned: tuning them against the Elo they produce would make
     the reward a second model fitted to the evaluation, which is exactly the loop this module
     warns about.

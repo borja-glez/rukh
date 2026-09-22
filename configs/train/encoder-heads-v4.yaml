@@ -1,7 +1,7 @@
 # The same fine-tuning as `encoder-heads.yaml`, on the other input scheme: the position is the
 # *line that reached it* instead of the board itself. This is the scheme `encoder-mmm.yaml`
 # pretrains, so this is the run that uses the masked-move checkpoint; `encoder-heads.yaml` on
-# `squares` is the comparison it is measured against (docs/spec/02, Componente 2).
+# `squares` is the comparison it is measured against (the design spec 02, Componente 2).
 #
 # Caveat worth knowing before reading the numbers: the supervised table is deduplicated by
 # `fen4`, so the prefix is *a* line reaching the position, not necessarily the labelled game's.

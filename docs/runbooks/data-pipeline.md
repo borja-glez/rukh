@@ -3,7 +3,7 @@
 ## Cuándo
 
 Al regenerar los datasets `chorcat/rukh-*` y el tokenizador desde cero, o al añadir meses.
-Requisitos: `uv sync --extra cu128 --group dev`, unos 40 GB libres en `E:` (ver `docs/spec/01`),
+Requisitos: `uv sync --extra cu128 --group dev`, unos 40 GB libres en `E:` (ver el spec de diseño 01),
 red para `fetch`, `evals`, `puzzles` y `elite`, y `HF_TOKEN` en el entorno solo para `publish`.
 Todo se ejecuta desde `rukh/` con `uv run rukh data <paso>`. Cada paso lee su sección de
 `configs/data/pipeline.yaml` (`--config` para otro fichero) y deja un `manifest.json` con
@@ -76,7 +76,7 @@ partidas no necesita más memoria que uno de 20.
 - Con `start_at_game=True` (lo normal) cada elemento empieza en un `<bos>`, es decir hay un elemento
   por partida y **los tokens de una partida más allá de la posición `block` no se ven nunca**: con
   `block = 200` una partida de 300 plies aporta solo su primer tercio (truncado admitido por
-  `docs/spec/01`; D-019). Si hace falta ver el resto, `start_at_game=False` corta el flujo en bloques
+  el spec de diseño 01; D-019). Si hace falta ver el resto, `start_at_game=False` corta el flujo en bloques
   consecutivos: se ve todo, pero las ventanas empiezan a mitad de partida y el prefijo de control
   (`<bos>`, Elo, resultado) deja de estar siempre al principio.
 - Una ventana que se sale del final del flujo se rellena con `<pad>`.

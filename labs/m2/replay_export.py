@@ -10,7 +10,7 @@ from MLflow when that exact step was logged (with the shipped configs it always 
 and ``eval_every`` both divide ``ckpt_every``), ``legality`` needs ``--with-legality`` and ``elo``
 needs ``--with-elo``.
 
-``legality`` is the argmax rate of ``docs/spec/02`` (D-026): the single most likely token, no
+``legality`` is the argmax rate of the design spec 02 (D-026): the single most likely token, no
 temperature, no top-k and no mask. It is the bar ``GOAL.md`` sets at 99 %, and the one that means
 something when it is plotted against the training step.
 

@@ -1,4 +1,4 @@
-# `medium-v4` fine-tuned on masters only: the trade `docs/spec/02` predicts, measured.
+# `medium-v4` fine-tuned on masters only: the trade the design spec 02 predicts, measured.
 #
 # "Seguir preentrenando con rukh-games-elite (lr 1e-4). Medir: sube el Elo, baja la diversidad."
 # Both halves need a number. The Elo comes from the usual suite; the diversity is the opening

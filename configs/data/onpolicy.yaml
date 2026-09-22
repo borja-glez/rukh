@@ -7,7 +7,7 @@ source: data/pairs/dpo-prompts.parquet
 checkpoint: checkpoints/medium-v4/best.pt
 out: data/pairs-onpolicy/pairs.parquet
 
-# Four candidates is what `docs/spec/02` asks for. Each one costs an engine analysis, so this
+# Four candidates is what the design spec 02 asks for. Each one costs an engine analysis, so this
 # is the knob that sets the price of the dataset.
 candidates: 4
 

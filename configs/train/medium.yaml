@@ -1,4 +1,4 @@
-# `medium` (16 layers, d=768, 115,120,128 parameters): the escalation `docs/spec/08` allows when
+# `medium` (16 layers, d=768, 115,120,128 parameters): the escalation the design spec 08 allows when
 # `small` falls short of the 1200 Elo bar. `small` measured 1007 Elo (CI 920-1101) at near-greedy
 # sampling, so this run exists to answer whether capacity or data is the binding constraint.
 # Three times the compute of `small` at the same token budget: expect around two hours on a 5090.

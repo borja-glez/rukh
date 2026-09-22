@@ -1,4 +1,4 @@
-# Two recent months of rated standard games, filtered remotely (see docs/spec/01-datos.md).
+# Two recent months of rated standard games, filtered remotely (see the design spec 01).
 dataset: Lichess/standard-chess-games
 months: ["2025-01", "2025-02"]
 min_elo: 1800
