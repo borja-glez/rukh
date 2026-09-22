@@ -13,18 +13,18 @@ Tres reglas que valen para todos los módulos:
    y cambió el número publicado de todos los modelos. Los hitos están marcados con etiquetas
    (`git tag -l 'p*'`) por si quieres ver cómo estaba el repo el día que se cerró cada uno; para
    ejecutar, quédate en `main`.
-2. **Los checkpoints se nombran por su corrida, sin fecha.** Las configs y las lecciones dicen
+2. **Los checkpoints se nombran por su ejecución, sin fecha.** Las configs y las lecciones dicen
    `checkpoints/medium-v4/best.pt`. El bucle de entrenamiento escribe
    `checkpoints/medium-v4-20260919-174623/` (con `unique_run_name`), y `rukh pull medium-v4` escribe
    `checkpoints/medium-v4/best.pt`. Los dos valen: cuando la carpeta sin fecha no existe, cualquier
-   comando o config busca la corrida con fecha más reciente de ese nombre. Lo mismo para carpetas
+   comando o config busca la ejecución con fecha más reciente de ese nombre. Lo mismo para carpetas
    de adaptadores (`checkpoints/lora-e4`).
 3. **`rukh pull --module mN` trae del Hub lo que el módulo N necesita para empezar.** Modelos a
-   `checkpoints/<corrida>/…` y datasets a su `data/…`. Lo que ya está en disco no se toca
+   `checkpoints/<ejecución>/…` y datasets a su `data/…`. Lo que ya está en disco no se toca
    (`--force` lo sustituye). `rukh pull --list` imprime el catálogo entero.
 
 Sobre la exactitud: los datos, las configs y las semillas son los mismos, y los comandos son los
-que se ejecutaron. Lo que **no** se repite exactamente es la GPU: dos corridas idénticas del
+que se ejecutaron. Lo que **no** se repite exactamente es la GPU: dos ejecuciones idénticas del
 reward model dieron 72,91 % y 74,21 % (D-113), y dos escaleras idénticas 1498 y 1558 (D-107). Cada
 lección publica sus números con ese margen delante; si el tuyo cae dentro, has reproducido el
 módulo.
@@ -92,7 +92,7 @@ M5, y no está en el spec original: salió de medir por qué `small` no llegaba 
 | 12 | `uv run rukh train --config configs/train/medium-v4.yaml` | 4 h 3 min | `checkpoints/medium-v4-*/best.pt` — o `rukh pull medium-v4` |
 | 13 | `uv run rukh eval --model checkpoints/medium-v4/best.pt --config configs/eval/greedy.yaml --stage medium-v4-greedy` | ~30 min | 1504 Elo (IC 1446-1558), 99,8 % legal |
 
-Las corridas intermedias de esa parte (`small-v2.yaml` sobre `pipeline-v2.yaml`, `small-v3.yaml`
+Las ejecuciones intermedias de esa parte (`small-v2.yaml` sobre `pipeline-v2.yaml`, `small-v3.yaml`
 sobre `pipeline-v3.yaml`) están en el repo y se ejecutan igual; `rukh-small` en el Hub es
 `small-v3`.
 
@@ -161,7 +161,7 @@ publican.
 LoRA sobre su base antes de medirlos; las filas que ninguna etapa reclama se retiran con
 `rukh eval drop <etapa>`.
 
-## Qué hay en el Hub y a qué corrida corresponde
+## Qué hay en el Hub y a qué ejecución corresponde
 
 | `rukh pull` | Repositorio | Escribe | Es |
 |---|---|---|---|

@@ -255,7 +255,7 @@ Y lo que dejó es más útil que la casilla marcada:
   enseña *qué se juega* a cada nivel; nunca premia *calcular mejor*. Mover la competencia necesita
   otra herramienta, y eso es el hito siguiente: recompensas, DPO, GRPO.
 - **Tres formas de distinguir «no hay efecto» de «no lo medí bien»**: la aritmética de las partidas
-  necesarias, la corrida de control sobre el modelo sin tratar, y medir cuánto se mueve tu montaje
+  necesarias, la ejecución de control sobre el modelo sin tratar, y medir cuánto se mueve tu montaje
   cuando no cambias nada.
 
 Esa última es la que más se me va a quedar. Antes de explicar una diferencia pequeña, mide tu propio

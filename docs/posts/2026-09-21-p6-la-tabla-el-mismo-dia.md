@@ -68,7 +68,7 @@ Este es el trozo del curso que más me costó escribir, y va en el vídeo tal cu
   (36-79).
 - **«Entiende ajedrez».** Predice el siguiente token con un 54 % de acierto sobre lo que jugaron
   humanos de 1800 en adelante. No tengo un instrumento que mida «entender».
-- **«Reproduce el número».** Reproduce el intervalo. Dos corridas idénticas del reward model
+- **«Reproduce el número».** Reproduce el intervalo. Dos ejecuciones idénticas del reward model
   dieron 72,91 % y 74,21 %; dos escaleras idénticas, 1538 y 1538 un día y 1498 y 1558 otro.
 
 ## Un baseline que no entrené yo

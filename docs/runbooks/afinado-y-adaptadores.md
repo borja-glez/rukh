@@ -42,7 +42,7 @@ exportaciones esperan a que no haya ninguna evaluación en marcha, y entre traba
 | 16 | Publicar el Qwen | `uv run rukh publish qwen --run checkpoints/qwen3-pgn-qlora --repo rukh-qwen3-pgn-qlora` | minutos | repo `peft` tal cual |
 
 Los pasos 14-16 admiten `--dry-run`: preparan la carpeta entera en `artifacts/publish/` y no tocan
-la red. **Conviene revisar la card antes de subir**, porque se genera a partir de la corrida y
+la red. **Conviene revisar la card antes de subir**, porque se genera a partir de la ejecución y
 puede delatar que una medición falta.
 
 ## Lo que hay que mirar y no está en el comando

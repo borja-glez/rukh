@@ -881,7 +881,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   prácticamente sin bullet y es coherente con nuestro filtro `min_base_seconds: 180`.
 - **Cuidado al leer la pérdida:** el entrenamiento deja de parecerse a la validación, que es 53 %
   sub-2000. Se añade `data/uci-strong` (10 230 partidas de 2200+ **dentro** de las 100 000
-  congeladas, nunca entrenadas por ninguna corrida) para tener una pérdida comparable sobre juego
+  congeladas, nunca entrenadas por ninguna ejecución) para tener una pérdida comparable sobre juego
   fuerte, y el Elo se mide con partidas en vez de inferirse.
 - **Si está mal:** el modelo dedicaría capacidad a imitar un juego que el listón no premia; se
   vería como Elo estancado pese a mejor pérdida sobre `uci-strong`, y la alternativa sería usar
@@ -890,7 +890,7 @@ Evidencia obtenida por el controlador, no por subagentes:
 ### D-065 · Recuperar el mes de validación vale más que triplicar los parámetros
 - **Medido** (misma receta, mismo muestreo, misma validación congelada):
 
-  | Corrida | Parámetros | Tokens únicos | Pasos | val/loss | top-1 | hueco train/val |
+  | Ejecución | Parámetros | Tokens únicos | Pasos | val/loss | top-1 | hueco train/val |
   |---|---|---|---|---|---|---|
   | `small` v1 | 38 971 392 | 240 068 954 | 20 000 | 1,5197 | 51,20 % | **+0,0603** |
   | `medium` v1 | 115 120 128 | 240 068 954 | 20 000 | 1,4782 | 52,31 % | — |
@@ -910,7 +910,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   para decidir si merece la pena seguir, y se sustituye por la medición en cuanto haya CPU libre.
 
 ### D-066 · La élite ensancha el eje de Elo; la cantidad de datos por sí sola, no
-- **Medido** al terminar las tres corridas, todas con 28 000 pasos salvo v1 (20 000), mismo
+- **Medido** al terminar las tres ejecuciones, todas con 28 000 pasos salvo v1 (20 000), mismo
   planificador, misma semilla y la misma validación congelada:
 
   | Modelo | Par. | general | top-1 | fuerte 2200+ | top-1 |
@@ -989,7 +989,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   Elo/nat; lo medido son +63 sobre 0,0494 nats, o sea ~1275 Elo/nat. Llegar a 1200 desde 1007
   exige ~0,151 nats, no 0,09.
 - **Vigilar:** la legalidad sin máscara baja monótonamente (99,40 → 99,30 → 99,10 %). Sigue sobre
-  el listón del 99 % pero el margen se adelgaza corrida a corrida.
+  el listón del 99 % pero el margen se adelgaza ejecución a ejecución.
 - **Los puzles suben mucho más que el Elo**: 22,07 → 26,93 %, y por bandas +8,7 puntos en
   1000-1500 frente a +1,1 en 2000+.
 
@@ -1117,7 +1117,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   Pearson (0,688 frente a 0,648) y peor Spearman (0,422 frente a 0,520) que `moves` — aprendía la
   escala y se dejaba el ranking.
 - **Arreglo:** `pairwise_rank_loss`, un término por pares ponderado por la distancia entre
-  etiquetas, detrás de `HeadWeights.value_rank` (por defecto 0, así que las corridas anteriores
+  etiquetas, detrás de `HeadWeights.value_rank` (por defecto 0, así que las ejecuciones anteriores
   siguen siendo reproducibles). La ponderación importa: sin ella el gradiente se iría a separar
   posiciones casi iguales, que es justo donde un evaluador sin búsqueda no puede ganar.
 - **Medido** (mismo encoder de 15 M, mismo afinado `last-n`, solo cambia la pérdida):
@@ -1251,7 +1251,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   entrenamiento (es lo que recuperó 238 M de tokens en D-062). Sobre el corpus balanceado eso añade
   **2,85 millones** de partidas de 1800+ encima del reparto plano y lo deshace en silencio.
 - **Qué se hace:** `val_remainder_trains: false` en la config del afinado. El conjunto de
-  validación sigue siendo exactamente el mismo con el que se miden las demás corridas —para que las
+  validación sigue siendo exactamente el mismo con el que se miden las demás ejecuciones —para que las
   pérdidas sean comparables— y el de entrenamiento es el corpus balanceado y nada más.
 - **Por qué no se quita la regla:** para un preentrenamiento sigue siendo correcta y valiosa. Lo que
   hacía falta era un interruptor, no una marcha atrás.
@@ -1342,7 +1342,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   condición en todos los puzles; y la caché del barrido es otra, porque estas tentativas responden a
   otra pregunta.
 - **La caché vieja no se invalida:** el campo entra en la clave **solo cuando está activo**. Una
-  clave de caché es la promesa de que dos corridas midieron lo mismo, y un interruptor apagado *es*
+  clave de caché es la promesa de que dos ejecuciones midieron lo mismo, y un interruptor apagado *es*
   el comportamiento con el que se jugaron las partidas cacheadas de P2 y P3.
 
 ### D-090 · Se mide y se publica la entropía de aperturas, que llevaba desde el spec en `n/a`
@@ -1412,7 +1412,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   en verde con la lección rota.
 
 ### D-094 · QLoRA funciona en sm_120 y a 0,6 B no ahorra lo que dice su nombre
-- **Medido** con la misma corrida de dos pasos, cambiando solo `four_bit`:
+- **Medido** con la misma ejecución de dos pasos, cambiando solo `four_bit`:
 
   | Precisión | pesos en la tarjeta | pico durante el entrenamiento |
   |---|---|---|
@@ -1433,7 +1433,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   el extra `hf`.
 
 ### D-095 · El ensayo de dos pasos encontró un fallo que habría aparecido a los veinticinco minutos
-- **Qué se hizo:** antes de la corrida real de Qwen (media hora de GPU) se ejecutó la misma receta
+- **Qué se hizo:** antes de la ejecución real de Qwen (media hora de GPU) se ejecutó la misma receta
   con `max_steps: 2` y cien partidas, y la evaluación con una suite de doce posiciones, nueve
   puzles y una partida.
 - **Qué encontró:** `estimate(records, bootstrap=...)` — el parámetro se llama `samples`. Un
@@ -1482,13 +1482,13 @@ Evidencia obtenida por el controlador, no por subagentes:
 
 ### D-099 · La tabla única servía Elo retractados en `/proyecto/`
 - **Qué pasaba:** `configs/eval/greedy.yaml` tenía `web_results: null`, así que ninguna de las
-  corridas deterministas —las que producen todos los números publicados— escribía en
+  ejecuciones deterministas —las que producen todos los números publicados— escribía en
   `artifacts/web/results.json`. La tabla se quedó con las filas de la suite `full`, medidas antes
   de que D-070 corrigiera la escalera: **1091** para `medium`, **1007** y **785** para `small`,
   **64** para `tiny`. La página en inglés del proyecto las servía.
 - **Qué se hace:** `greedy.yaml` escribe en la tabla; las etapas publicadas se vuelven a evaluar
   (las partidas y los puzles están en `cache-greedy.sqlite`, así que son minutos y no otra hora de
-  Stockfish); y las filas que ninguna corrida corregida reemplaza se **retractan** con
+  Stockfish); y las filas que ninguna ejecución corregida reemplaza se **retractan** con
   `rukh eval drop`, que es una operación que faltaba.
 - **Por qué existe el comando en vez de editar el JSON:** una medición puede resultar equivocada, y
   cuando lo es la tabla tiene que poder dejar de llevarla. Es explícito y por etapa a propósito:
@@ -1691,7 +1691,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   determinista (límite por **nodos** o por profundidad) y volver a calibrar la escalera. Es la misma
   conclusión de D-100 vista desde el otro lado, y esta se puede enseñar con dos números.
 - **Qué se hace ahora:** nada en las mediciones —las dos son correctas y las dos se publican, cada
-  una diciendo de qué corrida sale—. La tabla única lleva la canónica (1558), que es la que
+  una diciendo de qué ejecución sale—. La tabla única lleva la canónica (1558), que es la que
   comparte suite con el resto de etapas; el barrido lleva la suya, que es la que comparte suite con
   las otras cinco condiciones. Comparar **dentro** de una tirada es válido; comparar **entre**
   tiradas es lo que este apunte existe para desaconsejar.
@@ -1712,7 +1712,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   - ordena el **repertorio** a lo largo del eje sin jugar una partida: entropía monótona 6 de 6;
   - y **no mueve la competencia**: ni el condicionado ni el de maestros separan su intervalo de Elo
     del modelo del que salieron;
-  - más la mitad metodológica, que es la que se reutiliza: partidas necesarias (D-100), corrida de
+  - más la mitad metodológica, que es la que se reutiliza: partidas necesarias (D-100), ejecución de
     control (D-106) y suelo de reproducibilidad (D-107).
 - **Por qué esto no es rebajar el listón:** el criterio se publica **incumplido**, con sus números y
   su explicación, en `GOAL.md`, en el ledger y en la lección. Lo que se reformula es el **objetivo
@@ -1800,7 +1800,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   cuenta a quien sepa escuchar.
 - **Después del arreglo:** 0,5000 exacto, 11 ilegales por bando. El control pasa.
 - **La regla que deja:** un instrumento nuevo se estrena midiendo algo cuya respuesta ya se sabe.
-  Aquí costó una corrida de cuatro minutos y evitó publicar un +40 que habría sido un artefacto.
+  Aquí costó una ejecución de cuatro minutos y evitó publicar un +40 que habría sido un artefacto.
 
 ### D-112 · El modelo de recompensa: manda la capacidad y el encoder de M3 **estorba**
 - **La bandeja de experimentos:** `rukh train reward` sobre los 13 838 pares, cambiando una cosa
@@ -1814,14 +1814,14 @@ Evidencia obtenida por el controlador, no por subagentes:
      acaba de mover» le obligaba a leer el turno del FEN e invertir. Se midió con la alternativa
      («cómo de buena es para las blancas», con el signo en la pérdida) y sale lo mismo. Queda como
      `point_of_view` en la config, documentado como *medido y sin efecto*.
-  4. **Falla donde tiene que fallar.** La banda 400-800 cp es la mejor en las cuatro corridas
+  4. **Falla donde tiene que fallar.** La banda 400-800 cp es la mejor en las cuatro ejecuciones
      (80,2 % a 85,4 %) y la de **mate** la peor en las cuatro (68,3 % a 71,7 %), siendo un tercio
      de los pares. Un mate es un hecho táctico y una evaluación estática de la posición resultante
      no lo ve; esa banda es exactamente la que una recompensa verificable contesta sin error.
      **Lo que no se puede decir:** que el acierto suba monótonamente con la distancia. Las bandas
      100-200 y 200-400 se cruzan según la semilla, y la 800-2000 tiene entre **10 y 22 pares**, así
      que su 90 % y su 50 % son la misma ausencia de dato con dos caras distintas.
-- **El error que hizo falta cometer antes:** la primera corrida daba 72,98 % alimentando un encoder
+- **El error que hizo falta cometer antes:** la primera ejecución daba 72,98 % alimentando un encoder
   entrenado con el esquema `moves` con los 69 tokens de casilla del esquema `squares`. No falla
   nada: los ids caben en el vocabulario de 2 030 y significan otra cosa. Ahora `load_squares_encoder`
   se niega, con el mensaje que dice por qué.
@@ -1848,7 +1848,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   lección: **antes de explicar una diferencia pequeña, mide cuánto se mueve tu montaje cuando no
   cambias nada.**
 - **Qué se publica:** el acierto global, el acierto sobre los pares que una evaluación puede
-  decidir, el recuento por banda, y la frase de que dos corridas idénticas se separan 1,3 puntos.
+  decidir, el recuento por banda, y la frase de que dos ejecuciones idénticas se separan 1,3 puntos.
   Un número solo, sin su reparto y sin su ruido, no es comparable ni consigo mismo.
 
 ### D-114 · Un `head` sesgado convertía un recorte en otro experimento
@@ -1880,7 +1880,7 @@ Evidencia obtenida por el controlador, no por subagentes:
 ### D-116 · La galería preguntaba por la corona, y todas coronaban lo mismo
 - **Cómo se escribió primero:** seis recompensas —la sana y cinco rotas— y una pregunta: ¿qué jugada
   corona cada una? La hipótesis era que las rotas coronarían otra, y ese desacuerdo sería el hackeo.
-- **Qué contestó la corrida:** las seis coronan **la misma jugada** en las tres posiciones. En
+- **Qué contestó la ejecución:** las seis coronan **la misma jugada** en las tres posiciones. En
   retrospectiva es evidente: todas son monótonas en la evaluación del motor, así que el máximo no se
   mueve. La cima de la ordenación no es donde vive el hackeo de recompensa.
 - **Qué se mide en su lugar:** lo que el optimizador consume de verdad, que no es la recompensa sino
@@ -1932,7 +1932,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   todo lo que el motor te dé depende de cuánto le dejaste pensar.
 
 ### D-119 · Una correlación negativa que cambia de signo al quitar un tercio de los datos
-- **El número raro:** las cuatro corridas del modelo de recompensa reportan una correlación de
+- **El número raro:** las cuatro ejecuciones del modelo de recompensa reportan una correlación de
   Pearson **negativa** entre el margen que da el modelo y la distancia en centipeones que el motor
   puso entre las dos jugadas: de −0,034 a −0,156. Leído tal cual dice que el modelo está más seguro
   cuanto *más parecidas* son las dos jugadas, que es lo contrario de lo que debería.
@@ -1963,7 +1963,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   sale **+37**. El residuo del triángulo es de **47 Elo con un error típico de 19**, o sea **2,4 σ**.
   No es consistente con que cada modelo tenga un número de fuerza y las partidas lo respeten.
 - **Por qué no es el instrumento:** fue lo primero que se sospechó, porque las tres primeras
-  corridas las ganó quien iba como A. Se repitieron las tres con los lados intercambiados y el
+  ejecuciones las ganó quien iba como A. Se repitieron las tres con los lados intercambiados y el
   signo aguanta las tres veces: `off` gana a `base` por +61 siendo A y por +74 siendo B. No hay
   ventaja por el lado.
 - **Y una sorpresa que vale un lab entero:** para el par `on` contra `off`, la misma comparación con
@@ -1995,7 +1995,7 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Nota (2026-09-21, D-120):** los números definitivos del triángulo son los de D-127 y la lección de M5: DPO fuera de política +65 (50-81) con 1 600 partidas, dentro de política +57 (36-79), on contra off +37 (15-59), residuo 45 Elo con error típico 18 (2,6 σ); la cuota de mates de los pares fuera de política es el 29 %, medida sobre el parquet.
 ### D-121 · El peaje del alineamiento: DPO dobla la tasa de jugadas ilegales
 - **Qué se midió:** la proporción de jugadas ilegales que propone cada modelo, sobre sus propias
-  jugadas, en las cuatro corridas de enfrentamiento. No es una métrica que se estuviera buscando:
+  jugadas, en las cuatro ejecuciones de enfrentamiento. No es una métrica que se estuviera buscando:
   `rukh eval match` la cuenta sola porque el control del instrumento la necesitaba.
 
   | modelo | ilegales sobre sus jugadas |
@@ -2003,7 +2003,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   | `medium-v4` (base) | 1,30 % – 1,47 % |
   | `medium-v4-dpo-onpolicy` | 2,42 % – 2,58 % |
   | `medium-v4-dpo-offpolicy` | 2,90 % – 3,80 % |
-  | `medium-v4-grpo` | 1,92 % (base 1,16 % en la misma corrida) |
+  | `medium-v4-grpo` | 1,92 % (base 1,16 % en la misma ejecución) |
 
 - **El peaje es real y `nll_weight` no lo evitó.** Los dos DPO se entrenaron con `nll_weight: 0.1`,
   que existe precisamente para anclar la política mientras el margen crece, y aun así la tasa se
@@ -2024,7 +2024,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   legalidad; que en esta configuración no llegue a dispararse (las candidatas se muestrean entre
   jugadas legales) hace el resultado más interesante, no menos: lo que protege la legalidad no es
   la puerta, es que el gradiente solo mueve masa **entre jugadas que ya eran legales**.
-- **La regla que deja:** mide el coste de alinear en la misma corrida que mides el beneficio. Aquí
+- **La regla que deja:** mide el coste de alinear en la misma ejecución que mides el beneficio. Aquí
   salió gratis porque el instrumento ya contaba las ilegales; si no las hubiera contado, el peaje
   habría pasado desapercibido y el modelo se habría publicado diciendo solo la mitad.
 
@@ -2064,7 +2064,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   esa política no es la que quieres, la métrica no es la que quieres.
 
 ### D-124 · La curva dosis-respuesta del colapso: más tasa de aprendizaje, más recompensa, más grupos planos
-- **Qué se midió:** tres corridas de GRPO de 400 pasos cada una desde el mismo checkpoint, con la
+- **Qué se midió:** tres ejecuciones de GRPO de 400 pasos cada una desde el mismo checkpoint, con la
   misma semilla, cambiando solo la tasa de aprendizaje.
 
   | lr | recompensa (referencia del grupo) | KL contra el inicio | grupos planos |
@@ -2082,7 +2082,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   romper nada: la recompensa era la sana, el bucle era el correcto, y la única pregunta que hizo
   falta fue «¿qué política maximizaría este número?». La respuesta —una determinista— está a la
   vista en la columna de la derecha.
-- **Qué se hace:** las corridas publicadas reportan las **dos** recompensas (referencia del grupo y
+- **Qué se hace:** las ejecuciones publicadas reportan las **dos** recompensas (referencia del grupo y
   referencia del motor) más `flat_share` sobre validación, y la conclusión se lee de la absoluta.
   La tasa de aprendizaje se elige por dónde la absoluta sube con la KL todavía pequeña, no por
   dónde la del grupo sube más.
@@ -2091,7 +2091,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   cabía en una columna.
 
 ### D-125 · GRPO sí mejora las jugadas, y la mejora tiene forma de U invertida
-- **La medición que hizo falta:** con las dos recompensas separadas (D-123), tres corridas de 400
+- **La medición que hizo falta:** con las dos recompensas separadas (D-123), tres ejecuciones de 400
   pasos con la misma semilla y solo la tasa de aprendizaje cambiando, sobre 300 posiciones de
   validación.
 
@@ -2106,13 +2106,13 @@ Evidencia obtenida por el controlador, no por subagentes:
      tres tasas. Las jugadas mejoran de verdad, no solo respecto a sí mismas.
   2. **Las dos recompensas discrepan en el signo** a 1e-6: la del grupo **baja** y la del motor
      **sube**. Es exactamente lo que D-123 predijo, y es la prueba de que separarlas no era
-     pedantería: con la métrica original, esa corrida se habría archivado como fracasada.
+     pedantería: con la métrica original, esa ejecución se habría archivado como fracasada.
   3. **La ganancia es no monótona.** Sube hasta 5e-6 y vuelve a caer a 2e-5, mientras el indicador
      de colapso —la proporción de grupos planos— **sube monótono en las tres**. Es la U invertida
      de la sobreoptimización, con el mecanismo a la vista en la columna de al lado.
 - **Y a 1e-6 los grupos planos bajan**, de 0,387 a 0,370: la única de las tres donde la política se
   hace *más* diversa mientras mejora.
-- **Al alargar a 1 500 pasos, esa última frase dejó de ser verdad.** Las dos corridas largas:
+- **Al alargar a 1 500 pasos, esa última frase dejó de ser verdad.** Las dos ejecuciones largas:
 
   | lr | recompensa (motor) | grupos planos | KL |
   |---|---:|---:|---:|
@@ -2121,25 +2121,25 @@ Evidencia obtenida por el controlador, no por subagentes:
 
   Las dos mejoran mucho más que a 400 pasos, y el colapso sube en las dos. Lo que a 400 pasos
   parecía «una tasa que mejora sin peaje» era «una tasa que aún no había llegado al peaje». No hay
-  una corrida limpia y otra sucia: hay una curva, y dónde se para es una decisión. Se publica la de
+  una ejecución limpia y otra sucia: hay una curva, y dónde se para es una decisión. Se publica la de
   1e-6 —la mitad del colapso por dos tercios de la ganancia— diciendo que es un punto elegido y no
   un óptimo encontrado.
 - **Un arreglo de medición por el camino:** `kl_after` reportaba la KL del **último grupo**, no un
-  nivel. Dos corridas con la misma tasa dieron 0,00048 y 0,126 sin que nada relevante cambiara.
+  nivel. Dos ejecuciones con la misma tasa dieron 0,00048 y 0,126 sin que nada relevante cambiara.
   Ahora promedia sobre la última décima parte de los pasos. Una sola muestra no es un nivel.
 - **La regla que deja:** una curva con tres puntos vale más que un punto con tres decimales. La
   forma —sube, se dobla, baja— es lo que distingue «mejora» de «sobreoptimización», y con un solo
   ajuste no se ve ninguna de las dos.
 
 ### D-126 · Qué GRPO se publica, y por qué el que gana más Elo no es el que sale
-- **Primero se leyó mal, y merece quedarse escrito.** Con una sola dirección de cada corrida, la
+- **Primero se leyó mal, y merece quedarse escrito.** Con una sola dirección de cada ejecución, la
   tabla decía +44 contra +54 y la conclusión fue «diez puntos dentro del ruido, se publica el
   barato». Al completar la segunda dirección —que este mismo hito estableció como obligatoria
-  (D-120)— la corrida rápida pasó de +54 a **+68**, porque en el otro sentido dio +82. Veinticuatro
+  (D-120)— la ejecución rápida pasó de +54 a **+68**, porque en el otro sentido dio +82. Veinticuatro
   puntos, no diez.
-- **Las dos corridas largas, con las dos direcciones agrupadas:**
+- **Las dos ejecuciones largas, con las dos direcciones agrupadas:**
 
-  | corrida | Elo sobre la base (800 partidas) | ilegales propios | grupos planos | KL |
+  | ejecución | Elo sobre la base (800 partidas) | ilegales propios | grupos planos | KL |
   |---|---|---|---|---|
   | GRPO lr 1e-6 | **+44** (IC 23 a 66) | 1,92 % · **1,66×** la base | 0,472 | 0,122 |
   | GRPO lr 5e-6 | **+68** (IC 46 a 90) | 3,12 % · **2,08×** la base | 0,560 | 0,555 |
@@ -2262,21 +2262,21 @@ Evidencia obtenida por el controlador, no por subagentes:
   repos, en local y en GitHub, junto con la rama de trabajo `curso-reproducible` ya fusionada.
   Queda `main` y las etiquetas.
 
-### D-131 · Los checkpoints se nombran por su corrida, y una carpeta sin fecha resuelve a la corrida con fecha más reciente
+### D-131 · Los checkpoints se nombran por su ejecución, y una carpeta sin fecha resuelve a la ejecución con fecha más reciente
 - **Qué pasaba:** doce configs apuntaban a checkpoints por su carpeta con fecha
   (`checkpoints/medium-v4-20260919-174623/best.pt`, `encoder-mmm-20260919-093554//best.pt`).
-  Solo funcionaban en la máquina que entrenó esa corrida ese día. Las lecciones, por su parte,
+  Solo funcionaban en la máquina que entrenó esa ejecución ese día. Las lecciones, por su parte,
   escribían `checkpoints/small/best.pt`, una ruta que el bucle **nunca** produce porque
   `unique_run_name` añade la fecha.
-- **Qué se decidió:** las configs y las lecciones nombran la corrida sin fecha
+- **Qué se decidió:** las configs y las lecciones nombran la ejecución sin fecha
   (`checkpoints/medium-v4/best.pt`), que es lo que escribe `rukh pull`. Cuando esa carpeta no
   existe, `resolve_run` busca las carpetas `medium-v4-AAAAMMDD-HHMMSS` de al lado y toma la más
   reciente **por nombre**, no por fecha de modificación: copiar una carpeta no puede cambiar a qué
-  corrida apunta una config. Vale para ficheros y para carpetas de adaptadores, y para toda opción
+  ejecución apunta una config. Vale para ficheros y para carpetas de adaptadores, y para toda opción
   `--ckpt`, `--model`, `--resume`, `--adapter` y `--run` del CLI.
-- **Por qué no quitar `unique_run_name`:** la serie `step-*.pt` de una segunda corrida pisaría la
+- **Por qué no quitar `unique_run_name`:** la serie `step-*.pt` de una segunda ejecución pisaría la
   primera, y el `TrainingReplay` del curso lee esa serie.
-- **Qué cuesta si está mal:** dos corridas del mismo nombre y el lector que quiere la antigua.
+- **Qué cuesta si está mal:** dos ejecuciones del mismo nombre y el lector que quiere la antigua.
   El log dice cuál se ha resuelto; la config puede escribir la carpeta con fecha si hace falta.
 
 ### D-132 · Dos ficheros de M5 no los escribía ningún comando
@@ -2294,7 +2294,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   `3 + ply <= 200`. La muestra de 6 386 del brazo off-policy sale por tanto de 13 842 filas y no
   de 13 838, así que no es la misma muestra bit a bit. Ninguna cifra publicada se vuelve a medir
   por esto: los modelos del Hub son los entrenados con los ficheros originales, y la diferencia
-  está dentro del ruido que D-113 midió entre dos corridas idénticas.
+  está dentro del ruido que D-113 midió entre dos ejecuciones idénticas.
 - **La regla que deja:** si una config lee un fichero, un comando del repo tiene que escribirlo.
   Un fichero que solo existe en disco es una dependencia sin código.
 
@@ -2354,7 +2354,7 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Qué se decidió:** `EvalConfig.cache_fields(family)` con dos familias: `games` (temperatura,
   `top_k`, semilla, bloque, `elo_max_plies`, peldaños y **o bien** `elo_nodes` **o bien**
   `elo_move_time`, según cuál mande) y `puzzles` (lo compartido más `puzzles_use_header` cuando se
-  fuerza la cabecera). Dos `EvalCache` sobre el mismo `sqlite`. Una corrida por reloj conserva
+  fuerza la cabecera). Dos `EvalCache` sobre el mismo `sqlite`. Una ejecución por reloj conserva
   sus partidas cuando aparece `elo_nodes` en la config y no se usa.
 - **Por qué ahora:** M6 mide el mismo modelo con dos límites del rival, dos veces cada uno, y
   regenera la tabla entera; sin la partición cada cambio de régimen habría vuelto a jugar los
@@ -2412,7 +2412,7 @@ Evidencia obtenida por el controlador, no por subagentes:
   conocía el `model` de nanoGPT; corregido). Las dos filas de decoder que no están en el catálogo
   porque no se publicaron (`small-greedy`, la v1 de M2, y `medium-v4-dpo-greedy`, el DPO fuera de
   política de M5) se midieron a mano el mismo día en vez de retirarse: 1355 (1297-1420) y 1586
-  (1530-1651). Las dos filas del encoder que llevaban el nombre de su carpeta de corrida (backlog
+  (1530-1651). Las dos filas del encoder que llevaban el nombre de su carpeta de ejecución (backlog
   de P3) se retiraron con `rukh eval drop`; las tres del encoder de M3 (`encoder`, `encoder-rank`,
   `encoder-squares`) se conservan con su fecha porque son la comparación de esquemas de aquel
   módulo y no comparten columna con nada de lo de hoy.

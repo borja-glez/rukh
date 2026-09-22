@@ -164,7 +164,7 @@ Una que proponga la misma jugada ocho veces de ocho. Porque la calidad se mide c
 candidata **del grupo**, y si las ocho son la misma, cada una es la mejor.
 
 Es decir: mi métrica de «la recompensa mejoró» sube cuando el modelo **deja de ser diverso**. Lo
-comprobé con tres corridas que solo cambiaban la tasa de aprendizaje:
+comprobé con tres ejecuciones que solo cambiaban la tasa de aprendizaje:
 
 | tasa | recompensa | grupos donde las ocho eran la misma jugada |
 |---|---|---|

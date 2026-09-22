@@ -24,7 +24,7 @@ Un fichero por procedimiento, `<verbo>-<objeto>.md` (por ejemplo `entrenar-small
   reanudar `evals`.
 - [`afinado-y-adaptadores.md`](afinado-y-adaptadores.md): la familia de M4 (corpus plano por Elo,
   afinado condicionado, afinado de maestros, adaptadores LoRA), el barrido por condición con su
-  corrida de control, la exportación del grafo que acepta adaptadores en caliente y la publicación
+  ejecución de control, la exportación del grafo que acepta adaptadores en caliente y la publicación
   de los cinco artefactos. Incluye las trampas que costaron una medición cada una.
 - [`alineamiento.md`](alineamiento.md): la familia de M5 (reward model, pares on-policy, los dos
   DPO, GRPO), el instrumento de enfrentamiento directo con su control, y cómo se lee cada salida.

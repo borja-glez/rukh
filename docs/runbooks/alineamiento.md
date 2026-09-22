@@ -19,7 +19,7 @@ Requisitos: `uv sync --extra cu128 --extra hf --group dev`, los pares de P1 en
    compite con ellos, no ellos.
 2. **La profundidad del motor se fija y se escribe en el run.** D-118 midió que el valor de una
    recompensa para una jugada fija se mueve al cambiar la profundidad, incluso en la recompensa
-   sana. Dos corridas con profundidades distintas no son comparables y nada en el log lo avisa.
+   sana. Dos ejecuciones con profundidades distintas no son comparables y nada en el log lo avisa.
 3. **Entre trabajos largos, 15-20 minutos de descanso.**
 
 ## Comandos, en orden
@@ -74,7 +74,7 @@ conclusión es «no se puede distinguir», y decir «+48» sin el intervalo es d
 midió. El reparto de colores tiene que salir exacto a la mitad: `play_match` se niega a jugar un
 número impar de partidas precisamente para que no pueda no salir.
 
-**Y una corrida sola no basta.** El mismo par medido con los lados intercambiados dio +26 con el
+**Y una ejecución sola no basta.** El mismo par medido con los lados intercambiados dio +26 con el
 intervalo incluyendo el cero: la estimación se movió 22 puntos —ruido normal con 400 partidas— y el
 **veredicto** se dio la vuelta (D-120). Se corren las dos direcciones y se agrupan con
 `labs/m5/pooled_match.py`, que además calcula el residuo del triángulo cuando hay tres modelos.
@@ -100,7 +100,7 @@ Las dos primeras líneas y las dos últimas se leen juntas o no se leen. El acie
 tirado hacia abajo por la banda de mate, que es un tercio de los pares, y la correlación global
 **cambia de signo** al quitarla (D-119). Además, la semilla reparte la partición, así que el
 titular depende de cuántos pares de mate le tocaron al conjunto de validación (D-113): comparar
-dos corridas con semillas distintas no dice nada del modelo.
+dos ejecuciones con semillas distintas no dice nada del modelo.
 
 ### `rukh train grpo`
 
@@ -126,7 +126,7 @@ determinismo (D-124).
 entre jugadas legales y la puerta nunca se dispara. Para que enseñe algo hay que usar
 `grpo-legality.yaml`.
 
-Y la elección entre dos corridas **no se hace con esta salida**: se hace enfrentándolas (paso 9b).
+Y la elección entre dos ejecuciones **no se hace con esta salida**: se hace enfrentándolas (paso 9b).
 Restar lo que cada una hizo contra la base es el error que el hito entero desaconseja, y se cometió
 una vez antes de darse cuenta (D-126).
 
@@ -152,7 +152,7 @@ una vez antes de darse cuenta (D-126).
   cuando los emparejamientos interactúan.
   Y un veredicto binario leído del borde de un intervalo se da la vuelta con el ruido normal.
 - **Alinear cuesta legalidad** (D-121). Los dos DPO doblan la tasa de propuestas ilegales de su
-  base, y `nll_weight: 0.1` no lo evitó. GRPO paga menos, 1,66×. Mide el coste en la misma corrida
+  base, y `nll_weight: 0.1` no lo evitó. GRPO paga menos, 1,66×. Mide el coste en la misma ejecución
   que el beneficio.
 - **La recompensa que optimizas y la que publicas no son la misma** (D-123 a D-125). La del grupo se
   maximiza colapsando la política; la del motor no. Publica las dos y `flat_share` con ellas.
