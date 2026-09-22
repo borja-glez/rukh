@@ -1,6 +1,6 @@
 """How many games a head-to-head match needs, and what a match of N games can see.
 
-Lab 1 of M5, and the first thing that runs in the milestone. `GOAL.md` asks for **+50 Elo with an
+The first thing that runs in M5. `docs/acceptance.md` asks for **+50 Elo with an
 interval** over the base, and there are two ways to measure that:
 
 * run the Stockfish ladder twice and subtract the two absolute ratings;

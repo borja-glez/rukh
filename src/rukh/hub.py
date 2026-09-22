@@ -64,6 +64,16 @@ class Artefact:
     def repo_id(self) -> str:
         return self.repo if "/" in self.repo else f"{OWNER}/{self.repo}"
 
+    @property
+    def hub_repo_type(self) -> str:
+        """``dataset`` or ``model``, as the Hub API means it.
+
+        Not simply ``kind``: `rukh-tokenizer` is a dataset of this project's and a **model**
+        repository on the Hub, because that is where a tokenizer is looked for. The rule lives here
+        so that the card refresher and the collection sync cannot drift apart on it.
+        """
+        return "dataset" if self.kind == "dataset" and self.name != "rukh-tokenizer" else "model"
+
 
 MODELS: tuple[Artefact, ...] = (
     Artefact(
@@ -71,22 +81,22 @@ MODELS: tuple[Artefact, ...] = (
         "rukh-tiny",
         "decoder",
         "checkpoints/tiny/best.pt",
-        ("m2", "m6", "m6"),
+        ("m2", "m6"),
         "the 5 M decoder M2 iterates on (`configs/train/tiny.yaml`)",
         stage="tiny-greedy",
         measure="decoder",
-        lesson="/curso/m2/02-entrenar-y-medir/",
+        lesson="/curso/m2/03-la-receta-de-entrenamiento/",
     ),
     Artefact(
         "small",
         "rukh-small",
         "decoder",
         "checkpoints/small-v3/best.pt",
-        ("m2", "m6", "m6"),
+        ("m2", "m6"),
         "the 39 M course decoder, `small-v3` on the corpus with 24 months of Elite games",
         stage="small-v3-greedy",
         measure="decoder",
-        lesson="/curso/m2/02-entrenar-y-medir/",
+        lesson="/curso/m2/03-la-receta-de-entrenamiento/",
     ),
     Artefact(
         "medium-v4",
@@ -97,115 +107,115 @@ MODELS: tuple[Artefact, ...] = (
         "the 115 M decoder every M4 fine-tune and every M5 alignment run starts from",
         stage="medium-v4-greedy",
         measure="decoder",
-        lesson="/curso/m2/04-mas-datos-no-mas-red/",
+        lesson="/curso/m2/11-mas-datos-no-mas-red/",
     ),
     Artefact(
         "encoder-mmm-v4",
         "rukh-encoder-mmm",
         "encoder",
         "checkpoints/encoder-mmm-v4/best.pt",
-        ("m3", "m6", "m6"),
+        ("m3", "m6"),
         "the masked-move pretraining the published encoder's heads were fine-tuned on",
-        lesson="/curso/m3/03-labs-del-encoder/",
+        lesson="/curso/m3/11-labs-del-encoder/",
     ),
     Artefact(
         "encoder-v4",
         "rukh-encoder",
         "encoder",
         "checkpoints/encoder-heads-v4/step-4000.pt",
-        ("m3", "m6", "m6"),
+        ("m3", "m6"),
         "the encoder with its three heads at its last step, as published and served by the demo",
         stage="encoder-v4",
         measure="encoder",
-        lesson="/curso/m3/03-labs-del-encoder/",
+        lesson="/curso/m3/11-labs-del-encoder/",
     ),
     Artefact(
         "medium-elo",
         "rukh-medium-elo",
         "decoder",
         "checkpoints/medium-elo/step-3800.pt",
-        ("m4", "m6", "m6"),
+        ("m4", "m6"),
         "`medium-v4` fine-tuned on the Elo-balanced corpus (the last step, not `best.pt`)",
         stage="medium-elo",
         measure="decoder",
-        lesson="/curso/m4/03-labs-de-afinado/",
+        lesson="/curso/m4/10-labs-de-afinado/",
     ),
     Artefact(
         "medium-masters",
         "rukh-medium-masters",
         "decoder",
         "checkpoints/medium-masters/step-3800.pt",
-        ("m4", "m6", "m6"),
+        ("m4", "m6"),
         "`medium-v4` fine-tuned on Elite games (the last step, not `best.pt`)",
         stage="medium-masters",
         measure="decoder",
-        lesson="/curso/m4/03-labs-de-afinado/",
+        lesson="/curso/m4/10-labs-de-afinado/",
     ),
     Artefact(
         "lora-e4",
         "rukh-lora-e4",
         "adapter",
         "checkpoints/lora-e4",
-        ("m4", "m6", "m6"),
+        ("m4", "m6"),
         "the 1.6 MB style adapter that opens 1. e4",
         stage="lora-e4",
         measure="decoder",
         base="checkpoints/medium-v4/best.pt",
-        lesson="/curso/m4/03-labs-de-afinado/",
+        lesson="/curso/m4/10-labs-de-afinado/",
     ),
     Artefact(
         "lora-d4",
         "rukh-lora-d4",
         "adapter",
         "checkpoints/lora-d4",
-        ("m4", "m6", "m6"),
+        ("m4", "m6"),
         "the 1.6 MB style adapter that opens 1. d4",
         stage="lora-d4",
         measure="decoder",
         base="checkpoints/medium-v4/best.pt",
-        lesson="/curso/m4/03-labs-de-afinado/",
+        lesson="/curso/m4/10-labs-de-afinado/",
     ),
     Artefact(
         "qwen3-pgn-qlora",
         "rukh-qwen3-pgn-qlora",
         "peft",
         "checkpoints/qwen3-pgn-qlora",
-        ("m4", "m6", "m6"),
+        ("m4", "m6"),
         "the `peft` adapter of Qwen3-0.6B over PGN text, as `trl` wrote it",
         stage="qwen3-pgn-qlora",
         measure="qwen",
-        lesson="/curso/m4/03-labs-de-afinado/",
+        lesson="/curso/m4/10-labs-de-afinado/",
     ),
     Artefact(
         "rm",
         "rukh-rm",
         "reward",
         "checkpoints/rm/reward.pt",
-        ("m5", "m6", "m6"),
+        ("m5", "m6"),
         "the Bradley-Terry reward model over 69 square tokens",
-        lesson="/curso/m5/03-labs-de-alineamiento/",
+        lesson="/curso/m5/09-labs-de-alineamiento/",
     ),
     Artefact(
         "medium-v4-dpo-onpolicy",
         "rukh-medium-dpo",
         "decoder",
         "checkpoints/medium-v4-dpo-onpolicy/dpo.pt",
-        ("m5", "m6", "m6"),
+        ("m5", "m6"),
         "`medium-v4` after DPO on its own pairs, the aligned decoder the demo serves",
         stage="medium-v4-dpo-onpolicy-greedy",
         measure="decoder",
-        lesson="/curso/m5/03-labs-de-alineamiento/",
+        lesson="/curso/m5/09-labs-de-alineamiento/",
     ),
     Artefact(
         "medium-v4-grpo",
         "rukh-medium-grpo",
         "decoder",
         "checkpoints/medium-v4-grpo/grpo.pt",
-        ("m5", "m6", "m6"),
+        ("m5", "m6"),
         "`medium-v4` after GRPO against the verifiable reward",
         stage="medium-v4-grpo-greedy",
         measure="decoder",
-        lesson="/curso/m5/03-labs-de-alineamiento/",
+        lesson="/curso/m5/09-labs-de-alineamiento/",
     ),
 )
 
@@ -225,14 +235,14 @@ DATASET_MODULES: dict[str, tuple[str, ...]] = {
 
 
 DATASET_LESSONS: dict[str, str] = {
-    "rukh-games-1800": "/curso/m1/02-labs-del-pipeline/",
-    "rukh-tokenizer": "/curso/m1/02-labs-del-pipeline/",
-    "rukh-games-elite": "/curso/m2/04-mas-datos-no-mas-red/",
-    "rukh-positions-eval": "/curso/m1/02-labs-del-pipeline/",
-    "rukh-puzzles-split": "/curso/m1/02-labs-del-pipeline/",
-    "rukh-elo-bins": "/curso/m1/02-labs-del-pipeline/",
-    "rukh-pairs-dpo": "/curso/m1/02-labs-del-pipeline/",
-    "rukh-pairs-onpolicy": "/curso/m5/03-labs-de-alineamiento/",
+    "rukh-games-1800": "/curso/m1/10-labs-del-pipeline/",
+    "rukh-tokenizer": "/curso/m1/10-labs-del-pipeline/",
+    "rukh-games-elite": "/curso/m2/11-mas-datos-no-mas-red/",
+    "rukh-positions-eval": "/curso/m1/10-labs-del-pipeline/",
+    "rukh-puzzles-split": "/curso/m1/10-labs-del-pipeline/",
+    "rukh-elo-bins": "/curso/m1/10-labs-del-pipeline/",
+    "rukh-pairs-dpo": "/curso/m1/10-labs-del-pipeline/",
+    "rukh-pairs-onpolicy": "/curso/m5/09-labs-de-alineamiento/",
 }
 """The lesson each dataset is built in."""
 

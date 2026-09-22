@@ -155,3 +155,13 @@ def test_the_cli_dry_run_prints_the_plan(rukh_home: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "tiny-greedy" in result.output and "planned" in result.output
     assert "rm" not in result.output.replace("tiny-greedy", "")
+
+
+def test_an_adapter_base_is_looked_up_and_not_hard_coded() -> None:
+    """Merging onto the wrong base does not fail, it just measures another model."""
+    from rukh.eval.nightly import _artefact_at
+
+    assert _artefact_at("checkpoints/medium-v4/best.pt").name == "medium-v4"
+    assert _artefact_at("checkpoints/small-v3/best.pt").name == "small"
+    with pytest.raises(FileNotFoundError):
+        _artefact_at("checkpoints/nothing-builds-this/best.pt")

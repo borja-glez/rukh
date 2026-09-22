@@ -12,8 +12,12 @@ import torch
 from rukh.engine import find_stockfish
 from rukh.models.squares import fen_to_tokens
 from rukh.train import load_any
+from rukh.train.checkpoint import resolve_run
 
-CKPT = Path("checkpoints/encoder-heads-full/best.pt")
+# `encoder-heads.yaml` sets `unique_run_name: true`, so on disk the run is stamped
+# (`encoder-heads-20260921-185425/`) and the unstamped folder never exists. `resolve_run` takes
+# the newest run of that name, which is what the config means by `run_name: encoder-heads`.
+CKPT = resolve_run(Path("checkpoints/encoder-heads/best.pt"))
 OUT = Path("artifacts/web/value-bar.json")
 VALUE_SCALE = 400.0  # the tanh(cp / 400) of rukh.data.labels: both curves must share it
 THRESHOLD = 0.5  # the blunder threshold of configs/eval/encoder.yaml

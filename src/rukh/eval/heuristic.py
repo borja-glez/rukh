@@ -1,6 +1,7 @@
 """The dumb baseline the encoder has to beat: material, mobility and a one-ply look at captures.
 
-``GOAL.md`` asks for a blunder F1 five points above a heuristic, and the heuristic is only worth
+``docs/acceptance.md`` asks for a blunder F1 five points above a heuristic, and the heuristic is
+only worth
 anything as a comparison if it is measured exactly like the model: same positions, same labels,
 same definition of a hit. So it lives here, next to the suite, and is deliberately kept as
 simple as a chess program can be:

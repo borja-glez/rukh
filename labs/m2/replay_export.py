@@ -1,6 +1,6 @@
 """Export the training curve of a run to ``artifacts/web/training-replay.json``.
 
-Lab 3 of module M2. Reads the metrics MLflow stored during ``rukh train`` and writes **one
+Lab 4 of module M2. Reads the metrics MLflow stored during ``rukh train`` and writes **one
 entry per checkpoint**: the slider of the ``TrainingReplay`` island walks the ``step-*.pt`` files
 the run left behind, not the (much denser) MLflow logging steps, because every other number the
 island can show — legality, Elo — only exists for a step whose weights are still on disk.
@@ -11,7 +11,8 @@ and ``eval_every`` both divide ``ckpt_every``), ``legality`` needs ``--with-lega
 needs ``--with-elo``.
 
 ``legality`` is the argmax rate of the design spec 02 (D-026): the single most likely token, no
-temperature, no top-k and no mask. It is the bar ``GOAL.md`` sets at 99 %, and the one that means
+temperature, no top-k and no mask. It is the bar ``docs/acceptance.md`` sets at 99 %, and the one
+that means
 something when it is plotted against the training step.
 
 Usage (from the repository root):

@@ -1,6 +1,7 @@
 # M6 labs
 
-Scripts referenced by the M6 lessons (`rukh-lab`, `curso/m6/`). Run them from the repository
+Scripts referenced by the M6 lessons (`rukh-lab`, `curso/m6/09-labs-de-cierre`). Run them
+from the repository
 root. Nothing here trains: the module measures, exports and publishes what M1-M5 left.
 
 | Script | Needs | Lesson lab |

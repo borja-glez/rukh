@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -22,6 +23,9 @@ from rukh.data.manifest import FileHash, Manifest
 from rukh.data.parallel import run_batches
 from rukh.data.uci import resolve_workers, sha256_file
 from rukh.paths import resolve
+
+if TYPE_CHECKING:  # `chess` is imported lazily inside the functions that need it at run time
+    import chess
 
 OPENING_MAX_PLY = 10
 MIDDLEGAME_MIN_PIECES = 14
@@ -53,7 +57,7 @@ class PositionsConfig(BaseConfig):
     duckdb: DuckDbConfig = Field(default_factory=DuckDbConfig)
 
 
-def fen4(board: object) -> str:
+def fen4(board: chess.Board) -> str:
     """First four FEN fields, built without the move counters python-chess would format.
 
     The en-passant square is written only when the capture is legal, which is the convention
@@ -61,9 +65,9 @@ def fen4(board: object) -> str:
     """
     import chess
 
-    ep = chess.SQUARE_NAMES[board.ep_square] if board.has_legal_en_passant() else "-"  # type: ignore[attr-defined]
-    turn = "w" if board.turn else "b"  # type: ignore[attr-defined]
-    return f"{board.board_fen()} {turn} {board.castling_xfen()} {ep}"  # type: ignore[attr-defined]
+    ep = chess.SQUARE_NAMES[board.ep_square] if board.has_legal_en_passant() else "-"
+    turn = "w" if board.turn else "b"
+    return f"{board.board_fen()} {turn} {board.castling_xfen()} {ep}"
 
 
 def phase(ply: int, n_pieces: int) -> str:
@@ -166,6 +170,19 @@ def dedupe(
     return int(row[0]) if row else 0
 
 
+def drop_parts(parts_dir: Path) -> None:
+    """Delete the undeduplicated parts once ``positions.parquet`` holds what they were for.
+
+    They are the raw walk -- some 23 M rows and several GB for a full month -- and nothing reads
+    them after ``dedupe``. They are also not in the manifest, so leaving them on disk puts bytes
+    beside a dataset that does not describe them.
+    """
+    for part in sorted(parts_dir.glob("part-*.parquet")):
+        part.unlink()
+    if parts_dir.is_dir() and not any(parts_dir.iterdir()):
+        parts_dir.rmdir()
+
+
 def month_parquet(uci_dir: Path, month: str) -> Path:
     year, mm = month.split("-")
     return uci_dir / f"year={year}" / f"month={mm}" / "games.parquet"
@@ -179,6 +196,7 @@ def run(cfg: PositionsConfig) -> Manifest:
     n_positions = write_parts(games, parts_dir, cfg)
     out = out_dir / POSITIONS_FILE
     n_distinct = dedupe(parts_dir, out, cfg.max_positions, cfg.duckdb)
+    drop_parts(parts_dir)
     manifest = Manifest(
         dataset="Lichess/standard-chess-games",
         months=[cfg.month],

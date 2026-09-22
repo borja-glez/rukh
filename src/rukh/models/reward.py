@@ -20,7 +20,8 @@ to infinity costs more and more for less and less.
 
 What this module is **not** for: DPO. `DPOTrainer` and `rukh.train.dpo` have an implicit reference
 and need no reward model at all. This one is here because it is the piece that makes PPO make
-sense, because it can be measured on its own (``GOAL.md`` asks for 75 % on held-out pairs), and
+sense, because it can be measured on its own (``docs/acceptance.md`` asks for 75 % on held-out
+pairs), and
 because a learned reward is the thing GRPO's verifiable rewards are being compared against.
 """
 
@@ -66,7 +67,8 @@ def preference_loss(chosen: Tensor, rejected: Tensor) -> Tensor:
 def preference_accuracy(chosen: Tensor, rejected: Tensor) -> float:
     """Share of pairs the model orders correctly. A tie counts as wrong, not as half right.
 
-    ``GOAL.md`` reads its bar on this number, and a reward model that scores two moves exactly
+    ``docs/acceptance.md`` reads its bar on this number, and a reward model that scores two moves
+    exactly
     the same has expressed no preference -- rounding that up to half a point would flatter it.
     """
     with torch.no_grad():

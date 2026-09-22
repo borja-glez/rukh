@@ -1,4 +1,9 @@
-# Full evaluation suite (the design spec 02, component 5): the numbers that go in the results table.
+# The wide suite of P2: ten times the positions and five times the games per Elo rung, sampled at
+# `temperature: 0.6`. It is a deeper look at one checkpoint, and it is **not** what the results
+# table holds -- every published row was measured with `configs/eval/greedy.yaml`, at
+# `temperature: 0.05, top_k: 1`, which is worth about 180 Elo on the same weights (D-047). Two
+# rows only compare if the config did not move, so this file no longer writes `web_results`:
+# pointing it at the table is how the table came to carry rows nothing else could be compared to.
 # Hours of Stockfish games; the SQLite cache makes a re-run cheap.
 games: data/uci/year=2025/month=02/games.parquet
 puzzles: data/puzzles/puzzles.parquet
@@ -16,7 +21,8 @@ top_k: 20
 block: 200
 seed: 42
 out_dir: artifacts/eval
-web_results: artifacts/web/results.json
+# Deliberately not `artifacts/web/results.json`: see the header.
+web_results: null
 cache_db: artifacts/eval/cache.sqlite
 # device: null -> CUDA when it is available (rukh.train.pick_device)
 track: true

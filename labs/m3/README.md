@@ -1,6 +1,6 @@
 # M3 labs
 
-Scripts referenced by the M3 lesson (`rukh-lab`, `curso/m3/01-el-encoder`). Run them from the
+Scripts referenced by the M3 lesson (`rukh-lab`, `curso/m3/11-labs-del-encoder`). Run them from the
 repository root.
 
 | Script | Needs | Lesson lab |
@@ -53,6 +53,7 @@ heads **and** with Stockfish, and writes `artifacts/web/value-bar.json` (schema
 uv run python labs/m3/value_bar_export.py
 ```
 
-It needs `checkpoints/encoder-heads-full/best.pt` and a Stockfish binary
+It needs the `encoder-heads` run (`checkpoints/encoder-heads-<stamp>/best.pt`, found for you)
+and a Stockfish binary
 (`scripts/get_stockfish.py`, or `RUKH_STOCKFISH`): both curves on one chart is the whole figure,
 so it refuses to run with only one of them rather than writing half a file.

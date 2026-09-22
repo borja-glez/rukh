@@ -42,11 +42,7 @@ def collection_items() -> list[tuple[str, str]]:
     """``(repo id, item type)`` for every catalogued artefact, models first, in course order."""
     items: list[tuple[str, str]] = []
     for artefact in catalogue():
-        item_type = (
-            "dataset"
-            if artefact.kind == "dataset" and artefact.name != "rukh-tokenizer"
-            else "model"
-        )
+        item_type = artefact.hub_repo_type
         if (artefact.repo_id, item_type) not in items:
             items.append((artefact.repo_id, item_type))
     return items

@@ -43,7 +43,7 @@ Not evaluated yet: run `rukh eval encoder --model <checkpoint>` to fill this tab
 
 ### Acceptance bars
 
-The project set these two bars for the encoder in `GOAL.md` before any of this was trained. This
+The project set these two bars for the encoder in `docs/acceptance.md` before any of this was trained. This
 is where the release stands against them, and it is the same table whether the answer is
 flattering or not.
 
@@ -60,7 +60,7 @@ exactly where the positions are densest. It is the same diagnosis as the decoder
 missing is labelled data, not capacity.
 {%- elif bar.id == "blunder" %}
 **The blunder bar is not met**: at its own operating point the head does not add the five F1
-points over the material baseline that `GOAL.md` asks for.
+points over the material baseline that `docs/acceptance.md` asks for.
 {%- endif %}
 {%- endfor %}
 {%- endif %}

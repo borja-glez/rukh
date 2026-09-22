@@ -1,19 +1,19 @@
-# El barrido otra vez, muestreando la distribución en vez de su moda.
+# The sweep again, sampling the distribution instead of its mode.
 #
-# Toda la suite juega con `temperature: 0.05, top_k: 1`, que es la moda: el modelo hace siempre su
-# jugada más probable. Y la diferencia entre un 1200 y un 2400 no está en la moda -- los dos hacen
-# la recaptura obvia -- sino en la cola, en cada cuánto eligen algo malo. Los datos del hito lo
-# dicen solos: la entropía de la primera jugada, que lee la distribución entera, es monótona en las
-# seis condiciones; los puzles y el Elo, que leen la moda, son planos.
+# The whole suite plays at `temperature: 0.05, top_k: 1`, which is the mode: the model always makes
+# its most likely move. And the difference between a 1200 and a 2400 is not in the mode -- both
+# play the obvious recapture -- but in the tail, in how often they pick something bad. The
+# milestone's own data says so: first-move entropy, which reads the whole distribution, is
+# monotonic across the six conditions; the puzzles and the Elo, which read the mode, are flat.
 #
-# Así que esta tirada cambia una sola cosa respecto de `greedy-sweep.yaml`: muestrea a temperatura
-# 1,0 con top-k 20, que es el ajuste "humano" de la demo. Si la brecha entre `<w1200>` y `<w2400>`
-# se abre, la cabecera controla la fuerza y lo que faltaba era dejar de muestrear el pico. Si sale
-# plana, es un segundo resultado nulo y también dice algo.
+# So this run changes exactly one thing against `greedy-sweep.yaml`: it samples at temperature 1.0
+# with top-k 20, the "human" setting of the demo. If the gap between `<w1200>` and `<w2400>` opens,
+# the header does control strength and what was missing was to stop sampling the peak. If it comes
+# out flat, that is a second null result and it says something too.
 #
-# NO sustituye a nada publicado: D-047 fija el muestreo casi determinista como el de todos los
-# números del proyecto, así que esto es una medición aparte, con su caché aparte, y se publica
-# diciendo a qué temperatura se leyó.
+# It replaces nothing published: D-047 fixes the near-deterministic sampling as the one every
+# number of this project is read at, so this is a separate measurement, with its own cache, and it
+# is published saying which temperature it was read at.
 
 games: data/uci/year=2025/month=02/games.parquet
 puzzles: data/puzzles/puzzles.parquet

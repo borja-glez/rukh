@@ -1,6 +1,6 @@
 """Pool the two directions of a match, and show how little the verdict deserves to be trusted.
 
-Lab 2 of M5. `rukh eval match` plays A against B; playing B against A is a different sample of the
+A lab of M5. `rukh eval match` plays A against B; playing B against A is a different sample of the
 same question, and M5 ran both for all three pairs because the first three matches all went to
 whoever was passed as A and that had to be ruled out.
 

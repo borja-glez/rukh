@@ -593,7 +593,7 @@ def parity_context(payload: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def acceptance_bars(evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """The decoder's two bars from ``GOAL.md``, each against the value that was measured.
+    """The decoder's two bars from ``docs/acceptance.md``, each against the value that was measured.
 
     A bar whose metric is missing is left out of the list entirely: "not met" and "not measured"
     are different statements, and only one of them would be true.
@@ -630,7 +630,8 @@ def acceptance_bars(evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
 
 
 def encoder_acceptance_bars(evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """The encoder's two bars from ``GOAL.md``, read on the same metrics the harness reads.
+    """The encoder's two bars from ``docs/acceptance.md``, read on the same metrics the harness
+    reads.
 
     The value bar is read on **Spearman** and not on Pearson, for the reason
     ``rukh.eval.encoder.GOAL_VALUE_CORRELATION`` spells out; the card must not be able to pass a
@@ -939,11 +940,7 @@ def publish_model(
     name = stage or repo_id.split("/")[-1].removeprefix("rukh-")
     model, payload, kind = load_any(ckpt)
     state = publish_state(model)
-    params = (
-        model.num_params(non_embedding=False)
-        if hasattr(model, "num_params")
-        else sum(parameter.numel() for parameter in model.parameters())
-    )
+    params = model.num_params(non_embedding=False)
 
     folder = resolve(cfg.publish_dir) / repo_id
     folder.mkdir(parents=True, exist_ok=True)

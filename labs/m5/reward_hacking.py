@@ -1,6 +1,6 @@
 """The gallery: five reward designs that are wrong, and what each one actually breaks.
 
-Lab 3 of M5. A verifiable reward is written down by a person, which means it is exactly
+A lab of M5. A verifiable reward is written down by a person, which means it is exactly
 specifiable and therefore exactly gameable. The usual way this gets taught is a story about a boat
 in a video game spinning in circles, and the trouble with a story is that you cannot check it.
 

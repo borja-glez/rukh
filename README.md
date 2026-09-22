@@ -99,7 +99,7 @@ uv run rukh pull medium-v4 rukh-pairs-dpo
   every config and lesson names it. A run you trained yourself lands in a stamped folder
   (`checkpoints/medium-v4-20260919-174623/`), and the same spelling finds it: a stable name that
   does not exist resolves to the newest stamped run of that name.
-- The code is always `main`. The milestones are tagged (`git tag -n1 -l 'p*'`: `p0` to `p5`,
+- The code is always `main`. The milestones are tagged (`git tag -n1 -l 'p*'`: `p0` to `p6`,
   plus `p3-elo-1200`) so the repository can be read as it was the day each one closed, but the
   tags are history, not starting points: `p2`, for instance, still carries the Elo ladder that
   D-070 later corrected.

@@ -224,6 +224,7 @@ def export_all(
     adapter_inputs: bool = False,
     adapter: Path | None = None,
     lora: LoraConfig | None = None,
+    blunder_threshold: float | None = None,
 ) -> ExportBundle:
     """Export, quantize and check one checkpoint in a single pass.
 
@@ -233,6 +234,11 @@ def export_all(
     ``rukh.data.labels`` and is skipped, with a warning, when those have not been built: a
     random board is not a position the demo will ever be asked to evaluate.
 
+    ``blunder_threshold`` (encoder only) is the tuned operating point of the blunder head,
+    ``threshold_tuned`` in the run of ``rukh eval encoder``. The head is not calibrated, so a
+    consumer that assumes 0.5 shows an alert that never fires; writing the real one into the
+    file's metadata is what lets the demo read it off the model instead of guessing.
+
     ``adapter_inputs`` writes the graph that takes its LoRA factors as two extra inputs
     (``rukh.export.adapter``) instead of a graph with fixed weights. Its parity is then read
     twice: once with an adapter of zeros, which has to reproduce the checkpoint exactly, and, if
@@ -241,7 +247,9 @@ def export_all(
     if kind not in KINDS:
         raise ValueError(f"unknown kind {kind!r}; expected one of {', '.join(KINDS)}")
     if kind == "encoder":
-        return _export_encoder(ckpt, out, opset, fp16, int8, check_parity, positions, labels, split)
+        return _export_encoder(
+            ckpt, out, opset, fp16, int8, check_parity, positions, labels, split, blunder_threshold
+        )
     from rukh.tokenize.uci_vocab import UciTokenizer
     from rukh.train import load_model
 
@@ -331,12 +339,15 @@ def _export_encoder(
     positions: int,
     labels: LabelsConfig | None,
     split: str,
+    blunder_threshold: float | None = None,
 ) -> ExportBundle:
     """``export_all(kind="encoder")``: the two heads, the same files, its own parity."""
     from rukh.train import load_heads
 
     model, _payload = load_heads(Path(ckpt))
-    bundle = ExportBundle(onnx=export_encoder_onnx(model, out, opset=opset))
+    bundle = ExportBundle(
+        onnx=export_encoder_onnx(model, out, opset=opset, blunder_threshold=blunder_threshold)
+    )
     checks = _quantize(bundle, fp16, int8)
     if check_parity:
         items, source, warning = encoder_parity_positions(model, labels, n=positions, split=split)

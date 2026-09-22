@@ -7,7 +7,14 @@ import pytest
 import torch
 
 from rukh.tokenize.uci_vocab import UciTokenizer
-from rukh.train.dpo import DpoConfig, batches, dpo_loss, encode_pairs
+from rukh.train.dpo import (
+    DpoConfig,
+    PreferencePair,
+    batches,
+    dpo_loss,
+    encode_pairs,
+    split_pairs,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -19,8 +26,9 @@ def tok() -> UciTokenizer:
 
 def _frame(rows: list[dict[str, object]]) -> pl.DataFrame:
     return pl.DataFrame(
-        rows,
+        [{"game_id": f"g{i}", **row} for i, row in enumerate(rows)],
         schema={
+            "game_id": pl.String,
             "prefix": pl.String,
             "chosen": pl.String,
             "rejected": pl.String,
@@ -47,11 +55,12 @@ def test_encode_builds_the_header_and_the_prefix(tok: UciTokenizer) -> None:
         block=200,
     )
     assert len(rows) == 1
-    ids, chosen, rejected = rows[0]
-    assert ids[0] == tok.bos_id
-    assert ids[1] == tok.vocab["<w1800>"] and ids[2] == tok.vocab["<b2200>"]
-    assert ids[3:] == [tok.vocab["e2e4"], tok.vocab["e7e5"]]
-    assert chosen == tok.vocab["g1f3"] and rejected == tok.vocab["h2h4"]
+    row = rows[0]
+    assert row.ids[0] == tok.bos_id
+    assert row.ids[1] == tok.vocab["<w1800>"] and row.ids[2] == tok.vocab["<b2200>"]
+    assert row.ids[3:] == [tok.vocab["e2e4"], tok.vocab["e7e5"]]
+    assert row.chosen == tok.vocab["g1f3"] and row.rejected == tok.vocab["h2h4"]
+    assert row.game_id == "g0"
 
 
 def test_encode_drops_what_it_cannot_represent(tok: UciTokenizer) -> None:
@@ -171,3 +180,36 @@ def test_max_pairs_samples_the_whole_file_with_the_seed() -> None:
     assert limit_pairs(frame, DpoConfig(max_pairs=50)).height == 12
     with pytest.raises(ValueError):
         DpoConfig(max_pairs=0)
+
+
+def test_the_split_goes_by_game_so_two_pairs_of_one_game_cannot_straddle_it() -> None:
+    """Splitting by pair leaks: one game's pairs share a prefix almost to the end.
+
+    The same guarantee `train.reward.split_examples` gives the reward model, and the reason the
+    validation accuracy DPO prints can be read at all.
+    """
+    rows = [
+        PreferencePair(game_id=f"g{game}", ids=[0, 1, 2], chosen=3, rejected=4)
+        for game in range(300)
+        for _ in range(4)
+    ]
+    train, val = split_pairs(rows, val_fraction=0.2, seed=42)
+    assert train and val
+    assert len(train) + len(val) == len(rows)
+    assert {r.game_id for r in train} & {r.game_id for r in val} == set()
+    # A game keeps all four of its pairs on the one side it landed on.
+    for side in (train, val):
+        counts: dict[str, int] = {}
+        for row in side:
+            counts[row.game_id] = counts.get(row.game_id, 0) + 1
+        assert set(counts.values()) == {4}
+
+
+def test_the_split_is_the_same_split_on_every_run() -> None:
+    """A seed has to name one split, or two arms cannot be compared to each other."""
+    rows = [
+        PreferencePair(game_id=f"g{game}", ids=[0, 1], chosen=2, rejected=3) for game in range(200)
+    ]
+    first = split_pairs(rows, 0.2, seed=7)[1]
+    assert [r.game_id for r in first] == [r.game_id for r in split_pairs(rows, 0.2, seed=7)[1]]
+    assert [r.game_id for r in first] != [r.game_id for r in split_pairs(rows, 0.2, seed=8)[1]]

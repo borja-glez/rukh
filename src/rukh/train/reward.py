@@ -10,7 +10,8 @@ apart in the same position, so a model that memorised one has most of the other.
 the same pure CRC-32 function M3 used, for the same reason: it gives the same answer in every
 process and every future run.
 
-**The metric is accuracy on held-out pairs**, which `GOAL.md` puts a bar on, plus the correlation
+**The metric is accuracy on held-out pairs**, which `docs/acceptance.md` puts a bar on, plus the
+correlation
 between the reward and the centipawn difference it was trained from -- Spearman as well as
 Pearson, because M3 measured that a head can get the order right and the scale wrong, and the two
 numbers are the diagnosis.
@@ -117,7 +118,7 @@ class RewardResult(BaseConfig):
     train_pairs: int
     val_pairs: int
     accuracy: float
-    """Share of held-out pairs ordered correctly. The bar of ``GOAL.md`` is 75 %."""
+    """Share of held-out pairs ordered correctly. The bar of ``docs/acceptance.md`` is 75 %."""
     loss: float
     pearson: float | None = None
     spearman: float | None = None

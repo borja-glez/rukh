@@ -17,6 +17,9 @@ dependencies = [
   "pyarrow>=25",
   "zstandard>=0.25",
   "numpy>=2",
+  # `norm.ppf` in `eval/match.py` and `pearsonr`/`spearmanr` in `train/reward.py`. It used to
+  # arrive as a transitive of mlflow, which is not a promise mlflow makes.
+  "scipy>=1.14",
   "huggingface_hub>=1.32",
   "datasets>=5",
   "tokenizers>=0.22",

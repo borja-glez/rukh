@@ -293,6 +293,7 @@ def export_encoder_onnx(
     out: Path,
     opset: int = DEFAULT_OPSET,
     dynamic_batch: bool = True,
+    blunder_threshold: float | None = None,
 ) -> ExportResult:
     """Export the ``value`` and ``blunder`` heads of a fine-tuned encoder to ONNX.
 
@@ -300,6 +301,11 @@ def export_encoder_onnx(
     and there is no sequence axis to make dynamic, while ``moves`` reads a growing game exactly
     as the decoder does. The example the exporter traces is a sequence of real tokens rather
     than zeros, because ``<pad>`` everywhere is a position the encoder legitimately refuses.
+
+    ``blunder_threshold`` is the probability above which *this* head is calling a move a blunder,
+    as ``rukh eval encoder`` tuned it (``threshold_tuned``). It travels in the metadata because
+    the head is not calibrated: a reader who assumes the factory 0.5 gets an alert that never
+    fires, since the published head does not reach it.
     """
     model = ckpt if isinstance(ckpt, MultiHead) else _load_heads(Path(ckpt))
     model = model.eval()
@@ -342,6 +348,11 @@ def export_encoder_onnx(
             "dynamic_seq": really_dynamic,
             "exporter": exporter,
             "version": __version__,
+            **(
+                {}
+                if blunder_threshold is None
+                else {"blunder_threshold": f"{blunder_threshold:.6g}"}
+            ),
         },
     )
     return ExportResult(

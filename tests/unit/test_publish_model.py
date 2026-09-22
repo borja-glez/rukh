@@ -391,7 +391,8 @@ def test_the_cli_reports_a_missing_onnx_directory(
 
 
 def test_the_card_puts_every_acceptance_bar_next_to_what_was_measured() -> None:
-    """The bars are the project's own, from ``GOAL.md``, and the verdict is computed here."""
+    """The bars are the project's own, from ``docs/acceptance.md``, and the verdict is computed
+    here."""
     text = render_card(
         card_context(
             "chorcat/rukh-tiny", "tiny", ModelPublishConfig(), {"params": 1}, EVAL, RUN, []

@@ -70,7 +70,8 @@ def resolve_run(path: str | Path) -> Path:
 CURVE_KEY = "label_curve"
 """Where ``rukh.train.heads.label_curve`` writes its points and ``rukh eval encoder`` reads them.
 
-The curve is the lesson of M3 ("how many labels does this actually take?") and a ``GOAL.md``
+The curve is the lesson of M3 ("how many labels does this actually take?") and a
+``docs/acceptance.md``
 deliverable, so it travels **inside** the checkpoint: a number that only ever existed in a log
 line is a number nobody can put in a table."""
 TIED_HEAD = "lm_head.weight"

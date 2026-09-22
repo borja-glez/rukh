@@ -1,6 +1,6 @@
 import sys
 
-import duckdb
+from rukh.data.db import connect
 
 # The Windows console is cp1252 by default and DuckDB draws its tables with box characters, so a
 # plain `print` of a result set dies with UnicodeEncodeError. Ask for UTF-8 before printing
@@ -10,7 +10,9 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 GAMES = "data/uci/year=2025/month=01/games.parquet"
-con = duckdb.connect()
+# `rukh.data.db.connect` and not `duckdb.connect`: it is what sets the spill directory and the
+# memory limit, and a group-by over a month of games is exactly the query that needs them.
+con = connect()
 
 print("== Distribución de Elo (blancas), tramos de 100 ==")
 print(

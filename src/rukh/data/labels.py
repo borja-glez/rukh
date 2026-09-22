@@ -78,7 +78,7 @@ class LabelsConfig(BaseConfig):
     seed: int = 42
 
 
-def game_split(game_id: int, val_fraction: float, seed: int) -> str:
+def game_split(game_id: int | str, val_fraction: float, seed: int) -> str:
     """Which side of the split a game falls on: a pure function of its id and the seed.
 
     CRC-32 rather than ``hash()`` or a dataframe hash: it is the same number in every process,

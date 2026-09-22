@@ -8,9 +8,11 @@ wrong, which is a different problem and the one this module is about.
 
 Four rules shape every function below.
 
-**Legality is a gate, not a term.** An illegal move scores zero and skips the rest. Adding a
-legality *bonus* to a weighted sum lets the model trade legality for something else, and the whole
-point of a verifiable reward is that some things are not tradeable.
+**Legality is a gate, not a term.** An illegal move scores ``illegal_value(weights)`` -- a whole
+unit below anything a legal move can reach, ``-1.25`` with the default weights -- and skips the
+rest. Adding a legality *bonus* to a weighted sum lets the model trade legality for something
+else, and the whole point of a verifiable reward is that some things are not tradeable. A flat
+zero was the first answer and it was wrong; ``ILLEGAL_MARGIN`` below carries why (D-115).
 
 **Everything is capped.** A reward with no ceiling is an invitation: the optimiser will find the
 direction that grows without bound and go there, and what comes back is a model that maximises the

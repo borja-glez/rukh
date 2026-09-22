@@ -17,4 +17,4 @@ Every row is the same suite with one number changed: the `<wXXXX> <bXXXX>` heade
 - Confidence intervals: separated.
 - Span between the weakest and the strongest condition: 161 Elo.
 
-The two are not the same claim. Point estimates rise by chance often enough that a monotonic row of numbers is not evidence on its own; the acceptance bar of `GOAL.md` is read on the intervals.
+The two are not the same claim. Point estimates rise by chance often enough that a monotonic row of numbers is not evidence on its own; the acceptance bar of `docs/acceptance.md` is read on the intervals.

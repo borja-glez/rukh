@@ -1,6 +1,6 @@
 """Export a small, seeded set of test puzzles for the demo's live puzzle mode.
 
-Lab 5 of M6. The demo cannot read a parquet and should not download 22 MB to show fifty puzzles,
+A lab of M6. The demo cannot read a parquet and should not download 22 MB to show fifty puzzles,
 so this writes `artifacts/web/puzzles.json`: 50 puzzles per difficulty band drawn from the
 `test` split of `chorcat/rukh-puzzles-split` with the same loader the harness uses
 (`rukh.eval.puzzles.load_puzzles`), so what the browser attempts is exactly what the table

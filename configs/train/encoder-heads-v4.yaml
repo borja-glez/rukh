@@ -16,7 +16,7 @@ weights:
   value: 1.0
   blunder: 1.0
   result: 0.5
-  value_rank: 1.0   # optimise the ordering GOAL.md scores, not only the magnitude (D-076)
+  value_rank: 1.0   # optimise the ordering docs/acceptance.md scores, not only the magnitude (D-076)
 labels:
   positions_eval: data/evals/positions-eval.parquet
   games_dir: data/uci # only this scheme reads it: the prefixes come from the P1 games

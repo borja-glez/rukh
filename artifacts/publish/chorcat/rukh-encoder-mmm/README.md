@@ -111,7 +111,7 @@ Validation uses a held-out slice of a month the training split does not read.
 
 ## In the course
 
-- Built in [M3 · El encoder: los labs](https://lab.rukh.borjaglez.com/curso/m3/03-labs-del-encoder/), the lesson that runs every command behind this repository.
+- Built in [M3 · El encoder: los labs](https://lab.rukh.borjaglez.com/curso/m3/11-labs-del-encoder/), the lesson that runs every command behind this repository.
 - Measured in the [single results table](https://lab.rukh.borjaglez.com/proyecto/): every stage of the course, the same suite, the same day.
 - Bring it to the paths the configs read: `uv run rukh pull encoder-mmm-v4`.
 

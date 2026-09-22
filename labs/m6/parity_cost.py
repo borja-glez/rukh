@@ -1,6 +1,6 @@
 """What the export costs in Elo: fp32, fp16 and int8 of the same model on the same ladder.
 
-Lab 2 of M6. M2 measured **parity** -- in how many positions each export picks the checkpoint's
+A lab of M6. M2 measured **parity** -- in how many positions each export picks the checkpoint's
 move (fp16 99.9 %, int8 95.1 % for ``medium-v4``) -- and left the question that matters open: a
 model that plays another move once in twenty games is another player, so how much weaker is it?
 Parity cannot answer that; only playing can. This puts each ONNX file on the very ladder every

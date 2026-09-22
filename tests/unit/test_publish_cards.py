@@ -29,14 +29,14 @@ def test_every_card_template_carries_the_course_section() -> None:
 def test_the_links_name_the_lesson_the_table_and_the_demo_when_they_apply() -> None:
     medium = course_links("chorcat/rukh-medium")
     assert (
-        medium["lesson_url"] == "https://lab.rukh.borjaglez.com/curso/m2/04-mas-datos-no-mas-red/"
+        medium["lesson_url"] == "https://lab.rukh.borjaglez.com/curso/m2/11-mas-datos-no-mas-red/"
     )
     assert medium["lesson_title"].startswith("M2")
     assert medium["table_url"] == "https://lab.rukh.borjaglez.com/proyecto/"
     assert medium["stage"] == "medium-v4-greedy"
     assert medium["reproduce"] == "uv run rukh pull medium-v4"
     pairs = course_links("chorcat/rukh-pairs-dpo")
-    assert pairs["lesson_url"].endswith("/curso/m1/02-labs-del-pipeline/")
+    assert pairs["lesson_url"].endswith("/curso/m1/10-labs-del-pipeline/")
     assert pairs["stage"] is None and pairs["demo_url"] is None
     # A repository the catalogue does not know gets the table and nothing it cannot back.
     unknown = course_links("chorcat/rukh-nope", course_url="https://x", demo_url="https://d")
