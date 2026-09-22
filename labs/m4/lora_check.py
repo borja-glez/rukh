@@ -1,6 +1,6 @@
 """Check that the LoRA written by hand is LoRA, including against `peft`.
 
-Lab 4 and Lab 5 of M4, in one script and with no checkpoint: it builds its own toy decoder.
+A lab of M4, in one script and with no checkpoint: it builds its own toy decoder.
 
 Four claims, in order of how easy they are to get wrong:
 

@@ -1,6 +1,6 @@
 """Measure the ladder against itself: every rung plays the anchor, engine against engine.
 
-Lab 1 of M6, and the method of D-070 turned into a script. The four ``Skill Level`` rungs of the
+A lab of M6, and the method of D-070 turned into a script. The four ``Skill Level`` rungs of the
 Elo ladder were once labelled 800/950/1100/1250 by assumption and measured 1381/1467/1589/1678;
 the labels of a ladder are hypotheses until the rungs have played each other. This plays each
 rung against ``uci-1320`` (the anchor, the floor of ``UCI_Elo``) with colours alternated and a

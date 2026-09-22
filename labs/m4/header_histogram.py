@@ -1,6 +1,6 @@
 """Count how many times the model has seen each Elo header, before blaming the model.
 
-Lab 1 of M4. The claim under test is "the Elo conditioning opens the axis but gives no strength",
+A lab of M4. The claim under test is "the Elo conditioning opens the axis but gives no strength",
 which was the conclusion of the previous milestone. Before accepting it, count: the second token of
 every packed game *is* White's Elo header, so a histogram of `tokens[starts + 1]` says exactly how
 much training each condition got.

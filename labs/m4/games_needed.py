@@ -1,6 +1,6 @@
 """How many games each pair of conditions would need before its intervals stop overlapping.
 
-Lab 6 of M4. The sweep of this milestone leaves `1500 < 2000 < 2400` unproven, and there are two
+A lab of M4. The sweep of this milestone leaves `1500 < 2000 < 2400` unproven, and there are two
 very different reasons a comparison can come out unproven: too few games, or no difference to
 find. Telling them apart is arithmetic, not opinion.
 

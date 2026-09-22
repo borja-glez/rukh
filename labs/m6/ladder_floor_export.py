@@ -5,9 +5,9 @@ opponent plays on a clock and a clock is not the same twice. M6 measured it on p
 checkpoint, the same rungs, games and seed, twice with ``elo_move_time`` and twice with
 ``elo_nodes``. This collects the four ``results.json`` and writes the course figure's
 ``artifacts/web/ladder-floor.json``, with the spread between the two runs of each regime and the
-regime that was chosen (D-135):
+regime that was chosen (D-137: the clock stays, nodes buy no reproducibility):
 
-    uv run python labs/m6/ladder_floor_export.py --decision nodes
+    uv run python labs/m6/ladder_floor_export.py --decision time
 """
 
 from __future__ import annotations

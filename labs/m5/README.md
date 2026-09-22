@@ -1,6 +1,7 @@
 # M5 labs
 
-Scripts referenced by the M5 lessons (`rukh-lab`, `curso/m5/`). Run them from the repository
+Scripts referenced by the M5 lessons (`rukh-lab`, `curso/m5/09-labs-de-alineamiento`). Run
+them from the repository
 root.
 
 | Script | Needs | Lesson lab |
