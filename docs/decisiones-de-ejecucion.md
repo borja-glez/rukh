@@ -1268,8 +1268,8 @@ Evidencia obtenida por el controlador, no por subagentes:
 - **Es el precio esperado y es pequeño.** La validación mide imitación de juego 1800+, que es
   precisamente lo que este afinado deja de optimizar: dos tercios de su corpus son partidas de club.
   Que suba no es un defecto, es la definición de lo que se está haciendo.
-- **Receta:** 3 800 pasos × 51 200 tokens = 194,56 M (unas dos pasadas), `lr` 1e-4 (dieciséis veces
-  por debajo del preentrenamiento), warmup 200, coseno a 0,1. ~20 min en la 5090.
+- **Receta:** 3 800 pasos × 51 200 tokens = 194,56 M (unas dos pasadas), `lr` 1e-4 (cuatro veces y media
+  por debajo del 4,5e-4 de `medium-v4`), warmup 200, coseno a 0,1. ~20 min en la 5090.
 - **Lo que decide el hito no es esta tabla** sino el barrido por condición: lo que importa es qué
   compró ese cuarto de nat.
 
