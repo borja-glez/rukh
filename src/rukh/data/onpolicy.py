@@ -59,7 +59,7 @@ class OnPolicyConfig(BaseConfig):
     checkpoint: str = ""
     out: str = "data/pairs-onpolicy/pairs.parquet"
     candidates: int = Field(default=4, ge=2)
-    """Moves sampled per position. The design spec 02 says four; more is more engine time per pair."""
+    """Moves sampled per position. The spec says four; more is more engine time per pair."""
     temperature: float = Field(default=1.0, gt=0)
     top_k: int | None = 20
     depth: int = Field(default=10, ge=1)
