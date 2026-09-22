@@ -1041,7 +1041,8 @@ def train_reward_cmd(
 
     The reward model is **not** what DPO uses -- DPO's reference is implicit and needs no reward
     model at all. It is here because it is the piece that makes PPO make sense, because its
-    accuracy on held-out pairs is a bar `GOAL.md` puts a number on, and because a learned reward
+    accuracy on held-out pairs is a bar `docs/acceptance.md` puts a number on, and because a learned
+    reward
     is what GRPO's verifiable ones are compared against.
     """
     from rukh.config import load_yaml
@@ -1117,8 +1118,9 @@ def eval_match_cmd(
     ladder's own irreproducibility (about 40 Elo of one sigma, D-107). To measure a difference,
     measure the difference -- do not measure two absolutes and subtract them.
 
-    Run `uv run python labs/m5/games_needed_match.py <elo>` first: it says how many games the edge
-    you expect would take, which is a decision to make before paying for them rather than after.
+    Run `uv run python labs/m5/games_needed_match.py --edges <elo,...>` first: it says how many
+    games the edge you expect would take, which is a decision to make before paying for them
+    rather than after.
 
     `--mask` exists as a **control**, not as a setting. By default both models propose from the
     unmasked distribution and an illegal proposal is rescued with a masked draw, which is how every
@@ -1590,6 +1592,14 @@ def export_cmd(
             help="Adapter folder to check the parity of the swapped path against PyTorch.",
         ),
     ] = None,
+    blunder_threshold: Annotated[
+        float | None,
+        typer.Option(
+            "--blunder-threshold",
+            help="Tuned operating point of the blunder head (`threshold_tuned`), into the "
+            "metadata so a reader does not assume the uncalibrated 0.5.",
+        ),
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Print the result as JSON only.")] = False,
 ) -> None:
     """Export a model to ONNX, quantize it and check parity with PyTorch.
@@ -1598,6 +1608,11 @@ def export_cmd(
     reads from a position, ``value`` and ``blunder``. With ``--adapter-inputs`` the decoder's
     graph takes its LoRA factors as two extra inputs: fed zeros it is the checkpoint, fed a
     1.6 MB adapter it is that style, and the browser changes style without downloading a model.
+
+    The blunder head is **not** calibrated: on the published encoder it never reaches 0.5, so a
+    consumer that uses that as the alert threshold shows no alert at all. Pass
+    ``--blunder-threshold`` with the `threshold_tuned` of the matching `rukh eval encoder` run and
+    the file carries its own operating point.
     """
     from rukh.export import KINDS, export_all
 
@@ -1619,6 +1634,7 @@ def export_cmd(
             games=games,
             adapter_inputs=adapter_inputs,
             adapter=adapter,
+            blunder_threshold=blunder_threshold,
         )
     except (ImportError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
