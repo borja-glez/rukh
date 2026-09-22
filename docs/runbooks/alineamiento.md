@@ -111,7 +111,7 @@ flat:       0.385 -> 0.472
 illegal:    0.0000 -> 0.0000
 kl:         0.12169 against the frozen start
 groups:     6,743 useful, 5,257 flat
-engine:     analyses, % from cache
+engine:     <n> analyses, <x> % from cache
 ```
 
 **La segunda línea es la que puntúa, no la primera.** La primera toma `cp_best` dentro del grupo,
@@ -146,7 +146,10 @@ una vez antes de darse cuenta (D-126).
 - **Ninguna recompensa que lea al motor es estable con la profundidad** (D-118). La sana se mueve
   0,99 entre profundidad 4 y 14; la que no tiene suelo, 47,0.
 - **El triángulo no cierra** (D-120). Las tres aristas agrupadas a 800 partidas dejan un residuo de
-  47 Elo a 2,4 σ: la fuerza no es un solo número por modelo cuando los emparejamientos interactúan.
+  45 Elo con error típico 18, o sea 2,6 σ, que es lo que `labs/m5/pooled_match.py` imprime hoy
+  sobre los artefactos publicados (D-120 lo registró como 47 a 2,4 σ el día que se midió; la
+  conclusión es la misma y el registro no se reescribe): la fuerza no es un solo número por modelo
+  cuando los emparejamientos interactúan.
   Y un veredicto binario leído del borde de un intervalo se da la vuelta con el ruido normal.
 - **Alinear cuesta legalidad** (D-121). Los dos DPO doblan la tasa de propuestas ilegales de su
   base, y `nll_weight: 0.1` no lo evitó. GRPO paga menos, 1,66×. Mide el coste en la misma corrida
