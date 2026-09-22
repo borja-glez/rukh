@@ -12,12 +12,17 @@ concurrency:
 jobs:
   cpu:
     name: lint and unit tests (CPU)
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`: that label moves to Ubuntu 26 from 2026-10-19, and the CPU
+    # wheel that `uv sync` resolves and the cache key it builds both depend on the distribution.
+    # Move it on purpose, with a run that proves the environment still resolves.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v6
+      # An exact version, not a `v10`: setup-uv stopped publishing moving major tags at v8,
+      # on purpose, so that a compromised tag cannot be repointed at other code.
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
